@@ -1,6 +1,17 @@
 # Monolith: Mimari ve Risk Listesi
 
-Hedef: Minecraft Java Edition **26.3** (release) davranışını birebir yeniden üreten, GC'siz Rust çalışma zamanı. Hedef platformlar: PC ve Android (arm64, `.so`).
+Hedef: Minecraft Java Edition **26.3** istemcisini (sunucu değil) Rust'a dönüştürmek ve davranışını vanilla ile birebir aynı tutmak. GC'siz çalışma zamanı. Hedef platformlar: PC ve Android (arm64, `.so`).
+
+## Yaklaşım: çeviri + yama
+
+Sıfırdan yeniden yazmak yerine:
+
+1. **Decompile:** 26.3 client jar'ı (obfüskasyonsuz) Java kaynağına çevrilir (Vineflower 1.12.0, Maven Central, sha1 doğrulamalı).
+2. **Çeviri betiği:** Java kaynağını Rust'a dönüştüren araç (`tools/transpile/`). Girdi: kullanıcının kendi jar'ı. Çıktı: `OUT_DIR` veya `generated/` (gitignore'da), depoya girmez.
+3. **Yama katmanı:** Repodaki elle yazılmış Rust modülleri, çeviri çıktısındaki belirli sınıf/metot imzalarını değiştirir (`patches/`). GC'ye bağlı desenler, sıcak yollar ve platform kodu burada düzeltilir.
+4. **Optimizasyon:** Her performans yaması vanilla çıktısıyla karşılaştırılarak kabul edilir.
+
+Repo kuralı: Mojang kodu veya varlıkları commit edilmez. Depoda yalnızca betik, yamalar, test altyapısı ve `mono-*` yardımcı crate'leri olur.
 
 ## Doğrulananlar (26.3 istemci jar'ından, depoya girmedi)
 
@@ -50,7 +61,8 @@ Bağımlılık yönü tek yönlü: `platform, render -> world -> core`. `core` v
 
 ## Riskler
 
-1. **Yasal (en yüksek):** Mojang kodunu bytecode'dan okuyup yeniden yazmak lisans/EULA riski taşır. Clean-room prosedürü ve hukuki görüş gerekli. Bu karar kullanıcıya ait; kod yazılmadan önce netleşmeli.
+1. **Yasal (en yüksek):** Çevrilmiş kod Mojang'ın telifli kodunun türevidir. Kişisel yerel kullanım ile dağıtım (özellikle Android `.so` paketleri) farklı değerlendirilmeli. Hukuki görüş gerekli. Bu karar kullanıcıya ait.
+1b. **Sınırlar:** Decompile edilmiş Java'nın tam anlamıyla derlenebilir olması garanti değil. Lambda, generic, iç sınıf, reflection ve Java `float` semantiği çeviride ayrı ele alınmalı.
 2. **Sürüm hareketliliği:** 26.x snapshot'ları sık değişiyor. Hedef sürüm 26.3 olarak sabitlendi. Güncelleme bilinçli yapılacak.
 3. **Matematik uyumu:** Java `StrictMath` (fdlibm) ile Rust `libm`/`f64::ln` son bit farkı verebilir. Noise ve `nextGaussian` bu yüzden kayabilir. Çözüm: fdlibm portu ve bit-düzeyinde test. Doğrulanmadı.
 4. **Sıralama bağımlılığı:** Vanilla'nın hash tabanlı koleksiyon sıraları worldgen'i etkiliyorsa birebir eşleşme için sıra bilinmeli. Bytecode incelemesi gerekecek.
@@ -66,9 +78,9 @@ Bağımlılık yönü tek yönlü: `platform, render -> world -> core`. `core` v
 | Adım | İçerik | Durum |
 |---|---|---|
 | 0 | Mimari ve risk | Yazıldı |
-| 1 | `java.util.Random` + chunk düzeni + doğrulama fixture'ı | Bu commit |
-| 2 | Pencere + boş dünya + tek chunk (vanilla ile karşılaştırma) | Bekliyor |
-| 3 | Dünya üretimi | Bekliyor |
-| 4 | Blok/varlık kayıt defterleri (build.rs) | Bekliyor |
-| 5 | Render | Bekliyor |
-| 6 | Girdi, ağ, ses, Android | Bekliyor |
+| 1 | `java.util.Random` + chunk düzeni + doğrulama fixture'ı | Commit `fb41322` |
+| 2 | Decompile (Vineflower 1.12.0, sha1 doğrulandı, client jar eşleşti) | İzin reddedildi, bekliyor |
+| 3 | Çeviri betiği `tools/transpile/` ilk dilim (tek sınıf) | Bekliyor |
+| 4 | Derlenen çeviri + pencere + boş dünya, tek chunk vanilla karşılaştırması | Bekliyor |
+| 5 | Dünya üretimi, kayıt defterleri (build.rs) | Bekliyor |
+| 6 | Render, girdi, ağ, ses, Android | Bekliyor |
