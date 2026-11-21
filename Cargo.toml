@@ -1,0 +1,18 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/mono-core",
+    "crates/mono-world",
+]
+
+[workspace.package]
+edition = "2024"
+publish = false
+
+[workspace.lints.rust]
+# unsafe yalnızca grafik, ses, girdi ve FFI sınırlarında izinlidir. Bu crate'lerin
+# hiçbiri o sınırda değildir; onlar kendi lib.rs dosyalarında #![forbid(unsafe_code)] koyar.
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

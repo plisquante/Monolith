@@ -1,0 +1,8 @@
+/target
+# Mojang varlıkları ve sürücü dosyaları asla depoya girmez
+/assets/
+/reference/
+*.jar
+*.class
+/ref/
+.env
