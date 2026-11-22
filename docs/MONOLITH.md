@@ -57,3 +57,17 @@ survived: 0, 1, 2, 3+), plus sampled allocation sites; `python3 tools/alloc_repo
 class as TEMP (dies young), MIXED or LONG and lists the methods that allocate the most. `docs/ALLOC_BASELINE.md` is the
 first measurement (4 minutes of play, Minecraft 26.3). Limits: the sampler records physical frames, so a method that
 the compiler inlined is charged to its caller; the allocation hook is a single relaxed load when profiling is off.
+
+## Memory without a collector: where it stands
+Measured on 4 minutes of play (see `docs/ALLOC_BASELINE.md`, `tools/alloc_report.py --base` for the steady state): 98% of
+the bytes the game allocates are short-lived. The steps, each verified against HotSpot (`monolith/*_tests.py`) and in the game:
+
+| Step | Effect measured in the game |
+|---|---|
+| `DataFixers.optimize` skipped (patch `datafix.rs`) | live heap 1,387 -> 543 MiB, longest GC pause 8.1 s -> 2.1 s |
+| for-each iterators are given back when the loop ends (`find_iterator_scopes`, `gc.rs` recycling) | iterator heap allocation -89..98%, steady allocation 44.0 -> 36.5 MiB/s |
+| `ServerLevel.tickChunk` without BlockPos garbage (patch `tick_chunk.rs`) | about a fifth of the BlockPos volume |
+| `--inline --escape`: small callees inlined, non-escaping objects kept in the caller's frame (`inline.py`, `escape.py`, `rt::stack_obj`) | see `docs/ALLOC_BASELINE.md` after the next measurement |
+
+Safety nets: `MONO_ARENA_CHECK=abort` makes every collection verify that no heap object or static points into a frame or
+arena; `MONO_ARENA=0` and `MONO_RECYCLE=0` switch the mechanisms off for comparison; `MONO_PATCH_VERIFY=1` checks patches.

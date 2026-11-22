@@ -151,8 +151,8 @@ def main() -> int:
     w(f"# Allocation profile\n")
     w(f"- run time: {secs:,.0f} s; allocated {mb(T['b'])} MiB in {T['n']:,} objects ({mb(T['b']) .replace(',', '')} MiB, "
       f"{T['b'] / 1048576 / secs:,.1f} MiB/s, {T['b'] / 1048576 / secs * 60 / 1024:,.1f} GiB/min)")
-    w(f"- escape analysis marked {mb(T['arena_b'])} MiB ({100 * T['arena_b'] / max(T['b'], 1):.1f}%) as non-escaping "
-      f"(arena candidates); the scope arena is switched off, so today they come from the collected heap")
+    w(f"- {mb(T['arena_b'])} MiB ({100 * T['arena_b'] / max(T['b'], 1):.1f}%) were served without the collected heap "
+      f"(recycled for-each iterators, scope arenas); these are counted in the totals above")
     gcs = P["gcs"]
     if gcs:
         tot_pause = sum(g["pause_us"] for g in gcs) / 1000
@@ -177,7 +177,7 @@ def main() -> int:
       f"when its chunk/world goes); MIXED needs the allocating method looked at.\n")
 
     w(f"## Top {a.top} classes by allocated bytes\n")
-    w("| class | allocated MiB | objects | avg B | survive>=1 GC | class | live MiB | arena MiB |")
+    w("| class | allocated MiB | objects | avg B | survive>=1 GC | class | live MiB | not on the heap MiB |")
     w("|---|---:|---:|---:|---:|---|---:|---:|")
     for c in sorted(cl, key=lambda c: -c["ab"])[:a.top]:
         w(f"| {c['name']} | {mb(c['ab'])} | {c['an']:,} | {c['ab'] // max(c['an'], 1)} | {100 * c['f']:.0f}% | {c['cat']} | {mb(c['live'])} | {mb(c['arb'])} |")
