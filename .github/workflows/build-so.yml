@@ -1,0 +1,391 @@
+
+name: Build Minecraft Android SO (J2ZIG)
+
+"on":
+  workflow_dispatch:
+    inputs:
+      mc_version:
+        description: "Minecraft Sürümü"
+        required: true
+        default: "26.3"
+
+      optimize:
+        description: "Zig Optimizasyon Modu"
+        type: choice
+        options:
+          - ReleaseFast
+          - ReleaseSmall
+        required: true
+        default: ReleaseFast
+
+      shards:
+        description: "Shard Sayısı"
+        required: true
+        default: "8"
+
+      shard_jobs:
+        description: "Paralel Derleme İşi"
+        required: true
+        default: "4"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-so-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-android-so:
+    name: Build Minecraft ARM64 Native Library
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      # --------------------------------------------------
+      # CHECKOUT
+      # --------------------------------------------------
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # --------------------------------------------------
+      # BUILD CACHE
+      # --------------------------------------------------
+
+      - name: Restore Zig and J2ZIG Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zig
+            ~/.cache/j2zig
+            .zig-cache
+            zig-cache
+          key: ${{ runner.os }}-j2zig-zig0152-${{ hashFiles('**/*.zig', '**/*.py', '**/*.toml', '**/*.json') }}
+          restore-keys: |
+            ${{ runner.os }}-j2zig-zig0152-
+
+      - name: Cache Minecraft Client JAR
+        id: mc-cache
+        uses: actions/cache@v4
+        with:
+          path: client.jar
+          key: minecraft-client-${{ inputs.mc_version }}
+
+      # --------------------------------------------------
+      # JAVA & ZIG
+      # --------------------------------------------------
+
+      - name: Setup Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Install Zig 0.15.2
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: "0.15.2"
+
+      # --------------------------------------------------
+      # ANDROID NDK CROSS LINKER
+      # --------------------------------------------------
+
+      - name: Configure Android NDK AArch64 Linker
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NDK_ROOT="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-}}"
+
+          if [ -z "$NDK_ROOT" ] && [ -d "/usr/local/lib/android/sdk/ndk" ]; then
+            NDK_ROOT=$(ls -d /usr/local/lib/android/sdk/ndk/* | sort -V | tail -n 1)
+          fi
+
+          if [ -z "$NDK_ROOT" ] || [ ! -d "$NDK_ROOT" ]; then
+            echo "ERROR: Android NDK not found."
+            exit 1
+          fi
+
+          NDK_BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+
+          test -x "$NDK_BIN/aarch64-linux-android26-clang"
+          test -x "$NDK_BIN/aarch64-linux-android26-clang++"
+          test -x "$NDK_BIN/ld.lld"
+
+          echo "Using Android NDK: $NDK_ROOT"
+
+          mkdir -p "$HOME/ndk-wrap"
+
+          cat > "$HOME/ndk-wrap/clang" <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          ARGS=()
+          SKIP_NEXT=0
+
+          for arg in "\$@"; do
+            if [ "\$SKIP_NEXT" = "1" ]; then
+              SKIP_NEXT=0
+              case "\$arg" in
+                /usr/lib*|/lib*) continue ;;
+                *) ARGS+=("\$arg"); continue ;;
+              esac
+            fi
+
+            case "\$arg" in
+              -L/usr/lib*|-L/lib*) continue ;;
+              -L) ARGS+=("\$arg"); SKIP_NEXT=1 ;;
+              *) ARGS+=("\$arg") ;;
+            esac
+          done
+
+          exec "$NDK_BIN/aarch64-linux-android26-clang" -fuse-ld=lld "\${ARGS[@]}"
+          EOF
+
+          cat > "$HOME/ndk-wrap/clang++" <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          ARGS=()
+          SKIP_NEXT=0
+
+          for arg in "\$@"; do
+            if [ "\$SKIP_NEXT" = "1" ]; then
+              SKIP_NEXT=0
+              case "\$arg" in
+                /usr/lib*|/lib*) continue ;;
+                *) ARGS+=("\$arg"); continue ;;
+              esac
+            fi
+
+            case "\$arg" in
+              -L/usr/lib*|-L/lib*) continue ;;
+              -L) ARGS+=("\$arg"); SKIP_NEXT=1 ;;
+              *) ARGS+=("\$arg") ;;
+            esac
+          done
+
+          exec "$NDK_BIN/aarch64-linux-android26-clang++" -fuse-ld=lld "\${ARGS[@]}"
+          EOF
+
+          chmod +x "$HOME/ndk-wrap/clang"
+          chmod +x "$HOME/ndk-wrap/clang++"
+
+          echo "$HOME/ndk-wrap" >> "$GITHUB_PATH"
+          echo "$NDK_BIN" >> "$GITHUB_PATH"
+
+          {
+            echo "ANDROID_NDK_HOME=$NDK_ROOT"
+            echo "CC=$HOME/ndk-wrap/clang"
+            echo "CXX=$HOME/ndk-wrap/clang++"
+            echo "LD=$NDK_BIN/ld.lld"
+            echo "AR=$NDK_BIN/llvm-ar"
+            echo "STRIP=$NDK_BIN/llvm-strip"
+          } >> "$GITHUB_ENV"
+
+      # --------------------------------------------------
+      # DOWNLOAD MINECRAFT
+      # --------------------------------------------------
+
+      - name: Download Minecraft Client JAR
+        if: steps.mc-cache.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          MC_VERSION: ${{ inputs.mc_version }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import urllib.request
+          import os
+
+          version = os.environ["MC_VERSION"].strip()
+
+          manifest_url = (
+              "https://piston-meta.mojang.com/"
+              "mc/game/version_manifest_v2.json"
+          )
+
+          with urllib.request.urlopen(manifest_url) as response:
+              manifest = json.load(response)
+
+          version_url = next(
+              (
+                  v["url"]
+                  for v in manifest["versions"]
+                  if v["id"] == version
+              ),
+              None
+          )
+
+          if not version_url:
+              raise RuntimeError(
+                  f"Minecraft version not found: {version}"
+              )
+
+          with urllib.request.urlopen(version_url) as response:
+              metadata = json.load(response)
+
+          client = metadata["downloads"]["client"]
+
+          print(f"Downloading Minecraft {version}")
+          print(client["url"])
+
+          urllib.request.urlretrieve(
+              client["url"],
+              "client.jar"
+          )
+
+          size = os.path.getsize("client.jar") / (1024 * 1024)
+
+          print(f"Client JAR: {size:.2f} MB")
+          PY
+
+      - name: Verify Minecraft Client JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -s client.jar
+
+          echo "Minecraft client:"
+          ls -lh client.jar
+
+          file client.jar
+
+      # --------------------------------------------------
+      # BUILD
+      # --------------------------------------------------
+
+      - name: Build Minecraft ARM64 Native Library
+        shell: bash
+        env:
+          MC_OPTIMIZE: ${{ inputs.optimize }}
+          MC_SHARDS: ${{ inputs.shards }}
+          MC_SHARD_JOBS: ${{ inputs.shard_jobs }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$MC_SHARDS" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid shard count."
+            exit 1
+          fi
+
+          if ! [[ "$MC_SHARD_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid parallel job count."
+            exit 1
+          fi
+
+          echo "======================================"
+          echo "J2ZIG ANDROID NATIVE BUILD"
+          echo "======================================"
+
+          echo "Optimization: $MC_OPTIMIZE"
+          echo "Shards: $MC_SHARDS"
+          echo "Parallel jobs: $MC_SHARD_JOBS"
+
+          START=$SECONDS
+
+          python3 -u tools/mcbuild.py build-lib client.jar \
+            --target aarch64-linux-android.26 \
+            --optimize "$MC_OPTIMIZE" \
+            --shards "$MC_SHARDS" \
+            --shard-jobs "$MC_SHARD_JOBS" \
+            --skip-assets \
+            --out out_so
+
+          DURATION=$((SECONDS - START))
+
+          echo "BUILD_TIME_SECONDS=$DURATION" >> "$GITHUB_ENV"
+
+          echo "======================================"
+          echo "BUILD COMPLETED"
+          echo "Duration: ${DURATION}s"
+          echo "======================================"
+
+      # --------------------------------------------------
+      # VERIFY NATIVE LIBRARY
+      # --------------------------------------------------
+
+      - name: Verify ARM64 ELF
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SO_PATH=$(find out_so -type f \
+            -name "libminecraft_j2z.so" | head -n 1)
+
+          if [ -z "$SO_PATH" ]; then
+            echo "ERROR: libminecraft_j2z.so not found."
+            exit 1
+          fi
+
+          echo "Native library: $SO_PATH"
+
+          ls -lh "$SO_PATH"
+          file "$SO_PATH"
+
+          ELF_INFO=$(readelf -h "$SO_PATH")
+
+          echo "$ELF_INFO"
+
+          if ! grep -q "Class:.*ELF64" <<< "$ELF_INFO"; then
+            echo "ERROR: Expected ELF64."
+            exit 1
+          fi
+
+          if ! grep -q "Machine:.*AArch64" <<< "$ELF_INFO"; then
+            echo "ERROR: Expected AArch64."
+            exit 1
+          fi
+
+          if ! nm -D "$SO_PATH" | grep -q "j2z_android_entry"; then
+            echo "ERROR: Exported j2z_android_entry symbol missing."
+            exit 1
+          fi
+
+          if ! strings "$SO_PATH" | grep -q \
+            "net/minecraft/client/main/Main"; then
+            echo "ERROR: Minecraft Main class not found."
+            exit 1
+          fi
+
+          echo "SUCCESS: ARM64 ELF verification passed."
+
+      # --------------------------------------------------
+      # UPLOAD ARTIFACT
+      # --------------------------------------------------
+
+      - name: Upload Minecraft Native Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: libminecraft_j2z-${{ inputs.mc_version }}-${{ inputs.optimize }}
+          path: out_so/**/libminecraft_j2z.so
+          if-no-files-found: error
+          retention-days: 14
+
+      # --------------------------------------------------
+      # SUMMARY
+      # --------------------------------------------------
+
+      - name: Build Summary
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "## Minecraft Android Native Build"
+            echo ""
+            echo "| Property | Value |"
+            echo "|---|---|"
+            echo "| Minecraft | ${{ inputs.mc_version }} |"
+            echo "| Architecture | ARM64 Android |"
+            echo "| Optimization | ${{ inputs.optimize }} |"
+            echo "| Shards | ${{ inputs.shards }} |"
+            echo "| Parallel jobs | ${{ inputs.shard_jobs }} |"
+            echo "| Build duration | ${BUILD_TIME_SECONDS}s |"
+            echo "| Artifact | libminecraft_j2z.so |"
+          } >> "$GITHUB_STEP_SUMMARY"

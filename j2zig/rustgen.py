@@ -1,0 +1,2118 @@
+"""Monolith back end, first slice: Java bytecode -> Rust.
+
+Scope (everything else fails loudly with `RustGenError`, never silently):
+  * application classes with a superclass chain, instance and static fields, constructors, static initializers
+    (run lazily on first use, superclass first), virtual calls through a vtable, `checkcast`/`instanceof`
+  * arrays of every primitive type and of references, `multianewarray`, null / bounds / negative-size checks
+  * all arithmetic, shift, conversion and comparison opcodes with Java semantics (runtime: monolith/rt/rt.rs)
+  * branches, switches, calls between application methods, `System.out.println` for int/long/char/boolean/String
+  * not yet: interfaces, exception handlers and `athrow`, string concatenation, the JDK, threads, monitors
+Control flow follows the Zig back end: one `loop { match pc { N => { ...; pc = M; continue; } } }` per method,
+stack slots and locals are typed Rust variables named `s<depth><kind>` / `l<index><kind>`.
+
+Usage: python3 -m j2zig.rustgen --cp <classes dir> --main <Class> -o <out dir> [--run]
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import os
+import shutil
+import struct
+import subprocess
+import sys
+
+from .world import LinkError, parse_method_desc
+from .zigen import VH_MODES
+from .reflectmeta import CompactPool, inner_info, rewrite_annotations, rewrite_default, rewrite_param_annotations
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+
+RT = {"I": "i32", "J": "i64", "F": "f32", "D": "f64", "A": "rt::Ref"}
+DEFAULT = {"I": "0", "J": "0", "F": "0.0", "D": "0.0", "A": "rt::Ref::NULL"}
+WIDE = ("J", "D")
+
+
+class RustGenError(Exception):
+    pass
+
+
+def kind_of(desc: str) -> str:
+    c = desc[0]
+    if c in "ZBCSI":
+        return "I"
+    if c in "JFD":
+        return c
+    if c in "L[":
+        return "A"
+    raise RustGenError(f"type {desc}")
+
+
+def rstr(s: str) -> str:
+    out = ['"']
+    for ch in s:
+        if ch == '"':
+            out.append('\\"')
+        elif ch == "\\":
+            out.append("\\\\")
+        elif ch == "\n":
+            out.append("\\n")
+        elif ch == "\r":
+            out.append("\\r")
+        elif ch == "\t":
+            out.append("\\t")
+        elif 32 <= ord(ch) < 127:
+            out.append(ch)
+        else:
+            out.append("\\u{%x}" % ord(ch))
+    out.append('"')
+    return "".join(out)
+
+
+def rbytes(b) -> str:
+    if not b:
+        return "&[]"
+    return "&[" + ", ".join(str(x) for x in b) + "]"
+
+
+FT = {"Z": "i8", "B": "i8", "C": "u16", "S": "i16", "I": "i32", "J": "i64", "F": "f32", "D": "f64"}
+
+
+def ftype(desc: str) -> str:
+    return FT.get(desc[0], "rt::Ref")
+
+
+def mang(name: str) -> str:
+    return "".join(c if c.isalnum() else "_" for c in name)
+
+
+def fname(owner: str, name: str, desc: str) -> str:
+    h = hashlib.sha1(desc.encode()).hexdigest()[:6]
+    cls = "".join(c if c.isalnum() else "_" for c in owner)
+    nm = "".join(c if c.isalnum() else "_" for c in name)
+    return f"m_{cls}__{nm}__{h}"
+
+
+def cret_type(ret: str) -> str:
+    return "rt::CVoid" if ret == "V" else f"rt::CRes<{RT[kind_of(ret)]}>"
+
+
+def cret_wrap(ret: str) -> str:
+    return "cvoid" if ret == "V" else "cres"
+
+
+class MethodGen:
+    def __init__(self, gen, ci, m):
+        self.g, self.p, self.w, self.ci, self.m = gen, gen.prog, gen.world, ci, m
+        self.refs: set[str] = set()          # application classes this method refers to
+        self.insns = self.p.insns(ci, m)
+        self.idx = {x.pc: i for i, x in enumerate(self.insns)}
+        self.used_locals: dict[str, str] = {}
+        self.used_stack: dict[str, str] = {}
+        self.callees: set[tuple[str, str, str]] = set()
+        self.where = f"{ci.name}.{m.name}{m.desc}"
+        self.noescape = gen.noescape_sites(ci.name, m.key)
+        self.has_arena = False
+
+    # ---------------------------------------------------------------- helpers
+    def err(self, msg: str):
+        raise RustGenError(f"{self.where}: {msg}")
+
+    def sname(self, depth: int, k: str) -> str:
+        n = f"s{depth}{k.lower()}"
+        self.used_stack[n] = k
+        return n
+
+    def lname(self, idx: int, k: str) -> str:
+        n = f"l{idx}{k.lower()}"
+        self.used_locals[n] = k
+        return n
+
+    def app_class(self, name: str):
+        if name.startswith("["):
+            self.err(f"array class {name} used as a plain class")
+        return self.g.need_class(name)
+
+    def field(self, a, static: bool):
+        self.app_class(a.owner)
+        dc, f = self.w.resolve_field(a.owner, a.name, a.desc)
+        self.app_class(dc.name)
+        if f.is_static != static:
+            raise LinkError(f"field {a.owner}.{a.name} static mismatch")
+        return dc, f
+
+    def resolve(self, a, special: bool):
+        self.app_class(a.owner)
+        r = self.p.resolve_special(self.ci, a) if special else self.p.resolve(a)
+        if r is None:
+            raise LinkError(f"cannot resolve {a.owner}.{a.name}{a.desc}")
+        self.app_class(r[0].name)
+        self.g.need_method(r[0], r[1])
+        return r
+
+    def desc_cref(self, desc: str) -> str:
+        """Rust expression (a `&'static rt::Class`) for any JVM type descriptor or internal class name."""
+        if desc.startswith("["):
+            if len(desc) == 2 and desc[1] in "ZBCSIJFD":
+                return f"unsafe {{ &CLS_ARR_{desc[1]} }}"
+            return f"rt::array_class_of({self.desc_cref(desc[1:])})"
+        if desc.startswith("L") and desc.endswith(";"):
+            return f"unsafe {{ &{self.g.class_name(self.app_class(desc[1:-1]))} }}"
+        if desc in ("Z", "B", "C", "S", "I", "J", "F", "D", "V"):
+            pm = {"Z": "BOOLEAN", "B": "BYTE", "C": "CHAR", "S": "SHORT", "I": "INT",
+                  "J": "LONG", "F": "FLOAT", "D": "DOUBLE", "V": "VOID"}[desc]
+            return f"&rt::CLS_P_{pm}"
+        return f"unsafe {{ &{self.g.class_name(self.app_class(desc))} }}"
+
+    def cref(self, name: str) -> str:
+        """Rust expression (a `&Class`) for a class or an array type."""
+        if name.startswith("["):
+            return self.desc_cref(name)
+        return "unsafe { &" + self.g.class_name(self.app_class(name)) + " }"
+
+    def emit_link_err(self, e, err_cls: str, msg: str, stk: list, pops: int, ret_desc: str = "V"):
+        for _ in range(pops):
+            stk.pop()
+        if ret_desc != "V":
+            rk = kind_of(ret_desc)
+            stk.append(rk)
+        self.g.link_errors.append(f"{self.where}: {err_cls}: {msg}")
+        e(f"return rt::throw({rstr(err_cls)}, {rstr(msg)}.to_string());")
+
+    VT = {"Z": "i8", "B": "i8", "C": "u16", "S": "i16", "I": "i32", "J": "i64", "F": "f32", "D": "f64"}
+
+    def varhandle(self, ins, stk, e):
+        a = ins.arg
+        args, ret = parse_method_desc(a.desc)
+        family, nvals, volatile_ = VH_MODES[a.name]
+        self.g.need_class("java/lang/invoke/VarHandle")
+        self.g.vh_used = True
+        vals = []
+        for _ in range(len(args)):
+            k = stk.pop()
+            vals.append(self.sname(len(stk), k))
+        vals.reverse()
+        k = stk.pop()
+        vh = self.sname(len(stk), k)
+        coords, values = vals[:len(vals) - nvals], vals[len(vals) - nvals:]
+        cdesc = args[:len(args) - nvals]
+        vdesc = (args[len(args) - nvals:] or [ret])[0]
+        nc = len(coords)
+        T = self.VT.get(vdesc[0], "rt::Ref")
+        t = f"::<{T}>"
+        if nc == 2 and cdesc[0] == "Ljava/lang/foreign/MemorySegment;" and cdesc[1] == "J":
+            try:
+                self.app_class("java/lang/foreign/MemorySegment")
+                r = self.p.resolve(type(a)(11, "java/lang/foreign/MemorySegment", "address", "()J"))
+                if r is None:
+                    raise LinkError("cannot resolve MemorySegment.address()J")
+                dc, m2 = r
+                self.app_class(dc.name)
+                self.g.need_method(dc, m2)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoSuchMethodError", str(le), stk, 0, ret)
+                return None
+            base_call = self.iface_call(m2, coords[0], [], ["rt::Ref"], "rt::CRes<i64>")
+            addr_expr = f"({base_call}).wrapping_add({coords[1]})"
+            if family == "get":
+                call = f"vh::get_seg{t}({str(volatile_).lower()}, {addr_expr})?"
+            elif family == "set":
+                call = f"vh::set_seg{t}({str(volatile_).lower()}, {addr_expr}, {values[0]})?"
+            elif family == "cas":
+                call = f"vh::cas_seg{t}({addr_expr}, {values[0]}, {values[1]})?"
+            elif family == "cax":
+                call = f"vh::cax_seg{t}({addr_expr}, {values[0]}, {values[1]})?"
+            elif family == "xchg":
+                call = f"vh::get_and_set_seg{t}({addr_expr}, {values[0]})?"
+            else:
+                op = {"add": 0, "bor": 1, "band": 2, "bxor": 3}[family]
+                call = f"vh::get_and_op_seg{t}({op}, {addr_expr}, {values[0]})?"
+        else:
+            if nc > 2 or (nc >= 1 and kind_of(cdesc[0]) != "A") or (nc == 2 and kind_of(cdesc[1]) != "I"):
+                self.err(f"VarHandle coordinates {a.desc}")
+            obj = coords[0] if nc >= 1 else "rt::Ref::NULL"
+            idx = coords[1] if nc == 2 else "0"
+            if family == "get":
+                call = f"vh::get{t}({str(volatile_).lower()}, {vh}, {obj}, {idx}, {nc})?"
+            elif family == "set":
+                call = f"vh::set{t}({str(volatile_).lower()}, {vh}, {obj}, {idx}, {nc}, {values[0]})?"
+            elif family == "cas":
+                call = f"vh::cas{t}({vh}, {obj}, {idx}, {nc}, {values[0]}, {values[1]})?"
+            elif family == "cax":
+                call = f"vh::cax{t}({vh}, {obj}, {idx}, {nc}, {values[0]}, {values[1]})?"
+            elif family == "xchg":
+                call = f"vh::get_and_set{t}({vh}, {obj}, {idx}, {nc}, {values[0]})?"
+            else:
+                op = {"add": 0, "bor": 1, "band": 2, "bxor": 3}[family]
+                call = f"vh::get_and_op{t}({op}, {vh}, {obj}, {idx}, {nc}, {values[0]})?"
+        if ret == "V":
+            e(call + ";")
+        else:
+            rk = kind_of(ret)
+            stk.append(rk)
+            e(f"{self.sname(len(stk) - 1, rk)} = {call};")
+        return None
+
+    def iface_call(self, m2, recv, vals, ptypes, cret) -> str:
+        sel = self.g.sel(m2.name, m2.desc)
+        fp = (f"unsafe {{ std::mem::transmute::<*const (), extern \"C\" fn({', '.join(ptypes)}) -> {cret}>"
+              f"(rt::itab_find((*rt::nn({recv})?).class, {sel})) }}")
+        return f"({fp})({', '.join([recv] + vals)}).res()?"
+
+    def init_class(self, ci2, emit):
+        if self.g.needs_init(ci2):
+            emit(f"unsafe {{ {self.g.init_name(ci2)}() }}.res()?;")
+
+    @staticmethod
+    def kind_of_field(desc: str) -> str:
+        return kind_of(desc)
+
+    @staticmethod
+    def from_field(desc: str, expr: str) -> str:
+        return f"{expr} as i32" if desc[0] in "ZBCS" else expr
+
+    @staticmethod
+    def to_field(desc: str, v: str) -> str:
+        if desc[0] == "Z":
+            return f"({v} & 1) as i8"
+        if desc[0] in "BCS":
+            return f"{v} as {FT[desc[0]]}"
+        return v
+
+    # ---------------------------------------------------------------- one instruction
+    def gen_insn(self, ins, stk: list, out: list, leaders: set):
+        """Emits code for `ins`, mutates `stk` (list of kinds). Returns the successor pcs or None for fall-through."""
+        op, a = ins.op, ins.arg
+        e = out.append
+
+        def push(k, expr):
+            stk.append(k)
+            e(f"{self.sname(len(stk) - 1, k)} = {expr};")
+
+        def top(i=1):
+            k = stk[-i]
+            return self.sname(len(stk) - i, k)
+
+        def pop():
+            k = stk.pop()
+            return self.sname(len(stk), k)
+
+        if op == "nop":
+            return None
+        if op == "aconst_null":
+            push("A", "rt::Ref::NULL")
+        elif op.startswith("iconst_"):
+            push("I", "-1" if op == "iconst_m1" else op[-1])
+        elif op in ("bipush", "sipush"):
+            push("I", str(a))
+        elif op.startswith("lconst_"):
+            push("J", op[-1])
+        elif op.startswith("fconst_"):
+            push("F", op[-1] + ".0")
+        elif op.startswith("dconst_"):
+            push("D", op[-1] + ".0")
+        elif op == "ldc":
+            if isinstance(a, tuple):
+                t, v = a
+                if t == "int":
+                    push("I", f"{v}i32" if v >= 0 else f"({v}i32)")
+                elif t == "long":
+                    push("J", f"{v}i64" if v >= 0 else f"({v}i64)")
+                elif t == "float":
+                    push("F", f"f32::from_bits(0x{struct.unpack('>I', v)[0]:08x})")
+                elif t == "double":
+                    push("D", f"f64::from_bits(0x{struct.unpack('>Q', v)[0]:016x})")
+                elif t == "string":
+                    slot, data = self.g.lit(v)
+                    push("A", f"unsafe {{ rt::lit(&raw mut {slot}, &{data}) }}")
+                else:
+                    self.err(f"ldc {t}")
+            elif hasattr(a, "name") and not hasattr(a, "bsm_index"):
+                try:
+                    ce = self.cref(a.name)
+                    push("A", f"rt::class_mirror({ce})?")
+                except LinkError as le:
+                    self.emit_link_err(e, "java/lang/NoClassDefFoundError", str(le), stk, 0, "Ljava/lang/Class;")
+                    return None
+            else:
+                self.g.errors.append(f"{self.where}: ldc {type(a).__name__}")
+                stk.append("A")
+                e(f"return rt::unsupported_code({rstr(f'{self.where}: ldc {type(a).__name__}')});")
+                return None
+        elif op in ("iload", "lload", "fload", "dload", "aload"):
+            k = {"i": "I", "l": "J", "f": "F", "d": "D", "a": "A"}[op[0]]
+            push(k, self.lname(a, k))
+        elif op in ("istore", "lstore", "fstore", "dstore", "astore"):
+            k = {"i": "I", "l": "J", "f": "F", "d": "D", "a": "A"}[op[0]]
+            if stk[-1] != k:
+                self.err(f"{op} of a {stk[-1]} value")
+            e(f"{self.lname(a, k)} = {pop()};")
+        elif op == "iinc":
+            n = self.lname(a, "I")
+            e(f"{n} = {n}.wrapping_add({ins.arg2});")
+        elif op == "pop":
+            stk.pop()
+        elif op == "pop2":
+            if stk.pop() not in WIDE:
+                stk.pop()
+        elif op in ("dup", "dup_x1", "dup_x2", "dup2", "dup2_x1", "dup2_x2", "swap"):
+            w = lambda k: k in WIDE
+            if op == "dup": nin, perm = 1, (0, 0)
+            elif op == "dup_x1": nin, perm = 2, (1, 0, 1)
+            elif op == "dup_x2": nin, perm = (2, (1, 0, 1)) if w(stk[-2]) else (3, (2, 0, 1, 2))
+            elif op == "dup2": nin, perm = (1, (0, 0)) if w(stk[-1]) else (2, (0, 1, 0, 1))
+            elif op == "dup2_x1": nin, perm = (2, (1, 0, 1)) if w(stk[-1]) else (3, (1, 2, 0, 1, 2))
+            elif op == "dup2_x2":
+                if w(stk[-1]):
+                    nin, perm = (2, (1, 0, 1)) if w(stk[-2]) else (3, (2, 0, 1, 2))
+                else:
+                    nin, perm = (3, (1, 2, 0, 1, 2)) if w(stk[-3]) else (4, (2, 3, 0, 1, 2, 3))
+            else:
+                nin, perm = 2, (1, 0)
+            base = len(stk) - nin
+            seg = [(stk[base + j], self.sname(base + j, stk[base + j])) for j in range(nin)]
+            tmp = [f"_t{j}" for j in range(nin)]
+            e("{ " + " ".join(f"let {t} = {s};" for t, (_, s) in zip(tmp, seg)))
+            del stk[base:]
+            for p_i in perm:
+                k = seg[p_i][0]
+                stk.append(k)
+                e(f"{self.sname(len(stk) - 1, k)} = {tmp[p_i]};")
+            e("}")
+        elif op in BINOPS:
+            k, rust = BINOPS[op]
+            b = pop(); a_ = pop()
+            res = self.sname(len(stk), k)
+            stk.append(k)
+            e(f"{res} = {rust.format(a=a_, b=b)};")
+        elif op in UNOPS:
+            k, rust = UNOPS[op]
+            x = pop()
+            res = self.sname(len(stk), k)
+            stk.append(k)
+            e(f"{res} = {rust.format(a=x)};")
+        elif op in CONVS:
+            k, rust = CONVS[op]
+            x = pop()
+            res = self.sname(len(stk), k)
+            stk.append(k)
+            e(f"{res} = {rust.format(a=x)};")
+        elif op in CMPS:
+            rust = CMPS[op]
+            b = pop(); a_ = pop()
+            res = self.sname(len(stk), "I")
+            stk.append("I")
+            e(f"{res} = {rust.format(a=a_, b=b)};")
+        elif op in IF1:
+            x = pop()
+            e(f"if {IF1[op].format(a=x)} {{ pc = {ins.targets[0]}; continue; }}")
+        elif op in IF2:
+            b = pop(); a_ = pop()
+            e(f"if {IF2[op].format(a=a_, b=b)} {{ pc = {ins.targets[0]}; continue; }}")
+        elif op == "goto":
+            e(f"pc = {ins.targets[0]}; continue;")
+            return [ins.targets[0]]
+        elif op == "tableswitch":
+            x = pop()
+            e(f"match {x} {{")
+            for key, tgt in ins.arg2:
+                e(f"    {key} => {{ pc = {tgt}; continue; }}")
+            e(f"    _ => {{ pc = {ins.arg}; continue; }}")
+            e("}")
+            return list(dict.fromkeys(ins.targets))
+        elif op in ("ireturn", "lreturn", "freturn", "dreturn", "areturn"):
+            e(f"return Ok({pop()});")
+            return []
+        elif op == "return":
+            e("return Ok(());")
+            return []
+        elif op == "getstatic":
+            try:
+                dc, f = self.field(a, static=True)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoSuchFieldError", str(le), stk, 0, a.desc)
+                return None
+            self.init_class(dc, e)
+            push(self.kind_of_field(f.desc), self.from_field(f.desc, f"unsafe {{ {self.g.static_name(dc, f)} }}"))
+        elif op == "putstatic":
+            try:
+                dc, f = self.field(a, static=True)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoSuchFieldError", str(le), stk, 1, "V")
+                return None
+            self.init_class(dc, e)
+            v = pop()
+            e(f"unsafe {{ {self.g.static_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
+        elif op == "getfield":
+            try:
+                dc, f = self.field(a, static=False)
+                st_name = self.g.struct_name(self.w.req(a.owner))
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoSuchFieldError", str(le), stk, 1, a.desc)
+                return None
+            o = pop()
+            push(self.kind_of_field(f.desc),
+                 self.from_field(f.desc, f"unsafe {{ (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)} }}"))
+        elif op == "putfield":
+            try:
+                dc, f = self.field(a, static=False)
+                st_name = self.g.struct_name(self.w.req(a.owner))
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoSuchFieldError", str(le), stk, 2, "V")
+                return None
+            v = pop()
+            o = pop()
+            e(f"unsafe {{ (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
+        elif op == "new":
+            try:
+                ci2 = self.app_class(a.name)
+                cr = self.cref(a.name)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoClassDefFoundError", str(le), stk, 0, "Ljava/lang/Object;")
+                return None
+            self.init_class(ci2, e)
+            if ins.pc in self.noescape:
+                self.has_arena = True
+                push("A", f"rt::alloc_arena({cr})")
+            else:
+                push("A", f"rt::alloc({cr})")
+        elif op == "newarray":
+            n = pop()
+            if ins.pc in self.noescape:
+                self.has_arena = True
+                push("A", f"rt::new_array_arena(b'{a}', {n})?")
+            else:
+                push("A", f"rt::new_array(b'{a}', {n})?")
+        elif op == "anewarray":
+            n = pop()
+            try:
+                cr = self.desc_cref(a.name)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoClassDefFoundError", str(le), stk, 0, "Ljava/lang/Object;")
+                return None
+            if ins.pc in self.noescape:
+                self.has_arena = True
+                push("A", f"rt::new_obj_array_arena({cr}, {n})?")
+            else:
+                push("A", f"rt::new_obj_array({cr}, {n})?")
+        elif op == "multianewarray":
+            dims = [None] * ins.arg2
+            for j in range(ins.arg2 - 1, -1, -1):
+                dims[j] = pop()
+            desc = a.name
+            depth = len(desc) - len(desc.lstrip("["))
+            leaf = desc[depth]
+            if leaf == "L":
+                try:
+                    ec = self.desc_cref(desc[depth:])
+                except LinkError as le:
+                    self.emit_link_err(e, "java/lang/NoClassDefFoundError", str(le), stk, 0, "Ljava/lang/Object;")
+                    return None
+                push("A", f"rt::new_multi(Some({ec}), b'A', {depth}, &[{', '.join(dims)}])?")
+            else:
+                push("A", f"rt::new_multi(None, b'{leaf}', {depth}, &[{', '.join(dims)}])?")
+        elif op == "arraylength":
+            push("I", f"rt::alen({pop()})?")
+        elif op in ALOAD:
+            idx = pop(); arr = pop()
+            k, ty, cast = ALOAD[op]
+            push(k, f"rt::aload::<{ty}>({arr}, {idx})?{cast}")
+        elif op in ASTORE:
+            v = pop(); idx = pop(); arr = pop()
+            ty, cast = ASTORE[op]
+            if op == "bastore":
+                e(f"rt::bastore({arr}, {idx}, {v})?;")
+            elif op == "aastore":
+                e(f"rt::aastore_ref({arr}, {idx}, {v})?;")
+            else:
+                e(f"rt::astore::<{ty}>({arr}, {idx}, {v}{cast})?;")
+        elif op == "checkcast":
+            try:
+                cr = self.cref(a.name)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoClassDefFoundError", str(le), stk, 1, "Ljava/lang/Object;")
+                return None
+            e(f"{top()} = rt::checkcast({top()}, {cr})?;")
+        elif op == "instanceof":
+            try:
+                cr = self.cref(a.name)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoClassDefFoundError", str(le), stk, 1, "I")
+                return None
+            x = pop()
+            push("I", f"rt::instance_of({x}, {cr}) as i32")
+        elif op == "invokestatic":
+            args, ret = parse_method_desc(a.desc)
+            try:
+                dc, m2 = self.resolve(a, special=False)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoSuchMethodError", str(le), stk, len(args), ret)
+                return None
+            self.init_class(dc, e)
+            vals = [None] * len(args)
+            for j in range(len(args) - 1, -1, -1):
+                vals[j] = pop()
+            if self.g.caller_sensitive(dc, m2):
+                e(f"rt::set_caller({self.cref(self.ci.name)});")
+            call = self.g.call_direct(self.ci.name, dc, m2, vals)
+            if ret == "V":
+                e(call + ";")
+            else:
+                push(kind_of(ret), call)
+        elif op == "invokespecial":
+            args, ret = parse_method_desc(a.desc)
+            if a.owner == "java/lang/Object" and a.name == "<init>":
+                for _ in range(len(args)):
+                    pop()
+                recv = pop()
+                e(f"rt::nn({recv})?;")
+            else:
+                try:
+                    dc, m2 = self.resolve(a, special=True)
+                except LinkError as le:
+                    self.emit_link_err(e, "java/lang/NoSuchMethodError", str(le), stk, len(args) + 1, ret)
+                    return None
+                vals = [None] * len(args)
+                for j in range(len(args) - 1, -1, -1):
+                    vals[j] = pop()
+                recv = pop()
+                if self.g.caller_sensitive(dc, m2):
+                    e(f"rt::set_caller({self.cref(self.ci.name)});")
+                call = self.g.call_direct(self.ci.name, dc, m2, [recv] + vals)
+                if ret == "V":
+                    e(call + ";")
+                else:
+                    push(kind_of(ret), call)
+        elif op == "invokeinterface":
+            args, ret = parse_method_desc(a.desc)
+            try:
+                dc, m2 = self.resolve(a, special=False)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoSuchMethodError", str(le), stk, len(args) + 1, ret)
+                return None
+            vals = [None] * len(args)
+            for j in range(len(args) - 1, -1, -1):
+                vals[j] = pop()
+            recv = pop()
+            ptypes = ["rt::Ref"] + [RT[kind_of(d)] for d in args]
+            cret = cret_type(ret)
+            obj_slot = self.w.vindex(self.w.req("java/lang/Object")).get(m2.name + m2.desc)
+            if m2.is_private:
+                self.g.need_method(dc, m2)
+                e(f"rt::nn({recv})?;")
+                call = self.g.call_direct(self.ci.name, dc, m2, [recv] + vals)
+            elif obj_slot is not None:
+                if (m2.access & 0x0010):
+                    e(f"rt::nn({recv})?;")
+                    call = self.g.call_direct(self.ci.name, dc, m2, [recv] + vals)
+                else:
+                    fp = f"unsafe {{ std::mem::transmute::<*const (), extern \"C\" fn({', '.join(ptypes)}) -> {cret}>((*(*rt::nn({recv})?).class).vtable[{obj_slot}].0) }}"
+                    call = f"({fp})({', '.join([recv] + vals)}).res()?"
+            else:
+                owner_ci = self.app_class(a.owner)
+                dv = self.g.devirt_targets(owner_ci, m2.name, m2.desc)
+                if dv is not None and dv[0] == "single" and not self.g.caller_sensitive(dv[1][0], dv[1][1]):
+                    tdc, tm2 = dv[1]
+                    self.g.need_class(tdc.name)
+                    self.g.need_method(tdc, tm2)
+                    e(f"rt::nn({recv})?;")
+                    call = self.g.call_direct(self.ci.name, tdc, tm2, [recv] + vals)
+                elif dv is not None and dv[0] == "poly" and not any(self.g.caller_sensitive(x[1], x[2]) for x in dv[1]):
+                    arms_code = []
+                    for idx_p, (tc, tdc, tm2) in enumerate(dv[1]):
+                        self.g.need_class(tdc.name)
+                        self.g.need_method(tdc, tm2)
+                        c_ref = self.cref(tc.name)
+                        d_call = self.g.call_direct(self.ci.name, tdc, tm2, ["r__"] + vals)
+                        kw = "if" if idx_p == 0 else "else if"
+                        arms_code.append(f"{kw} std::ptr::eq(c__, {c_ref}) {{ {d_call} }}")
+                    sel = self.g.sel(m2.name, m2.desc)
+                    fb_fp = f"unsafe {{ std::mem::transmute::<*const (), extern \"C\" fn({', '.join(ptypes)}) -> {cret}>(rt::itab_find((*o__).class, {sel})) }}"
+                    fb = f"({fb_fp})({', '.join(['r__'] + vals)}).res()?"
+                    call = f"{{ let r__ = {recv}; let o__ = rt::nn(r__)?; let c__ = unsafe {{ (*o__).class as *const rt::Class }}; {' '.join(arms_code)} else {{ {fb} }} }}"
+                else:
+                    call = self.iface_call(m2, recv, vals, ptypes, cret)
+            if ret == "V":
+                e(call + ";")
+            else:
+                push(kind_of(ret), call)
+        elif op == "invokevirtual":
+            if a.owner == "java/lang/invoke/VarHandle" and a.name in VH_MODES:
+                return self.varhandle(ins, stk, e)
+            if a.owner.startswith("[") and a.name == "clone" and a.desc == "()Ljava/lang/Object;":
+                push("A", f"rt::array_clone({pop()})?")
+                return None
+            owner_name = "java/lang/Object" if a.owner.startswith("[") else a.owner
+            args, ret = parse_method_desc(a.desc)
+            try:
+                owner = self.app_class(owner_name)
+                r = self.p.resolve(a if not a.owner.startswith("[") else type(a)(a.tag, owner_name, a.name, a.desc))
+                if r is None:
+                    raise LinkError(f"cannot resolve {a.owner}.{a.name}{a.desc}")
+                dc, m2 = r
+                self.app_class(dc.name)
+                self.g.need_method(dc, m2)
+            except LinkError as le:
+                self.emit_link_err(e, "java/lang/NoSuchMethodError", str(le), stk, len(args) + 1, ret)
+                return None
+            vals = [None] * len(args)
+            for j in range(len(args) - 1, -1, -1):
+                vals[j] = pop()
+            recv = pop()
+            ptypes = ["rt::Ref"] + [RT[kind_of(d)] for d in args]
+            cret = cret_type(ret)
+            if self.g.caller_sensitive(dc, m2):
+                e(f"rt::set_caller({self.cref(self.ci.name)});")
+            if m2.is_private or (m2.access & 0x0010) or (dc.cf.access & 0x0010):
+                e(f"rt::nn({recv})?;")
+                call = self.g.call_direct(self.ci.name, dc, m2, [recv] + vals)
+            else:
+                dv = None if self.g.caller_sensitive(dc, m2) else self.g.devirt_targets(owner, m2.name, m2.desc)
+                if dv is not None and dv[0] == "single" and not self.g.caller_sensitive(dv[1][0], dv[1][1]):
+                    tdc, tm2 = dv[1]
+                    self.g.need_class(tdc.name)
+                    self.g.need_method(tdc, tm2)
+                    e(f"rt::nn({recv})?;")
+                    call = self.g.call_direct(self.ci.name, tdc, tm2, [recv] + vals)
+                else:
+                    slot = (self.w.vindex(self.w.req("java/lang/Object")).get(m2.name + m2.desc)
+                            if owner.is_interface else self.w.vindex(owner).get(m2.name + m2.desc))
+                    if slot is None:
+                        call = self.iface_call(m2, recv, vals, ptypes, cret)
+                        if ret == "V":
+                            e(call + ";")
+                        else:
+                            push(kind_of(ret), call)
+                        return None
+                    fp = f"unsafe {{ std::mem::transmute::<*const (), extern \"C\" fn({', '.join(ptypes)}) -> {cret}>((*(*rt::nn({recv})?).class).vtable[{slot}].0) }}"
+                    call = f"({fp})({', '.join([recv] + vals)}).res()?"
+            if ret == "V":
+                e(call + ";")
+            else:
+                push(kind_of(ret), call)
+        elif op in ("monitorenter", "monitorexit"):
+            e(f"rt::{op}({pop()})?;")
+        elif op == "athrow":
+            e(f"return rt::throw_ref({pop()});")
+            return []
+        else:
+            self.err(f"opcode {op}")
+        return None
+
+    # ---------------------------------------------------------------- whole method
+    def generate(self) -> str:
+        m, insns = self.m, self.insns
+        if m.code is None:
+            self.err("native/abstract methods are not in this slice")
+        handlers = m.code.handlers
+        args, ret = parse_method_desc(m.desc)
+        leaders = {0}
+        for i, x in enumerate(insns):
+            for t in x.targets:
+                leaders.add(t)
+            if (x.targets or x.op in ("ireturn", "lreturn", "freturn", "dreturn", "areturn", "return", "athrow")) \
+                    and i + 1 < len(insns):
+                leaders.add(insns[i + 1].pc)
+        entry: dict[int, list] = {0: []}
+        work = [0]
+        for h in handlers:
+            leaders.add(h.handler_pc)
+            if h.handler_pc not in entry:
+                entry[h.handler_pc] = ["A"]
+                work.append(h.handler_pc)
+        blocks: dict[int, list] = {}
+        has_sp = False
+        while work:
+            bpc = work.pop()
+            stk = list(entry[bpc])
+            lines: list = []
+            i = self.idx[bpc]
+            succs: list = []
+            while True:
+                ins = insns[i]
+                if handlers:
+                    lines.append(f"pc = {ins.pc};")
+                if ins.targets and any(t <= ins.pc for t in ins.targets):
+                    has_sp = True
+                    lines.append("_sp_tick = _sp_tick.wrapping_add(1); if (_sp_tick & 1023) == 0 { rt::gc_safepoint(); }")
+                r = self.gen_insn(ins, stk, lines, leaders)
+                if r is not None:
+                    succs = r
+                    break
+                if ins.op in ("ireturn", "lreturn", "freturn", "dreturn", "areturn", "return"):
+                    break
+                # conditional branch targets become successors too
+                if ins.targets:
+                    succs.extend(ins.targets)
+                i += 1
+                if i >= len(insns):
+                    break
+                nxt = insns[i].pc
+                if nxt in leaders:
+                    lines.append(f"pc = {nxt}; continue;")
+                    succs.append(nxt)
+                    break
+            blocks[bpc] = lines
+            for s in succs:
+                if s not in entry:
+                    entry[s] = list(stk)
+                    work.append(s)
+        params = []
+        init = []
+        slot = 0
+        if not m.is_static:
+            params.append("this: rt::Ref")
+            init.append(f"{self.lname(0, 'A')} = this;")
+            slot = 1
+        for j, d in enumerate(args):
+            k = kind_of(d)
+            params.append(f"a{j}: {RT[k]}")
+            init.append(f"{self.lname(slot, k)} = a{j};")
+            slot += 2 if k in WIDE else 1
+        rret = "()" if ret == "V" else RT[kind_of(ret)]
+        if handlers:
+            self.sname(0, "A")
+        body = []
+        for n, k in sorted(self.used_locals.items()):
+            body.append(f"    let mut {n}: {RT[k]} = {DEFAULT[k]};")
+        for n, k in sorted(self.used_stack.items()):
+            body.append(f"    let mut {n}: {RT[k]} = {DEFAULT[k]};")
+        for ln in init:
+            body.append("    " + ln)
+        if self.has_arena:
+            body.append("    let _arena_guard = rt::ArenaGuard::enter();")
+        if has_sp:
+            body.append("    let mut _sp_tick: u32 = 0;")
+        fn_nm = fname(self.ci.name, m.name, m.desc)
+        structured = None if handlers else _try_structure_cfg(blocks)
+        if structured is not None:
+            body.extend("    " + ln for ln in structured)
+        else:
+            body.append("    let mut pc: u32 = 0;")
+            if handlers:
+                body.append("    loop {")
+                body.append(f"    let r = (|| -> rt::Res<{rret}> {{ loop {{ match pc {{")
+            else:
+                body.append("    loop { match pc {")
+            for bpc in sorted(blocks):
+                body.append(f"        {bpc} => {{")
+                body.extend("            " + ln for ln in blocks[bpc])
+                body.append("        }")
+            body.append("        _ => unreachable!(),")
+        if handlers:
+            body.append("    } } })();")
+            body.append("    let t = match r { Ok(v) => return Ok(v), Err(t) => t };")
+            for h in handlers:
+                cond = f"pc >= {h.start_pc} && pc < {h.end_pc}"
+                if h.catch_type is not None:
+                    try:
+                        cr = self.cref(h.catch_type)
+                        cond += f" && rt::instance_of(t.obj, {cr})"
+                    except LinkError as le:
+                        self.g.link_errors.append(f"{self.where}: catch {h.catch_type}: {le}")
+                        cond += " && false"
+                body.append(f"    if {cond} {{ {self.sname(0, 'A')} = t.obj; pc = {h.handler_pc}; continue; }}")
+            body.append("    return Err(t);")
+            body.append("    }")
+        else:
+            if structured is None:
+                body.append("    } }")
+        cret = cret_type(ret)
+        cwrap = cret_wrap(ret)
+        self.g.fn_sigs[fn_nm] = f"pub fn {fn_nm}({', '.join(params)}) -> {cret};"
+        if m.access & 0x0020:
+            lock = "this" if not m.is_static else f"rt::class_mirror({self.cref(self.ci.name)})?"
+            call_args = ", ".join((["this"] if not m.is_static else []) + [f"a{j}" for j in range(len(args))])
+            wrapper = (f"#[no_mangle] pub extern \"C\" fn {fn_nm}({', '.join(params)}) -> {cret} {{\n"
+                       f"    rt::{cwrap}((|| -> rt::Res<{rret}> {{\n"
+                       f"        let lock = {lock};\n        rt::monitorenter(lock)?;\n"
+                       f"        let r = {fn_nm}__body({call_args});\n        rt::monitorexit(lock)?;\n        r\n"
+                       f"    }})())\n}}\n")
+            sig = f"fn {fn_nm}__body({', '.join(params)}) -> rt::Res<{rret}> {{"
+            return wrapper + sig + "\n" + "\n".join(body) + "\n}\n"
+        else:
+            r_nm = "r_" + fn_nm[2:]
+            inl = "#[inline] " if (not handlers and len(m.code.code) <= 120) else ""
+            call_args = ", ".join((["this"] if not m.is_static else []) + [f"a{j}" for j in range(len(args))])
+            nt = self.g.is_nothrow(self.ci, m)
+            if nt:
+                nt_body = []
+                for ln in body:
+                    s = ln.lstrip()
+                    ind = ln[:len(ln) - len(s)]
+                    if s == "return Ok(());":
+                        nt_body.append(ind + "return;")
+                    elif s.startswith("return Ok(") and s.endswith(");"):
+                        nt_body.append(ind + "return " + s[10:-2] + ";")
+                    else:
+                        nt_body.append(ln)
+                rsig = f"{inl}fn {r_nm}({', '.join(params)}) -> {rret} {{"
+                wrapper = (f"#[no_mangle] pub extern \"C\" fn {fn_nm}({', '.join(params)}) -> {cret} {{\n"
+                           f"    rt::{cwrap}(Ok({r_nm}({call_args})))\n}}\n")
+                return rsig + "\n" + "\n".join(nt_body) + "\n}\n" + wrapper
+            rsig = f"{inl}fn {r_nm}({', '.join(params)}) -> rt::Res<{rret}> {{"
+            wrapper = (f"#[no_mangle] pub extern \"C\" fn {fn_nm}({', '.join(params)}) -> {cret} {{\n"
+                       f"    rt::{cwrap}({r_nm}({call_args}))\n}}\n")
+            return rsig + "\n" + "\n".join(body) + "\n}\n" + wrapper
+
+
+def _try_structure_cfg(blocks: dict[int, list[str]]) -> list[str] | None:
+    if len(blocks) > 32:
+        return None
+    import re
+    goto_re = re.compile(r"^pc = (\d+); continue;$")
+    if_re = re.compile(r"^if (.+) \{ pc = (\d+); continue; \}$")
+    parsed: dict[int, tuple] = {}
+    succs: dict[int, list[int]] = {}
+    preds: dict[int, list[int]] = {b: [] for b in blocks}
+    for bpc, lines in blocks.items():
+        if not lines:
+            return None
+        m_g = goto_re.match(lines[-1])
+        if m_g:
+            f_pc = int(m_g.group(1))
+            m_if = if_re.match(lines[-2]) if len(lines) >= 2 else None
+            if m_if:
+                body = lines[:-2]
+                cond, t_pc = m_if.group(1), int(m_if.group(2))
+                if any("pc = " in ln or "continue;" in ln for ln in body):
+                    return None
+                parsed[bpc] = ("cond", body, cond, t_pc, f_pc)
+                succs[bpc] = [t_pc, f_pc]
+            else:
+                body = lines[:-1]
+                if any("pc = " in ln or "continue;" in ln for ln in body):
+                    return None
+                parsed[bpc] = ("goto", body, f_pc)
+                succs[bpc] = [f_pc]
+        else:
+            if any("pc = " in ln or "continue;" in ln for ln in lines):
+                return None
+            parsed[bpc] = ("term", lines)
+            succs[bpc] = []
+        for s in succs[bpc]:
+            if s not in preds:
+                return None
+            preds[s].append(bpc)
+
+    if len(blocks) == 1 and parsed[0][0] == "term":
+        return list(parsed[0][1])
+
+    loop_headers: set[int] = set()
+    for u, ss in succs.items():
+        for v in ss:
+            if v <= u:
+                loop_headers.add(v)
+
+    loop_exit: dict[int, int] = {}
+    for h in loop_headers:
+        can_reach = {h}
+        stk = [u for u in preds[h] if u >= h]
+        while stk:
+            cur = stk.pop()
+            if cur in can_reach or cur < h:
+                continue
+            can_reach.add(cur)
+            stk.extend(preds[cur])
+        fwd = {h}
+        fstk = [h]
+        while fstk:
+            cur = fstk.pop()
+            for s in succs[cur]:
+                if s in can_reach and s not in fwd:
+                    fwd.add(s)
+                    fstk.append(s)
+        # Require flat loop body: no internal non-header block has >1 predecessor inside fwd,
+        # and no nested loop header inside fwd.
+        for u in fwd:
+            if u != h and (u in loop_headers or len(preds[u]) > 1):
+                return None
+        exits = {s for u in fwd for s in succs[u] if s not in fwd}
+        if len(exits) > 1:
+            return None
+        loop_exit[h] = next(iter(exits)) if exits else -1
+
+    # For acyclic nodes (outside loop headers), forbid arbitrary DAG diamond sharing
+    # unless a cond node's two arms both terminate or directly share a single immediate merge.
+    budget = [len(blocks) * 2 + 8]
+
+    def emit(bpc: int, stop_pc: int, hdr: int, ex: int, out: list[str]) -> bool:
+        budget[0] -= 1
+        if budget[0] < 0:
+            return False
+        if bpc == hdr:
+            out.append(f"continue 'L_{hdr};")
+            return True
+        if bpc == ex:
+            out.append(f"break 'L_{hdr};")
+            return True
+        if bpc == stop_pc:
+            return True
+        if bpc in loop_headers and bpc != hdr:
+            nex = loop_exit[bpc]
+            out.append(f"'L_{bpc}: loop {{")
+            sub: list[str] = []
+            if not emit_node(bpc, nex, bpc, nex, sub):
+                return False
+            out.extend("    " + ln for ln in sub)
+            out.append("}")
+            if nex >= 0:
+                return emit(nex, stop_pc, hdr, ex, out)
+            return True
+        if bpc not in loop_headers and len(preds[bpc]) > 1:
+            return False
+        return emit_node(bpc, stop_pc, hdr, ex, out)
+
+    def emit_node(bpc: int, stop_pc: int, hdr: int, ex: int, out: list[str]) -> bool:
+        node = parsed[bpc]
+        kind = node[0]
+        if kind == "term":
+            out.extend(node[1])
+            return True
+        if kind == "goto":
+            out.extend(node[1])
+            return emit(node[2], stop_pc, hdr, ex, out)
+        _, lines, cond, t_pc, f_pc = node
+        out.extend(lines)
+        if t_pc == ex:
+            out.append(f"if {cond} {{ break 'L_{hdr}; }}")
+            return emit(f_pc, stop_pc, hdr, ex, out)
+        if f_pc == ex:
+            out.append(f"if !({cond}) {{ break 'L_{hdr}; }}")
+            return emit(t_pc, stop_pc, hdr, ex, out)
+        if t_pc == hdr:
+            out.append(f"if {cond} {{ continue 'L_{hdr}; }}")
+            return emit(f_pc, stop_pc, hdr, ex, out)
+        if f_pc == hdr:
+            out.append(f"if !({cond}) {{ continue 'L_{hdr}; }}")
+            return emit(t_pc, stop_pc, hdr, ex, out)
+        # Only allow cond diamond if both branches terminate or meet at the exact same immediate target
+        merge = -1
+        if parsed[t_pc][0] == "goto" and parsed[f_pc][0] == "goto" and parsed[t_pc][2] == parsed[f_pc][2]:
+            merge = parsed[t_pc][2]
+        elif t_pc in succs[f_pc]:
+            merge = t_pc
+        elif f_pc in succs[t_pc]:
+            merge = f_pc
+        t_out: list[str] = []
+        f_out: list[str] = []
+        sub_stop = merge if merge >= 0 else stop_pc
+        if not emit(t_pc, sub_stop, hdr, ex, t_out) or not emit(f_pc, sub_stop, hdr, ex, f_out):
+            return False
+        out.append(f"if {cond} {{")
+        out.extend("    " + ln for ln in t_out)
+        if f_out:
+            out.append("} else {")
+            out.extend("    " + ln for ln in f_out)
+        out.append("}")
+        if merge >= 0:
+            return emit(merge, stop_pc, hdr, ex, out)
+        return True
+
+    out: list[str] = []
+    if not emit(0, -1, -1, -1, out):
+        return None
+    return out
+
+
+I, J, F, D = "I", "J", "F", "D"
+BINOPS = {
+    "iadd": (I, "{a}.wrapping_add({b})"), "isub": (I, "{a}.wrapping_sub({b})"), "imul": (I, "{a}.wrapping_mul({b})"),
+    "idiv": (I, "rt::idiv({a}, {b})?"), "irem": (I, "rt::irem({a}, {b})?"),
+    "ishl": (I, "rt::ishl({a}, {b})"), "ishr": (I, "rt::ishr({a}, {b})"), "iushr": (I, "rt::iushr({a}, {b})"),
+    "iand": (I, "{a} & {b}"), "ior": (I, "{a} | {b}"), "ixor": (I, "{a} ^ {b}"),
+    "ladd": (J, "{a}.wrapping_add({b})"), "lsub": (J, "{a}.wrapping_sub({b})"), "lmul": (J, "{a}.wrapping_mul({b})"),
+    "ldiv": (J, "rt::ldiv({a}, {b})?"), "lrem": (J, "rt::lrem({a}, {b})?"),
+    "lshl": (J, "rt::lshl({a}, {b})"), "lshr": (J, "rt::lshr({a}, {b})"), "lushr": (J, "rt::lushr({a}, {b})"),
+    "land": (J, "{a} & {b}"), "lor": (J, "{a} | {b}"), "lxor": (J, "{a} ^ {b}"),
+    "fadd": (F, "{a} + {b}"), "fsub": (F, "{a} - {b}"), "fmul": (F, "{a} * {b}"), "fdiv": (F, "{a} / {b}"),
+    "frem": (F, "{a} % {b}"),
+    "dadd": (D, "{a} + {b}"), "dsub": (D, "{a} - {b}"), "dmul": (D, "{a} * {b}"), "ddiv": (D, "{a} / {b}"),
+    "drem": (D, "{a} % {b}"),
+}
+UNOPS = {"ineg": (I, "{a}.wrapping_neg()"), "lneg": (J, "{a}.wrapping_neg()"),
+         "fneg": (F, "-{a}"), "dneg": (D, "-{a}")}
+CONVS = {
+    "i2l": (J, "{a} as i64"), "i2f": (F, "{a} as f32"), "i2d": (D, "{a} as f64"),
+    "l2i": (I, "{a} as i32"), "l2f": (F, "{a} as f32"), "l2d": (D, "{a} as f64"),
+    "f2i": (I, "rt::f2i({a})"), "f2l": (J, "rt::f2l({a})"), "f2d": (D, "{a} as f64"),
+    "d2i": (I, "rt::d2i({a})"), "d2l": (J, "rt::d2l({a})"), "d2f": (F, "{a} as f32"),
+    "i2b": (I, "rt::i2b({a})"), "i2c": (I, "rt::i2c({a})"), "i2s": (I, "rt::i2s({a})"),
+}
+CMPS = {"lcmp": "rt::lcmp({a}, {b})", "fcmpl": "rt::fcmpl({a}, {b})", "fcmpg": "rt::fcmpg({a}, {b})",
+        "dcmpl": "rt::dcmpl({a}, {b})", "dcmpg": "rt::dcmpg({a}, {b})"}
+IF1 = {"ifeq": "{a} == 0", "ifne": "{a} != 0", "iflt": "{a} < 0", "ifge": "{a} >= 0", "ifgt": "{a} > 0",
+       "ifle": "{a} <= 0", "ifnull": "{a} == rt::Ref::NULL", "ifnonnull": "{a} != rt::Ref::NULL"}
+IF2 = {"if_icmpeq": "{a} == {b}", "if_icmpne": "{a} != {b}", "if_icmplt": "{a} < {b}", "if_icmpge": "{a} >= {b}",
+       "if_icmpgt": "{a} > {b}", "if_icmple": "{a} <= {b}", "if_acmpeq": "{a} == {b}", "if_acmpne": "{a} != {b}"}
+ALOAD = {
+    "iaload": ("I", "i32", ""), "laload": ("J", "i64", ""), "faload": ("F", "f32", ""), "daload": ("D", "f64", ""),
+    "aaload": ("A", "rt::Ref", ""), "baload": ("I", "i8", " as i32"), "caload": ("I", "u16", " as i32"),
+    "saload": ("I", "i16", " as i32"),
+}
+ASTORE = {
+    "iastore": ("i32", ""), "lastore": ("i64", ""), "fastore": ("f32", ""), "dastore": ("f64", ""),
+    "aastore": ("rt::Ref", ""), "bastore": ("i8", ""), "castore": ("u16", " as u16"), "sastore": ("i16", " as i16"),
+}
+PRINTLN = {"(I)V": "println_i", "(J)V": "println_j", "(Ljava/lang/String;)V": "println_s",
+           "(C)V": "println_c", "(Z)V": "println_z"}
+
+
+ARR_KINDS = "ZBCSIJFDA"
+# classes the runtime throws itself (null access, bounds, arithmetic, casts, ...); each needs <init>(String)
+RUNTIME_THROWN = [
+    "java/lang/ArithmeticException", "java/lang/NullPointerException", "java/lang/ArrayIndexOutOfBoundsException",
+    "java/lang/NegativeArraySizeException", "java/lang/ClassCastException", "java/lang/ArrayStoreException",
+    "java/lang/OutOfMemoryError", "java/lang/StackOverflowError", "java/lang/IllegalMonitorStateException",
+    "java/lang/InternalError", "java/lang/UnsatisfiedLinkError", "java/lang/AbstractMethodError",
+    "java/lang/NoClassDefFoundError", "java/lang/NoSuchFieldError", "java/lang/NoSuchMethodError",
+    "java/lang/IncompatibleClassChangeError", "java/lang/InterruptedException",
+    "java/lang/IllegalArgumentException", "java/lang/UnsupportedOperationException",
+    "java/lang/IllegalThreadStateException", "java/lang/InstantiationError",
+    "java/io/IOException", "java/io/FileNotFoundException",
+]
+OPTIONAL_THROWN = [
+    "java/lang/IndexOutOfBoundsException", "java/lang/InstantiationException", "java/lang/ClassNotFoundException",
+    "java/lang/SecurityException", "java/io/SyncFailedException", "java/util/zip/DataFormatException",
+    "java/net/SocketException", "java/net/UnknownHostException", "java/net/ConnectException",
+    "java/net/BindException", "java/net/SocketTimeoutException",
+    "java/net/ProtocolException", "java/net/NoRouteToHostException", "java/net/PortUnreachableException",
+    "java/nio/channels/ClosedChannelException",
+]
+
+
+class Gen:
+    """Whole-program state. Classes and methods are discovered from the entry point: a class is emitted once it is
+    referenced, a method once it is called directly, reachable (Program's analysis) or needed by a vtable/itable."""
+
+    def __init__(self, world, prog, natives_src: str, esc_res=None):
+        self.world, self.prog, self.esc = world, prog, esc_res
+        self.lits: dict[str, tuple] = {}
+        self.sels: dict[str, int] = {}
+        self.class_q: list = []
+        self.seen_classes: set = set()
+        self.method_q: list = []
+        self.seen_methods: set = set()
+        self.object_vtable = "&[]"
+        self.vh_used = False
+        self.cs_cache: dict = {}
+        self.errors: list[str] = []
+        self.link_errors: list[str] = []
+        self.missing_natives: list[str] = []
+        self.cls_syms: set[str] = {f"CLS_ARR_{k}" for k in ARR_KINDS}
+        self.fn_sigs: dict[str, str] = {}
+        self.static_sigs: dict[str, str] = {}
+        self.struct_defs: dict[str, str] = {}
+        self.shapes: dict[str, int] = {}
+        self.shards: int = 1
+        self._devirt_cache: dict = {}
+        self._iface_impls: dict | None = None
+        import re
+        rt_dir = os.path.dirname(natives_src)
+        self.natives = set()
+        for fn in os.listdir(rt_dir):
+            if fn.endswith(".rs"):
+                txt = open(os.path.join(rt_dir, fn), encoding="utf-8").read()
+                self.natives |= set(re.findall(r"pub fn (n_\w+)", txt)) | set(re.findall(r"\w+!\(\s*(n_\w+)", txt))
+
+    _NO_THROW_OPS = frozenset({
+        "nop", "aconst_null", "iconst_m1", "iconst_0", "iconst_1", "iconst_2", "iconst_3", "iconst_4", "iconst_5",
+        "lconst_0", "lconst_1", "fconst_0", "fconst_1", "fconst_2", "dconst_0", "dconst_1",
+        "bipush", "sipush",
+        "iload", "lload", "fload", "dload", "aload", "iload_0", "iload_1", "iload_2", "iload_3",
+        "lload_0", "lload_1", "lload_2", "lload_3", "fload_0", "fload_1", "fload_2", "fload_3",
+        "dload_0", "dload_1", "dload_2", "dload_3", "aload_0", "aload_1", "aload_2", "aload_3",
+        "istore", "lstore", "fstore", "dstore", "astore", "istore_0", "istore_1", "istore_2", "istore_3",
+        "lstore_0", "lstore_1", "lstore_2", "lstore_3", "fstore_0", "fstore_1", "fstore_2", "fstore_3",
+        "dstore_0", "dstore_1", "dstore_2", "dstore_3", "astore_0", "astore_1", "astore_2", "astore_3",
+        "pop", "pop2", "dup", "dup_x1", "dup_x2", "dup2", "dup2_x1", "dup2_x2", "swap",
+        "iadd", "ladd", "fadd", "dadd", "isub", "lsub", "fsub", "dsub",
+        "imul", "lmul", "fmul", "dmul", "fdiv", "ddiv", "frem", "drem",
+        "ineg", "lneg", "fneg", "dneg",
+        "ishl", "lshl", "ishr", "lshr", "iushr", "lushr",
+        "iand", "land", "ior", "lor", "ixor", "lxor", "iinc",
+        "i2l", "i2f", "i2d", "l2i", "l2f", "l2d", "f2i", "f2l", "f2d", "d2i", "d2l", "d2f",
+        "i2b", "i2c", "i2s", "lcmp", "fcmpl", "fcmpg", "dcmpl", "dcmpg",
+        "ifeq", "ifne", "iflt", "ifge", "ifgt", "ifle",
+        "if_icmpeq", "if_icmpne", "if_icmplt", "if_icmpge", "if_icmpgt", "if_icmple",
+        "if_acmpeq", "if_acmpne", "ifnull", "ifnonnull",
+        "goto", "goto_w", "tableswitch", "lookupswitch",
+        "ireturn", "lreturn", "freturn", "dreturn", "areturn", "return",
+    })
+
+    def is_nothrow(self, dc, m) -> bool:
+        k = (dc.name, m.key)
+        if hasattr(self, "_nothrow_cache") and k in self._nothrow_cache:
+            return self._nothrow_cache[k]
+        if not hasattr(self, "_nothrow_cache"):
+            self._nothrow_cache = {}
+        ok = False
+        if not m.is_native and m.code is not None and not m.code.handlers and not (m.access & 0x0020):
+            insns = self.prog.insns(dc, m)
+            ok = True
+            for ins in insns:
+                if ins.op in self._NO_THROW_OPS:
+                    continue
+                if ins.op == "invokestatic" and ins.arg.owner == dc.name and ins.arg.name == m.name and ins.arg.desc == m.desc:
+                    continue
+                ok = False
+                break
+        self._nothrow_cache[k] = ok
+        return ok
+
+    def rust_callable(self, cur_cn: str, dc, m) -> bool:
+        return (not m.is_native and m.code is not None and not (m.access & 0x0020)
+                and (self.shards <= 1 or cur_cn == dc.name))
+
+    def call_direct(self, cur_cn: str, dc, m, arg_exprs: list[str]) -> str:
+        fn_nm = fname(dc.name, m.name, m.desc)
+        if self.rust_callable(cur_cn, dc, m):
+            q = "" if self.is_nothrow(dc, m) else "?"
+            return f"r_{fn_nm[2:]}({', '.join(arg_exprs)}){q}"
+        return f"unsafe {{ {fn_nm}({', '.join(arg_exprs)}) }}.res()?"
+
+    def devirt_targets(self, owner_ci, name: str, desc: str):
+        key = (owner_ci.name, name + desc)
+        if key in self._devirt_cache:
+            return self._devirt_cache[key]
+        res = None
+        if owner_ci.is_interface:
+            if self._iface_impls is None:
+                m_map: dict[str, list] = {}
+                for c in self.world.classes.values():
+                    if not c.is_interface and not (c.cf.access & 0x0400):
+                        for iface in self.world.all_interfaces(c):
+                            m_map.setdefault(iface.name, []).append(c)
+                self._iface_impls = m_map
+            concs = self._iface_impls.get(owner_ci.name, ())
+            if 1 <= len(concs) <= 8:
+                by_cls = []
+                distinct = {}
+                ok = True
+                for c in concs:
+                    impl = self.world.select(c, name, desc)
+                    if impl is None or impl[1].is_abstract or impl[1].is_native:
+                        ok = False
+                        break
+                    dc, m2 = impl
+                    distinct[(dc.name, m2.key)] = (dc, m2)
+                    by_cls.append((c, dc, m2))
+                if ok and len(distinct) == 1:
+                    res = ("single", next(iter(distinct.values())))
+                elif ok and 2 <= len(by_cls) <= 4:
+                    res = ("poly", by_cls)
+        else:
+            stk = [owner_ci]
+            seen = set()
+            distinct = {}
+            ok = True
+            while stk:
+                c = stk.pop()
+                if c.name in seen:
+                    continue
+                seen.add(c.name)
+                if not c.is_interface and not (c.cf.access & 0x0400):
+                    impl = self.world.select(c, name, desc)
+                    if impl is None or impl[1].is_abstract or impl[1].is_native:
+                        ok = False
+                        break
+                    dc, m2 = impl
+                    distinct[(dc.name, m2.key)] = (dc, m2)
+                    if len(distinct) > 1:
+                        ok = False
+                        break
+                stk.extend(c.subclasses)
+            if ok and len(distinct) == 1:
+                res = ("single", next(iter(distinct.values())))
+        self._devirt_cache[key] = res
+        return res
+
+    def noescape_sites(self, cn: str, key: str):
+        return self.esc.noescape_sites(cn, key) if self.esc is not None else frozenset()
+
+    def shape_id(self, is_static: bool, desc: str) -> int:
+        args, ret = parse_method_desc(desc)
+        rk = lambda d: d[0] if d[0] in "ZBCSIJFDV" else "A"
+        key = ("S" if is_static else "I") + "".join(rk(d) for d in args) + ":" + rk(ret)
+        return self.shapes.setdefault(key, len(self.shapes) + 1)
+
+    def caller_sensitive(self, dc, m) -> bool:
+        """True if the method calls Reflection.getCallerClass(): its callers publish their class first."""
+        k = (dc.name, m.name + m.desc)
+        if k not in self.cs_cache:
+            r = False
+            if m.code is not None:
+                r = any(i.op == "invokestatic" and i.arg.owner == "jdk/internal/reflect/Reflection" and i.arg.name == "getCallerClass"
+                        for i in self.prog.insns(dc, m))
+            self.cs_cache[k] = r
+        return self.cs_cache[k]
+
+    def sel(self, name: str, desc: str) -> int:
+        """Global selector id of an interface method (name + descriptor)."""
+        return self.sels.setdefault(name + desc, len(self.sels))
+
+    def need_class(self, name: str):
+        ci = self.world.get(name)
+        if ci is None:
+            raise LinkError(f"class {name} not found")
+        if name not in self.seen_classes:
+            self.seen_classes.add(name)
+            self.class_q.append(ci)
+        return ci
+
+    def need_method(self, ci, m):
+        k = (ci.name, m.name + m.desc)
+        if k not in self.seen_methods:
+            self.seen_methods.add(k)
+            self.method_q.append((ci, m))
+
+    def lit(self, text: str):
+        if text not in self.lits:
+            n = len(self.lits)
+            u = []
+            for ch in text:
+                c = ord(ch)
+                if c >= 0x10000:
+                    c -= 0x10000
+                    u += [0xD800 + (c >> 10), 0xDC00 + (c & 0x3FF)]
+                else:
+                    u.append(c)
+            self.lits[text] = (f"LIT_{n}", f"LD_{n}", u)
+        r = self.lits[text]
+        return r[0], r[1]
+
+    @staticmethod
+    def struct_name(ci) -> str:
+        return "O_" + mang(ci.name)
+
+    @staticmethod
+    def class_name(ci) -> str:
+        return "CLS_" + mang(ci.name)
+
+    @staticmethod
+    def array_class_name(desc: str) -> str:
+        e = desc[1]
+        return "CLS_ARR_" + (e if e in ARR_KINDS else "A")
+
+    @staticmethod
+    def init_name(ci) -> str:
+        return "init_" + mang(ci.name)
+
+    @staticmethod
+    def field_name(dc, f) -> str:
+        return f"f_{mang(dc.name)}_{mang(f.name)}"
+
+    @staticmethod
+    def static_name(dc, f) -> str:
+        return f"S_{mang(dc.name)}__{mang(f.name)}"
+
+    @staticmethod
+    def cv(f):
+        """(kind, value) of a ConstantValue attribute, or None. Kinds: int long float double string."""
+        c = f.constant_value
+        if c is None:
+            return None
+        if isinstance(c, tuple):
+            return c
+        if isinstance(c, str):
+            return ("string", c)
+        if isinstance(c, bool) or isinstance(c, int):
+            return ("int", int(c))
+        raise RustGenError(f"{f.name}: ConstantValue {c!r}")
+
+    def string_consts(self, ci):
+        return [f for f in ci.cf.fields if f.is_static and (self.cv(f) or ("",))[0] == "string"]
+
+    def needs_init(self, ci) -> bool:
+        if ci.cf.method("<clinit>", "()V") is not None or self.string_consts(ci):
+            return True
+        return ci.super is not None and self.needs_init(ci.super)
+
+    def is_reachable(self, cname: str, m) -> bool:
+        return (cname, m.name + m.desc) in self.prog.reachable
+
+    def slot_fn(self, impl) -> str:
+        if impl is not None:
+            dcn, mm = impl
+            if (mm.code is not None or mm.is_native) and self.is_reachable(dcn, mm):
+                self.need_method(self.need_class(dcn), mm)
+                return fname(dcn, mm.name, mm.desc)
+        return "rt::unreachable_slot"
+
+    def native_name(self, ci, m) -> str:
+        base = f"n_{mang(ci.name)}__{mang(m.name)}"
+        same = [x for x in ci.cf.methods if x.is_native and x.name == m.name]
+        if len(same) > 1:
+            base += "__" + hashlib.sha1(m.desc.encode()).hexdigest()[:6]
+        return base
+
+    def emit_native(self, ci, m) -> str:
+        args, ret = parse_method_desc(m.desc)
+        params, call = [], []
+        if not m.is_static:
+            params.append("this: rt::Ref")
+            call.append("this")
+        for j, d in enumerate(args):
+            params.append(f"a{j}: {RT[kind_of(d)]}")
+            call.append(f"a{j}")
+        fn_nm = fname(ci.name, m.name, m.desc)
+        cret = cret_type(ret)
+        cwrap = cret_wrap(ret)
+        self.fn_sigs[fn_nm] = f"pub fn {fn_nm}({', '.join(params)}) -> {cret};"
+        nn_ = self.native_name(ci, m)
+        sig = f"#[no_mangle] pub extern \"C\" fn {fn_nm}({', '.join(params)}) -> {cret} {{"
+        if nn_ in self.natives:
+            return sig + f" rt::{cwrap}(natives::{nn_}({', '.join(call)})) }}\n"
+        self.missing_natives.append(f"{nn_}  ({ci.name}.{m.name}{m.desc})")
+        return sig + f" rt::{cwrap}(rt::missing_native({rstr(f'{ci.name}.{m.name}{m.desc}')})) }}\n"
+
+    def emit_class(self, ci) -> str:
+        w = self.world
+        self.cls_syms.add(self.class_name(ci))
+        sup = ci.super
+        if sup is not None:
+            self.need_class(sup.name)
+            sup_ref = "Some(unsafe { &" + self.class_name(sup) + " })"
+        else:
+            sup_ref = "None"
+        all_if = w.all_interfaces(ci)
+        for i in all_if:
+            self.need_class(i.name)
+        ifaces_ref = ", ".join("unsafe { &" + self.class_name(i) + " }" for i in all_if)
+        itab = []
+        if not ci.is_interface:
+            seen = set()
+            for i in all_if:
+                for im in w.iface_methods(i):
+                    key = im.name + im.desc
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    impl = w.select(ci, im.name, im.desc)
+                    itab.append((self.sel(im.name, im.desc), self.slot_fn((impl[0].name, impl[1]) if impl else None)))
+            itab.sort()
+        itab_text = ", ".join(f"rt::IEnt({n}, rt::Fp({f} as *const ()))" for n, f in itab)
+        out = []
+        fields = w.instance_fields(ci)
+        sn = self.struct_name(ci)
+        st_lines = ["#[repr(C)]", f"pub struct {sn} {{", "    pub hdr: rt::Obj,"]
+        for owner, f in fields:
+            st_lines.append(f"    pub f_{mang(owner)}_{mang(f.name)}: {ftype(f.desc)},")
+        st_lines.append("}")
+        self.struct_defs[sn] = "\n".join(st_lines) + "\n"
+        out.extend(st_lines)
+        slots = []
+        for sl in ([] if ci.is_interface else w.vtable(ci)):
+            slots.append(f"rt::Fp({self.slot_fn(sl.impl)} as *const ())")
+        vt = f"&[{', '.join(slots)}]"
+        if ci.name == "java/lang/Object":
+            self.object_vtable = vt
+        cf = ci.cf
+        pool = CompactPool(cf.cp)
+        keep_ann = lambda desc: isinstance(desc, str) and desc.startswith("L") and desc[1:-1] in self.prog.loaded
+        ents = []
+        for f in cf.fields:
+            if f.is_static:
+                loc = f"rt::FLoc::Static(rt::SPtr(unsafe {{ &raw mut {self.static_name(ci, f)} as *mut u8 }}))"
+            else:
+                loc = f"rt::FLoc::Off(std::mem::offset_of!({self.struct_name(ci)}, f_{mang(ci.name)}_{mang(f.name)}) as u32)"
+            fsig = rstr(f.signature or "")
+            fann = rbytes(rewrite_annotations(f.attributes.get("RuntimeVisibleAnnotations"), pool, keep_ann))
+            ents.append(f"rt::FInfo {{ name: {rstr(f.name)}, desc: {rstr(f.desc)}, access: {f.access}, loc: {loc}, sig: {fsig}, ann: {fann} }}")
+        foffs = ", ".join(ents)
+        ments = []
+        for m in cf.methods:
+            if m.name == "<clinit>":
+                continue
+            fp_expr = "rt::Fp(std::ptr::null())"
+            shape = 0
+            if self.is_reachable(ci.name, m) and (m.code is not None or m.is_native) and not m.is_abstract:
+                self.need_method(ci, m)
+                fp_expr = f"rt::Fp({fname(ci.name, m.name, m.desc)} as *const ())"
+                shape = self.shape_id(m.is_static, m.desc)
+            ma = m.attributes
+            msig = rstr(m.signature or "")
+            mann = rbytes(rewrite_annotations(ma.get("RuntimeVisibleAnnotations"), pool, keep_ann))
+            mpann = rbytes(rewrite_param_annotations(ma.get("RuntimeVisibleParameterAnnotations"), pool, keep_ann))
+            mdflt = rbytes(rewrite_default(ma.get("AnnotationDefault"), pool))
+            mex = "&[" + ", ".join(rstr(x) for x in m.exceptions) + "]" if m.exceptions else "&[]"
+            ments.append(f"rt::MInfo {{ name: {rstr(m.name)}, desc: {rstr(m.desc)}, access: {m.access}, shape: {shape}, fp: {fp_expr}, "
+                         f"sig: {msig}, ann: {mann}, pann: {mpann}, dflt: {mdflt}, ex: {mex} }}")
+        moffs = ", ".join(ments)
+        cann = rewrite_annotations(cf.attributes.get("RuntimeVisibleAnnotations"), pool, keep_ann)
+        ie = inner_info(cf)
+        declared = [e.inner for e in cf.inner_classes if e.outer == cf.name and e.inner and e.inner in self.prog.loaded]
+        em = cf.enclosing_method
+        has_refl = bool(cf.signature or cann or pool.entries or ie is not None or em is not None or declared or getattr(cf, "nest_host", None))
+        refl_expr = "None"
+        if has_refl:
+            cp_items = ["rt::CpEnt::None"]
+            for kind, val in pool.entries:
+                if kind == "utf8":
+                    cp_items.append(f"rt::CpEnt::Str({rstr(val)})")
+                elif kind == "int":
+                    cp_items.append(f"rt::CpEnt::Int({val})")
+                elif kind == "long":
+                    cp_items.append(f"rt::CpEnt::Long({val})")
+                elif kind == "float":
+                    cp_items.append(f"rt::CpEnt::Float(f32::from_bits(0x{struct.unpack('>I', val)[0]:08x}))")
+                elif kind == "double":
+                    cp_items.append(f"rt::CpEnt::Double(f64::from_bits(0x{struct.unpack('>Q', val)[0]:016x}))")
+            cr_nm = "CR_" + mang(ci.name)
+            refl_expr = f"Some(&{cr_nm})"
+            out.append(
+                f"static {cr_nm}: rt::ClassRefl = rt::ClassRefl {{ "
+                f"sig: {rstr(cf.signature or '')}, ann: {rbytes(cann)}, "
+                f"cpool: &[{', '.join(cp_items)}], "
+                f"is_inner: {'true' if ie is not None else 'false'}, "
+                f"outer: {rstr((ie.outer or '') if ie else '')}, "
+                f"inner_name: {rstr((ie.name or '') if ie else '')}, "
+                f"inner_flags: {ie.access if ie else 0}, "
+                f"enc_class: {rstr(em[0] if em else '')}, "
+                f"enc_name: {rstr((em[1] or '') if em else '')}, "
+                f"enc_desc: {rstr((em[2] or '') if em else '')}, "
+                f"declared: &[{', '.join(rstr(x) for x in declared)}], "
+                f"nest_host: {rstr(getattr(cf, 'nest_host', None) or '')} }};"
+            )
+        has_init = self.needs_init(ci)
+        init_fn = f"Some({self.init_name(ci)})" if has_init else "None"
+        enum_fn = "None"
+        if ci.cf.access & 0x4000 and ci.super is not None and ci.super.name == "java/lang/Enum":
+            vf = next((f for f in ci.cf.fields if f.name == "$VALUES" and f.is_static), None)
+            if vf is not None:
+                enum_fn = f"Some(ev_{mang(ci.name)})"
+                extra_enum = (f"extern \"C\" fn ev_{mang(ci.name)}() -> rt::CRes<rt::Ref> {{ "
+                              f"rt::cres((|| -> rt::Res<rt::Ref> {{ {self.init_name(ci)}().res()?; "
+                              f"Ok(unsafe {{ {self.static_name(ci, vf)} }}) }})()) }}")
+        ref_offs = ", ".join(
+            f"std::mem::offset_of!({sn}, f_{mang(owner)}_{mang(f.name)}) as u32"
+            for owner, f in fields if ftype(f.desc) == "rt::Ref"
+        )
+        srefs = ", ".join(
+            f"rt::SPtr(unsafe {{ &raw mut {self.static_name(ci, f)} as *mut u8 }})"
+            for f in cf.fields if f.is_static and ftype(f.desc) == "rt::Ref"
+        )
+        out.append(f"#[no_mangle] pub static {self.class_name(ci)}: rt::Class = rt::Class {{ name: {rstr(ci.name)}, super_: {sup_ref}, "
+                   f"size: std::mem::size_of::<{self.struct_name(ci)}>(), vtable: {vt}, elem: 0, elem_class: None, array_cache: rt::ArrCache::NEW, "
+                   f"itab: &[{itab_text}], ifaces: &[{ifaces_ref}], fields: &[{foffs}], ref_offsets: &[{ref_offs}], static_refs: &[{srefs}], methods: &[{moffs}], refl: {refl_expr}, mirror: rt::Mirror::NEW, kind: {1 if ci.is_interface else 0}, access: {ci.cf.access}, "
+                   f"init: {init_fn}, enum_values: {enum_fn} }};")
+        if enum_fn != "None":
+            out.append(extra_enum)
+        for f in ci.cf.fields:
+            if f.is_static:
+                k = kind_of(f.desc)
+                init = DEFAULT[k]
+                if k == "I" and not isinstance(DEFAULT[k], int):
+                    init = "0"
+                cv = self.cv(f)
+                if cv is not None and cv[0] != "string":
+                    t, v = cv
+                    if t in ("int", "long"):
+                        init = str(v)
+                    elif t == "float":
+                        init = f"f32::from_bits(0x{struct.unpack('>I', v)[0]:08x})"
+                    elif t == "double":
+                        init = f"f64::from_bits(0x{struct.unpack('>Q', v)[0]:016x})"
+                    else:
+                        raise RustGenError(f"{ci.name}.{f.name}: ConstantValue {cv!r}")
+                sn = self.static_name(ci, f)
+                ft = ftype(f.desc)
+                self.static_sigs[sn] = ft
+                out.append(f"#[no_mangle] pub static mut {sn}: {ft} = {init};")
+        if self.needs_init(ci):
+            st = "ST_" + mang(ci.name)
+            inm = self.init_name(ci)
+            self.fn_sigs[inm] = f"pub fn {inm}() -> rt::CVoid;"
+            out.append(f"static {st}: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);")
+            body = [f"#[no_mangle] pub extern \"C\" fn {inm}() -> rt::CVoid {{",
+                    f"    rt::cvoid((|| -> rt::Res<()> {{",
+                    f"        if !rt::init_enter(&{st}, {rstr(ci.name)})? {{ return Ok(()); }}",
+                    "        let r = (|| -> rt::Res<()> {"]
+            if sup is not None and self.needs_init(sup):
+                body.append(f"            unsafe {{ {self.init_name(sup)}() }}.res()?;")
+            for f in self.string_consts(ci):
+                slot, data = self.lit(self.cv(f)[1])
+                body.append(f"            unsafe {{ {self.static_name(ci, f)} = rt::lit(&raw mut {slot}, &{data}); }}")
+            clinit = ci.cf.method("<clinit>", "()V")
+            if clinit is not None:
+                self.need_method(ci, clinit)
+                body.append(f"            unsafe {{ {fname(ci.name, '<clinit>', '()V')}() }}.res()?;")
+            body += ["            Ok(())", "        })();", f"        rt::init_leave(&{st}, r.is_ok());", "        r", "    })())", "}"]
+            out.append("\n".join(body))
+        for m in ci.cf.methods:
+            if (m.code is not None or m.is_native) and self.is_reachable(ci.name, m):
+                self.need_method(ci, m)
+        return "\n".join(out) + "\n"
+
+
+_SYM_RE = None
+
+
+def _sym_scan(text: str) -> set[str]:
+    global _SYM_RE
+    if _SYM_RE is None:
+        import re
+        _SYM_RE = re.compile(r"\b(?:CLS|S|init|m|LIT|O)_[A-Za-z0-9_]+\b")
+    return set(_SYM_RE.findall(text))
+
+
+def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = False,
+                    no_lwjgl: bool = False, reflect_classes: list[str] | None = None,
+                    shards: int = 1, use_escape: bool = False) -> tuple[dict[str, str], Gen]:
+    sys.path.insert(0, ROOT)
+    import heapq
+    from . import __main__ as M
+    from .classpath import ClassPath, builtin_classes, builtin_nolwjgl_classes, jdk_jmods
+    from .program import Program, Report
+    from .world import World
+
+    classlib = M.build_classlib(False)
+    builtin = builtin_classes()
+    nolwjgl = builtin_nolwjgl_classes() if no_lwjgl else None
+    pre = [x for x in (builtin, nolwjgl) if x]
+    entries = pre + list(cp_dirs) + [classlib] + jdk_jmods()
+    napp = len(pre) + len(cp_dirs)
+    cp = ClassPath(entries, release=25, release_overrides={"lwjgl": 11}, boot_start=napp)
+    world = World(cp)
+    prog = Program(world, Report())
+    if reflect_classes:
+        prog.reflect_classes.extend(n.replace(".", "/") for n in reflect_classes)
+    if world.get("java/util/ImmutableCollections$Access") is not None:
+        prog.reflect_classes.append("java/util/ImmutableCollections$Access")
+    main = main.replace(".", "/")
+    if world.get(main) is None:
+        raise RustGenError(f"main class {main} not found")
+    prog.run(main)
+    esc_res = None
+    if use_escape:
+        from .escape import analyze as escape_analyze
+        esc_res = escape_analyze(prog, budget_s=120.0)
+    g = Gen(world, prog, natives_src, esc_res=esc_res)
+    g.shards = shards
+
+    mci = g.need_class(main)
+    mm = mci.cf.method("main", "([Ljava/lang/String;)V")
+    if mm is None:
+        raise RustGenError(f"{main} has no main(String[])")
+    g.need_method(mci, mm)
+    obj = g.need_class("java/lang/Object")
+    sci = g.need_class("java/lang/String")
+    ccls = g.need_class("java/lang/Class")
+    if world.instance_fields(ccls)[0][1].name != "j2zClass":
+        raise RustGenError("java.lang.Class: first field must be j2zClass")
+    names = [f.name for _, f in world.instance_fields(sci)]
+    if names != ["value", "hash", "hashIsZero", "coder"]:
+        raise RustGenError(f"java.lang.String layout {names} does not match rt::StrObj")
+    thr_init = {}
+    for cn in RUNTIME_THROWN:
+        ci = g.need_class(cn)
+        r = world.resolve_method(cn, "<init>", "(Ljava/lang/String;)V")
+        if r is None:
+            raise RustGenError(f"{cn} has no <init>(String)")
+        g.need_method(r[0], r[1])
+        thr_init[cn] = (ci, r)
+    for cn in OPTIONAL_THROWN:
+        if world.get(cn) is None:
+            continue
+        r = world.resolve_method(cn, "<init>", "(Ljava/lang/String;)V")
+        if r is not None:
+            ci = g.need_class(cn)
+            g.need_method(r[0], r[1])
+            thr_init[cn] = (ci, r)
+    boot = {}
+    for cn, mn, md in (("java/lang/Thread", "j2zStartMain", "()Ljava/lang/Thread;"),
+                       ("java/lang/Thread", "j2zUncaught", "(Ljava/lang/Thread;Ljava/lang/Throwable;)V"),
+                       ("java/lang/Thread", "j2zRun", "(Ljava/lang/Thread;)V"),
+                       ("java/lang/System", "j2zShutdown", "()V")):
+        g.need_class(cn)
+        r = world.resolve_method(cn, mn, md)
+        if r is None:
+            raise RustGenError(f"{cn}.{mn}{md} missing in the class library overlay")
+        g.need_method(r[0], r[1])
+        boot[mn] = r
+    g.need_class("java/lang/Throwable")
+    gm = world.resolve_method("java/lang/Throwable", "getMessage", "()Ljava/lang/String;")
+    g.need_method(gm[0], gm[1])
+    if world.get("java/util/ImmutableCollections$Access") is not None:
+        g.need_class("java/util/ImmutableCollections$Access")
+    for px in sorted(prog.proxies):
+        if world.get(px) is not None:
+            g.need_class(px)
+    for rc in sorted(set(prog.reflect_classes)):
+        if world.get(rc) is not None:
+            g.need_class(rc)
+    if no_lwjgl:
+        for rc in ("org/lwjgl/system/MemoryManage$DebugAllocator", "org/lwjgl/system/MemoryUtil$LazyInit"):
+            if world.get(rc) is not None:
+                g.need_class(rc)
+
+    class_code: dict[str, str] = {}
+    class_methods: dict[str, list[str]] = {}
+    class_weights: dict[str, int] = {}
+
+    def drain():
+        while g.class_q or g.method_q:
+            while g.class_q:
+                ci = g.class_q.pop()
+                class_code[ci.name] = g.emit_class(ci)
+                class_methods.setdefault(ci.name, [])
+                class_weights.setdefault(ci.name, 64)
+            if g.method_q:
+                ci, m = g.method_q.pop()
+                ms = class_methods.setdefault(ci.name, [])
+                if m.is_native:
+                    ms.append(g.emit_native(ci, m))
+                    class_weights[ci.name] = class_weights.get(ci.name, 64) + 32
+                    continue
+                if m.code is None:
+                    continue
+                try:
+                    mg = MethodGen(g, ci, m)
+                    ms.append(mg.generate())
+                    class_weights[ci.name] = class_weights.get(ci.name, 64) + 40 + len(m.code.code)
+                except RustGenError as ex:
+                    if strict:
+                        raise
+                    g.errors.append(str(ex))
+                    args, ret = parse_method_desc(m.desc)
+                    params = (["this: rt::Ref"] if not m.is_static else []) + [f"a{j}: {RT[kind_of(d)]}" for j, d in enumerate(args)]
+                    fn_nm = fname(ci.name, m.name, m.desc)
+                    cret = cret_type(ret)
+                    cwrap = cret_wrap(ret)
+                    g.fn_sigs[fn_nm] = f"pub fn {fn_nm}({', '.join(params)}) -> {cret};"
+                    ms.append(f"#[no_mangle] pub extern \"C\" fn {fn_nm}({', '.join(params)}) -> {cret} "
+                              f"{{ rt::{cwrap}(rt::unsupported_code({rstr(str(ex))})) }}\n")
+
+    BOX = [
+        ("Z", "java/lang/Boolean", "i8", "i32"),
+        ("B", "java/lang/Byte", "i8", "i32"),
+        ("C", "java/lang/Character", "u16", "i32"),
+        ("S", "java/lang/Short", "i16", "i32"),
+        ("I", "java/lang/Integer", "i32", "i32"),
+        ("J", "java/lang/Long", "i64", "i64"),
+        ("F", "java/lang/Float", "f32", "f32"),
+        ("D", "java/lang/Double", "f64", "f64"),
+    ]
+    box_info = {}
+    for p, bn, fty, sty in BOX:
+        bci = world.get(bn)
+        if bci is not None:
+            vm = bci.cf.method("valueOf", f"({p})L{bn};")
+            if vm is not None:
+                g.need_class(bn)
+                g.need_method(bci, vm)
+                box_info[p] = (bci, vm, fty, sty)
+    ok_box = len(box_info) == len(BOX)
+    arr_iface_cls = []
+    for ain in ("java/lang/Cloneable", "java/io/Serializable"):
+        aci = world.get(ain)
+        if aci is not None:
+            g.need_class(ain)
+            arr_iface_cls.append(aci)
+
+    drain()
+    vh_owner = None
+    if g.vh_used:
+        vhc = g.need_class("java/lang/invoke/VarHandle")
+        drain()
+        vs = g.struct_name(vhc)
+        vh_owner = vhc.name
+        class_code[vh_owner] += (
+            f"#[no_mangle] pub static VH_OFFSETS: [usize; 3] = ["
+            f"std::mem::offset_of!({vs}, f_{mang(vhc.name)}_j2zKind), "
+            f"std::mem::offset_of!({vs}, f_{mang(vhc.name)}_j2zOffset), "
+            f"std::mem::offset_of!({vs}, f_{mang(vhc.name)}_j2zBigEndian)];\n"
+        )
+
+    main_tail = []
+    if not g.vh_used:
+        main_tail.append("pub static VH_OFFSETS: [usize; 3] = [0, 0, 0];")
+    for k in ARR_KINDS:
+        nm = "[" + (k if k != "A" else "Ljava/lang/Object;")
+        ec_expr = f"Some(unsafe {{ &{g.class_name(obj)} }})" if k == "A" else "None"
+        main_tail.append(
+            f"#[no_mangle] pub static CLS_ARR_{k}: rt::Class = rt::Class {{ name: {rstr(nm)}, super_: Some(unsafe {{ &{g.class_name(obj)} }}), size: 24, "
+            f"vtable: {g.object_vtable}, elem: b'{k}', elem_class: {ec_expr}, array_cache: rt::ArrCache::NEW, "
+            f"itab: &[], ifaces: &ARRAY_IFACES, fields: &[], ref_offsets: &[], static_refs: &[], methods: &[], refl: None, mirror: rt::Mirror::NEW, kind: 2, access: 0x411, init: None, enum_values: None }};"
+        )
+    main_tail.append(f"static ARRAY_IFACES: [&rt::Class; {len(arr_iface_cls)}] = [" +
+                     ", ".join(f"unsafe {{ &{g.class_name(c)} }}" for c in arr_iface_cls) + "];")
+
+    if ok_box and g.shapes:
+        WIDEN_FROM = {
+            "Z": ["Z"], "B": ["B"], "C": ["C"], "S": ["B", "S"],
+            "I": ["B", "S", "C", "I"], "J": ["B", "S", "C", "I", "J"],
+            "F": ["B", "S", "C", "I", "J", "F"], "D": ["B", "S", "C", "I", "J", "F", "D"],
+        }
+        main_tail.append("fn rarg(args: rt::Ref, i: i32) -> rt::Res<rt::Ref> { if args.is_null() { Ok(rt::Ref::NULL) } else { rt::aload::<rt::Ref>(args, i) } }")
+        for p, (bci, vm, fty, sty) in box_info.items():
+            unbox_arms = []
+            for q in WIDEN_FROM[p]:
+                qci = box_info[q][0]
+                cast_e = f"val as {sty}"
+                unbox_arms.append(f"    if std::ptr::eq(c, unsafe {{ &{g.class_name(qci)} }}) {{ let val = unsafe {{ (*(r.0 as *mut {g.struct_name(qci)})).f_{mang(qci.name)}_value }}; return Ok({cast_e}); }}")
+            main_tail.append(
+                f"fn unbox_{p}(r: rt::Ref) -> rt::Res<{sty}> {{\n"
+                f"    let p = rt::nn(r)?;\n    let c = unsafe {{ (*p).class }};\n" +
+                "\n".join(unbox_arms) +
+                "\n    rt::throw(\"java/lang/IllegalArgumentException\", \"argument type mismatch\".to_string())\n}"
+            )
+            init_b = f"unsafe {{ {g.init_name(bci)}() }}.res()?; " if g.needs_init(bci) else ""
+            main_tail.append(
+                f"fn box_{p}(v: {sty}) -> rt::Res<rt::Ref> {{ {init_b}unsafe {{ {fname(bci.name, vm.name, vm.desc)}(v) }}.res() }}"
+            )
+        ref_arms = []
+        rk2k = lambda c: "A" if c == "A" else kind_of(c)
+        for key, sid in g.shapes.items():
+            ps_s, rkind = key[1:].split(":")
+            static = key[0] == "S"
+            ptypes = ([] if static else ["rt::Ref"]) + [RT[rk2k(c)] for c in ps_s]
+            cret = "rt::CVoid" if rkind == "V" else f"rt::CRes<{RT[rk2k(rkind)]}>"
+            cargs = ([] if static else ["recv"]) + [
+                f"rarg(args, {i})?" if c == "A" else f"unbox_{c}(rarg(args, {i})?)?"
+                for i, c in enumerate(ps_s)
+            ]
+            fp_ty = f"extern \"C\" fn({', '.join(ptypes)}) -> {cret}"
+            call = f"(unsafe {{ std::mem::transmute::<*const (), {fp_ty}>(fp) }})({', '.join(cargs)}).res()?"
+            if rkind == "V":
+                arm_body = f"{call}; Ok(rt::Ref::NULL)"
+            elif rkind == "A":
+                arm_body = f"Ok({call})"
+            else:
+                arm_body = f"box_{rkind}({call})"
+            ref_arms.append(f"        {sid} => {{ {arm_body} }}")
+        if len(ref_arms) > 400:
+            chunks = [ref_arms[i:i + 400] for i in range(0, len(ref_arms), 400)]
+            for ci, ch in enumerate(chunks):
+                main_tail.append(
+                    f"#[inline(never)] fn reflect_h{ci}(shape: u32, fp: *const (), recv: rt::Ref, args: rt::Ref) -> rt::Res<Option<rt::Ref>> {{\n"
+                    "    Ok(Some((match shape {\n" + "\n".join(ch) + "\n"
+                    "        _ => return Ok(None),\n    })?))\n}"
+                )
+            calls = "\n".join(f"    if let Some(r) = reflect_h{ci}(shape, fp, recv, args)? {{ return Ok(r); }}" for ci in range(len(chunks)))
+            main_tail.append(
+                "fn reflect_invoke_hook(shape: u32, fp: *const (), recv: rt::Ref, args: rt::Ref) -> rt::Res<rt::Ref> {\n"
+                + calls + "\n"
+                "    rt::throw(\"java/lang/UnsupportedOperationException\", \"reflective invocation\".to_string())\n}"
+            )
+        else:
+            main_tail.append(
+                "fn reflect_invoke_hook(shape: u32, fp: *const (), recv: rt::Ref, args: rt::Ref) -> rt::Res<rt::Ref> {\n"
+                "    match shape {\n" + "\n".join(ref_arms) + "\n"
+                "        _ => rt::throw(\"java/lang/UnsupportedOperationException\", \"reflective invocation\".to_string()),\n    }\n}"
+            )
+    else:
+        main_tail.append(
+            "fn reflect_invoke_hook(_shape: u32, _fp: *const (), _recv: rt::Ref, _args: rt::Ref) -> rt::Res<rt::Ref> {\n"
+            "    rt::throw(\"java/lang/UnsupportedOperationException\", \"reflective invocation\".to_string())\n}"
+        )
+
+    arms = []
+    for cn, (ci, r) in thr_init.items():
+        init = f"unsafe {{ {g.init_name(ci)}() }}.res().ok(); " if g.needs_init(ci) else ""
+        arms.append(f'        {rstr(cn)} => {{ {init}let o = rt::alloc(unsafe {{ &{g.class_name(ci)} }}); '
+                    f'if unsafe {{ {fname(r[0].name, r[1].name, r[1].desc)}(o, msg) }}.res().is_err() {{ rt::abort("exception constructor threw") }} o }}')
+    main_tail.append("fn throw_new_hook(class: &str, msg: rt::Ref) -> rt::Ref {\n    match class {\n" + "\n".join(arms) +
+                     "\n        _ => rt::abort(&format!(\"runtime threw {}, which is not a runtime-thrown class\", class)),\n    }\n}")
+    main_tail.append(f"fn thread_run_hook(t: rt::Ref) -> rt::Res<()> {{ unsafe {{ {fname(boot['j2zRun'][0].name, boot['j2zRun'][1].name, boot['j2zRun'][1].desc)}(t) }}.res() }}")
+    main_tail.append("fn uncaught_hook(t: rt::Ref) -> ! {\n"
+                     "    let name = unsafe { (*t.0).class.name }.replace('/', \".\");\n"
+                     f"    let m = unsafe {{ {fname(gm[0].name, gm[1].name, gm[1].desc)}(t) }}.res().unwrap_or(rt::Ref::NULL);\n"
+                     "    if m.is_null() { eprintln!(\"Exception in thread \\\"main\\\" {}\", name); }\n"
+                     "    else { eprintln!(\"Exception in thread \\\"main\\\" {}: {}\", name, rt::str_to_rust(m)); }\n"
+                     "    std::process::exit(1)\n}")
+    prov_entries = []
+    for svc, provs in sorted(getattr(prog, "services", {}).items()):
+        for pv in provs:
+            k = len(prov_entries)
+            pci = world.get(pv)
+            if pci is None:
+                continue
+            g.need_class(pv)
+            if (svc, pv) in getattr(prog, "service_factories", set()):
+                fm = next((m for m in pci.cf.methods if m.name == "provider" and m.is_static and m.desc.startswith("()")), None)
+                if fm is None:
+                    continue
+                g.need_method(pci, fm)
+                init_p = f"unsafe {{ {g.init_name(pci)}() }}.res()?; " if g.needs_init(pci) else ""
+                main_tail.append(f"fn new_provider_{k}() -> rt::Res<rt::Ref> {{ {init_p}unsafe {{ {fname(pv, 'provider', fm.desc)}() }}.res() }}")
+            else:
+                cm = pci.cf.method("<init>", "()V")
+                if cm is None:
+                    continue
+                g.need_method(pci, cm)
+                init_p = f"unsafe {{ {g.init_name(pci)}() }}.res()?; " if g.needs_init(pci) else ""
+                main_tail.append(
+                    f"fn new_provider_{k}() -> rt::Res<rt::Ref> {{\n"
+                    f"    {init_p}let o = rt::alloc(unsafe {{ &{g.class_name(pci)} }});\n"
+                    f"    unsafe {{ {fname(pv, '<init>', '()V')}(o) }}.res()?;\n    Ok(o)\n}}"
+                )
+            prov_entries.append((svc.replace("/", "."), k))
+    main_tail.append(
+        f"static SERVICES: [rt::ServiceEntry; {len(prov_entries)}] = ["
+        + ", ".join(f"rt::ServiceEntry {{ service: {rstr(svc)}, create: new_provider_{k} }}" for svc, k in prov_entries)
+        + "];"
+    )
+
+    UE = "sun/nio/fs/UnixException"
+    uci = world.get(UE)
+    um = uci.cf.method("<init>", "(I)V") if uci else None
+    if um is not None and (UE, um.key) in prog.reachable:
+        g.need_class(UE)
+        g.need_method(uci, um)
+        init_u = f"unsafe {{ {g.init_name(uci)}() }}.res()?; " if g.needs_init(uci) else ""
+        main_tail.append(
+            f"fn new_unix_exception_hook(errno: i32) -> rt::Res<rt::Ref> {{\n"
+            f"    {init_u}let o = rt::alloc(unsafe {{ &{g.class_name(uci)} }});\n"
+            f"    unsafe {{ {fname(UE, '<init>', '(I)V')}(o, errno) }}.res()?;\n    Ok(o)\n}}"
+        )
+    else:
+        main_tail.append(
+            "fn new_unix_exception_hook(_errno: i32) -> rt::Res<rt::Ref> {\n"
+            "    rt::throw(\"java/io/IOException\", \"UnixException unavailable\".to_string())\n}"
+        )
+
+    DB = "java/nio/DirectByteBuffer"
+    dci = world.get(DB)
+    dm = dci.cf.method("<init>", "(JJ)V") if dci else None
+    if dm is not None and (DB, dm.key) in prog.reachable:
+        g.need_class(DB)
+        g.need_method(dci, dm)
+        init_d = f"unsafe {{ {g.init_name(dci)}() }}.res()?; " if g.needs_init(dci) else ""
+        main_tail.append(
+            f"fn new_direct_byte_buffer_hook(addr: i64, cap: i64) -> rt::Res<rt::Ref> {{\n"
+            f"    {init_d}let o = rt::alloc(unsafe {{ &{g.class_name(dci)} }});\n"
+            f"    unsafe {{ {fname(DB, '<init>', '(JJ)V')}(o, addr, cap) }}.res()?;\n    Ok(o)\n}}"
+        )
+    else:
+        main_tail.append(
+            "fn new_direct_byte_buffer_hook(_addr: i64, _cap: i64) -> rt::Res<rt::Ref> {\n"
+            "    rt::throw(\"java/lang/InternalError\", \"DirectByteBuffer unavailable\".to_string())\n}"
+        )
+
+    drain()
+
+    entry = fname(main, "main", "([Ljava/lang/String;)V")
+    tcls = g.need_class("java/lang/Thread")
+    scls = g.need_class("java/lang/System")
+    F = lambda k: fname(boot[k][0].name, boot[k][1].name, boot[k][1].desc)
+    inits = "".join(f"unsafe {{ {g.init_name(c)}() }}.res()?; " for c in (tcls, scls, mci) if g.needs_init(c))
+    arrs = ", ".join(f"&CLS_ARR_{k}" for k in ARR_KINDS)
+    allc = ", ".join(f"unsafe {{ &{g.class_name(world.get(n))} }}" for n in sorted(g.seen_classes))
+    main_tail.append(f"static ALL_CLASSES: [&rt::Class; {len(g.seen_classes)}] = [{allc}];")
+    main_tail.append(
+        "fn main() {\n"
+        f"    rt::init_hooks(rt::Hooks {{ object_class: unsafe {{ &{g.class_name(obj)} }}, string_class: unsafe {{ &{g.class_name(sci)} }}, class_class: unsafe {{ &{g.class_name(ccls)} }}, all_classes: &ALL_CLASSES, arrays: [{arrs}], array_ifaces: &ARRAY_IFACES, "
+        "vh_kind: unsafe { VH_OFFSETS[0] }, vh_offset: unsafe { VH_OFFSETS[1] }, vh_bigendian: unsafe { VH_OFFSETS[2] }, "
+        "thread_run: thread_run_hook, throw_new: throw_new_hook, uncaught: uncaught_hook, reflect_invoke: reflect_invoke_hook, "
+        "services: &SERVICES, new_unix_exception: new_unix_exception_hook, new_direct_byte_buffer: new_direct_byte_buffer_hook });\n"
+        "    let _gc_main = rt::gc_thread_guard();\n"
+        f"    let th = match (|| -> rt::Res<rt::Ref> {{ unsafe {{ {g.init_name(tcls)}() }}.res()?; unsafe {{ {F('j2zStartMain')}() }}.res() }})() {{ Ok(t) => t, Err(t) => uncaught_hook(t.obj) }};\n"
+        "    rt::set_main_thread(th);\n"
+        f"    let r = (|| -> rt::Res<()> {{ {inits}unsafe {{ {entry}(rt::program_args()?) }}.res() }})();\n"
+        "    let mut code = 0;\n"
+        f"    if let Err(t) = r {{ code = 1; if unsafe {{ {F('j2zUncaught')}(th, t.obj) }}.res().is_err() {{ uncaught_hook(t.obj) }} }}\n"
+        f"    if unsafe {{ {F('j2zShutdown')}() }}.res().is_err() {{ rt::abort(\"exception during shutdown\") }}\n"
+        "    std::process::exit(code)\n}\n"
+    )
+    main_body = "\n".join(main_tail) + "\n"
+
+    lit_by_slot = {slot: (data, u) for (slot, data, u) in g.lits.values()}
+    hdr = "#![allow(warnings, improper_ctypes, static_mut_refs)]\nuse mono_rt::{rt, vh, sync, natives};\n"
+
+    def emit_lits_for(syms: set[str]) -> str:
+        lines = []
+        for s in sorted(syms):
+            if s in lit_by_slot:
+                data, u = lit_by_slot[s]
+                lines.append(f"static mut {s}: rt::Ref = rt::Ref::NULL;")
+                lines.append(f"static {data}: [u16; {len(u)}] = [{', '.join(map(str, u))}];")
+        return "\n".join(lines) + ("\n" if lines else "")
+
+    if shards <= 1:
+        chunks = [hdr]
+        for cn in sorted(class_code):
+            chunks.append(class_code[cn])
+            chunks.extend(class_methods.get(cn, ()))
+        full = "\n".join(chunks) + "\n" + main_body
+        return {"main.rs": full + emit_lits_for(_sym_scan(full))}, g
+
+    sorted_cls = sorted(class_code)
+    nshards = max(1, min(shards, len(sorted_cls)))
+    buckets: list[list[str]] = [[] for _ in range(nshards)]
+    for cn in sorted_cls:
+        idx = int(hashlib.sha1(cn.encode()).hexdigest()[:8], 16) % nshards
+        buckets[idx].append(cn)
+
+    arr_syms = {f"CLS_ARR_{k}" for k in ARR_KINDS}
+    files: dict[str, str] = {}
+
+    def wrap_unit(body: str, owned: set[str], need_vh_ext: bool = False) -> str:
+        syms = _sym_scan(body)
+        ext_cls = [s for s in sorted(syms) if s in g.cls_syms and s not in owned]
+        ext_stat = [s for s in sorted(syms) if s in g.static_sigs and s not in owned]
+        ext_fn = [s for s in sorted(syms) if s in g.fn_sigs and s not in owned]
+        ext_structs = [g.struct_defs[s] for s in sorted(syms) if s in g.struct_defs and s not in owned]
+        ex = []
+        if need_vh_ext:
+            ex.append("    pub static VH_OFFSETS: [usize; 3];")
+        for s in ext_cls:
+            ex.append(f"    pub static {s}: rt::Class;")
+        for s in ext_stat:
+            ex.append(f"    pub static mut {s}: {g.static_sigs[s]};")
+        for s in ext_fn:
+            ex.append(f"    {g.fn_sigs[s]}")
+        ext_block = ("extern \"C\" {\n" + "\n".join(ex) + "\n}\n") if ex else ""
+        return hdr + ext_block + "".join(ext_structs) + emit_lits_for(syms) + body
+
+    for idx, cnames in enumerate(buckets):
+        cnames.sort()
+        chunks = []
+        owned: set[str] = set()
+        for cn in cnames:
+            chunks.append(class_code[cn])
+            chunks.extend(class_methods.get(cn, ()))
+        body = "\n".join(chunks)
+        # Every symbol defined in this shard (CLS_, O_, S_, init_, m_) has its definition here:
+        for cn in cnames:
+            ci = world.get(cn)
+            owned.add(g.class_name(ci))
+            owned.add(g.struct_name(ci))
+            if g.needs_init(ci):
+                owned.add(g.init_name(ci))
+            for f in ci.cf.fields:
+                if f.is_static:
+                    owned.add(g.static_name(ci, f))
+            for m in ci.cf.methods:
+                fn_nm = fname(ci.name, m.name, m.desc)
+                if fn_nm in g.fn_sigs:
+                    owned.add(fn_nm)
+        files[f"shard_{idx:02d}.rs"] = wrap_unit(body, owned)
+
+    files["main.rs"] = wrap_unit(main_body, arr_syms, need_vh_ext=g.vh_used)
+    return files, g
+
+
+def generate(main: str, natives_src: str, cp_dirs: list, strict: bool = False,
+             no_lwjgl: bool = False, reflect_classes: list[str] | None = None) -> tuple:
+    files, g = _generate_parts(main, natives_src, cp_dirs, strict, no_lwjgl=no_lwjgl, reflect_classes=reflect_classes, shards=1)
+    return files["main.rs"], g
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Monolith back end: Java bytecode (application + JDK) -> Rust")
+    ap.add_argument("--cp", action="append", required=True)
+    ap.add_argument("--main", required=True)
+    ap.add_argument("-o", "--output", required=True)
+    ap.add_argument("--run", action="store_true", help="compile with rustc and run")
+    ap.add_argument("--compile", action="store_true", help="compile with rustc without running")
+    ap.add_argument("--strict", action="store_true", help="fail on untranslatable code instead of emitting a loud runtime stop")
+    ap.add_argument("--no-lwjgl", action="store_true", help="use runtime/java_nolwjgl Zero-LWJGL RHI overlay")
+    ap.add_argument("--reflect-class", action="append", default=[], help="class name or @file of reflectable classes")
+    ap.add_argument("--shards", type=int, default=1, help="split generated classes across N parallel rustc object shards")
+    ap.add_argument("--shard-jobs", type=int, default=2, help="max concurrent rustc shard compilations")
+    ap.add_argument("--opt", default="1")
+    a = ap.parse_args()
+    cp_dirs = []
+    for item in a.cp:
+        for p in item.split(os.pathsep):
+            if p:
+                cp_dirs.append(os.path.abspath(p))
+    ref_classes = []
+    for spec in a.reflect_class:
+        if spec.startswith("@"):
+            ref_classes.extend(open(spec[1:], encoding="utf-8").read().split())
+        else:
+            ref_classes.append(spec)
+    rt_dir = os.path.join(ROOT, "monolith", "rt")
+    natives = os.path.join(rt_dir, "natives.rs")
+    files, g = _generate_parts(a.main, natives, cp_dirs, a.strict, no_lwjgl=a.no_lwjgl, reflect_classes=ref_classes, shards=a.shards)
+    os.makedirs(a.output, exist_ok=True)
+    for fn, src in files.items():
+        with open(os.path.join(a.output, fn), "w", encoding="utf-8") as fh:
+            fh.write(src)
+    for f in os.listdir(rt_dir):
+        if f.endswith(".rs"):
+            shutil.copy(os.path.join(rt_dir, f), os.path.join(a.output, f))
+    from .classpath import jdk_home
+    jh = jdk_home()
+    tz = os.path.join(jh, "lib", "tzdb.dat")
+    if os.path.exists(tz):
+        os.makedirs(os.path.join(a.output, "lib"), exist_ok=True)
+        shutil.copy(tz, os.path.join(a.output, "lib", "tzdb.dat"))
+    conf = os.path.join(jh, "conf")
+    if os.path.isdir(conf):
+        shutil.copytree(conf, os.path.join(a.output, "conf"), dirs_exist_ok=True)
+    sys.stderr.write(f"monolith: {len(g.seen_classes)} classes, {len(g.seen_methods)} methods, "
+                     f"{len(g.errors)} untranslatable, {len(g.link_errors)} link-errors, {len(g.missing_natives)} natives missing\n")
+    if os.environ.get("MONO_VERBOSE"):
+        for x in g.errors:
+            sys.stderr.write("  untranslatable: " + x + "\n")
+        for x in g.link_errors:
+            sys.stderr.write("  link-error: " + x + "\n")
+        for x in g.missing_natives:
+            sys.stderr.write("  missing native: " + x + "\n")
+    if a.run or a.compile:
+        rlib = os.path.join(a.output, "libmono_rt.rlib")
+        rt_hasher = hashlib.sha256()
+        for f in sorted(os.listdir(rt_dir)):
+            if f.endswith(".rs"):
+                rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
+        rt_hash = rt_hasher.hexdigest()[:16]
+        cache_dir = os.path.join("/tmp", "monolith_shard_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        cached_rlib = os.path.join(cache_dir, f"libmono_rt_{a.opt}_{rt_hash}.rlib")
+        if os.path.exists(cached_rlib):
+            shutil.copy(cached_rlib, rlib)
+        else:
+            r = subprocess.run(["rustc", "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
+                                "--crate-type", "rlib", "--crate-name", "mono_rt",
+                                os.path.join(a.output, "lib.rs"), "-o", rlib], capture_output=True, text=True)
+            if r.returncode:
+                sys.stderr.write(r.stderr[-6000:])
+                return r.returncode
+            shutil.copy(rlib, cached_rlib)
+        link_args = []
+        shard_files = sorted(fn for fn in files if fn.startswith("shard_"))
+        if shard_files:
+            from concurrent.futures import ThreadPoolExecutor
+            def compile_shard(fn: str):
+                name = fn[:-3]
+                obj = os.path.join(a.output, name + ".o")
+                src_bytes = files[fn].encode("utf-8")
+                sh_key = hashlib.sha256(src_bytes).hexdigest()[:20]
+                cached_obj = os.path.join(cache_dir, f"{name}_{a.opt}_{rt_hash}_{sh_key}.o")
+                if os.path.exists(cached_obj):
+                    shutil.copy(cached_obj, obj)
+                    return fn, obj, subprocess.CompletedProcess([], 0, "", "")
+                res = subprocess.run(["rustc", "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
+                                      "--crate-type", "lib", "--crate-name", name, "--emit=obj",
+                                      "--extern", f"mono_rt={rlib}",
+                                      os.path.join(a.output, fn), "-o", obj], capture_output=True, text=True)
+                if res.returncode == 0 and os.path.exists(obj):
+                    shutil.copy(obj, cached_obj)
+                return fn, obj, res
+            with ThreadPoolExecutor(max_workers=max(1, a.shard_jobs)) as ex:
+                for fn, obj, res in ex.map(compile_shard, shard_files):
+                    if res.returncode:
+                        sys.stderr.write(f"shard {fn} failed:\n" + res.stderr[-6000:])
+                        return res.returncode
+                    link_args.extend(["-C", f"link-arg={obj}"])
+        exe = os.path.join(a.output, "prog")
+        main_opt = 0 if len(shard_files) >= 16 else a.opt
+        cgu_args = ["-C", "codegen-units=1"] if len(shard_files) >= 16 else []
+        lld_args = ["-C", "link-arg=-fuse-ld=lld"] if shutil.which("ld.lld") else []
+        r = subprocess.run(["rustc", "-C", f"opt-level={main_opt}", *cgu_args, "--edition", "2021", "-C", "panic=abort",
+                            "--extern", f"mono_rt={rlib}", *lld_args, *link_args,
+                            os.path.join(a.output, "main.rs"), "-o", exe], capture_output=True, text=True)
+        if r.returncode:
+            sys.stderr.write(r.stderr[-6000:])
+            return r.returncode
+        if a.run:
+            return subprocess.run([exe]).returncode
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+classlib/build/
+out/
+.zig-cache/
+zig-out/
+tests/build/
+# Never commit Minecraft binaries or anything derived from them.
+*.jar
+mc/
+build/
+.claude/settings.local.json
+logs/

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monolith Launcher</title>
+<style>
+:root{--bg:#14161a;--card:#1d2026;--line:#2b2f38;--fg:#e8eaed;--mute:#9aa0aa;--acc:#5bbd4b;--acc2:#3f8f33;--bad:#ef6b6b}
+@media(prefers-color-scheme:light){:root{--bg:#eef0f3;--card:#fff;--line:#d9dce2;--fg:#1b1e24;--mute:#5d6470}}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,Segoe UI,sans-serif;padding:16px}
+main{width:100%;max-width:520px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px}
+img{display:block;max-width:100%;height:auto;margin:0 auto 18px;image-rendering:pixelated}
+h1{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0 0 16px;text-align:center}
+label{display:block;font-size:12px;color:var(--mute);margin:14px 0 5px}
+input,select{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+button{width:100%;margin-top:22px;padding:14px;border:0;border-radius:10px;background:var(--acc);color:#07140a;font:700 16px inherit;letter-spacing:.06em;cursor:pointer}
+button:hover{background:var(--acc2)}button:disabled{opacity:.45;cursor:not-allowed}
+#msg{min-height:20px;margin-top:12px;font-size:13px;text-align:center;color:var(--mute)}#msg.err{color:var(--bad)}
+.foot{margin-top:10px;text-align:center;font-size:12px;color:var(--mute)}
+</style></head><body><main>
+<img src="/brand/title.png" alt="Minecraft Zig Edition" onerror="this.remove()">
+<h1>Monolith Launcher</h1>
+<label for="build">Build</label><select id="build"></select>
+<label for="user">Kullanıcı adı</label><input id="user" maxlength="16" autocomplete="off">
+<div class="row"><div><label for="gfx">Grafik API</label>
+<select id="gfx"><option value="auto">Auto</option><option value="vulkan">Vulkan 1.1+</option><option value="opengl">OpenGL 3.3 Core</option></select></div>
+<div><label for="dir">Oyun klasörü</label><input id="dir" placeholder="(varsayılan: build/game)"></div></div>
+<button id="play">OYNA</button><div id="msg"></div><div class="foot" id="foot"></div>
+</main><script>
+const T="__TOKEN__",$=i=>document.getElementById(i);
+const msg=(t,e)=>{$("msg").textContent=t;$("msg").className=e?"err":""};
+const post=(p,b)=>fetch(p,{method:"POST",headers:{"X-Token":T},body:JSON.stringify(b)}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error||r.status);return j});
+const body=()=>({build:$("build").value,username:$("user").value.trim()||"Player",graphics:$("gfx").value,game_dir:$("dir").value.trim()});
+(async()=>{
+ const s=await (await fetch("/api/state")).json();
+ $("foot").textContent="Platform: "+s.os;
+ $("user").value=s.cfg.username;$("gfx").value=s.cfg.graphics;$("dir").value=s.cfg.game_dir;
+ if(!s.builds.length){$("build").innerHTML="<option value=''>build bulunamadı</option>";$("play").disabled=true;
+  msg("Önce derleyin: ./build.sh /yol/client.jar",true);return}
+ $("build").innerHTML=s.builds.map(b=>`<option value="${b.path.replace(/"/g,"&quot;")}">${b.name}</option>`).join("");
+ if(s.builds.some(b=>b.path===s.cfg.build))$("build").value=s.cfg.build;
+ $("play").onclick=async()=>{$("play").disabled=true;msg("Başlatılıyor…");
+  try{await post("/api/play",body());msg("Oyun başlatıldı.")}catch(e){msg(e.message,true)}$("play").disabled=false};
+})();
+</script></body></html>
