@@ -770,6 +770,8 @@ fn jna_addr(ptr: Ref, base: i64, off: i64) -> usize {
     b.wrapping_add(off as usize)
 }
 
+// inline(never): the generated code must call this body; an inlined copy would survive in reused objects.
+#[inline(never)]
 /// jnidispatch's `initIDs`: stores the libffi type descriptors in `Structure.FFIType.FFITypes`, as `Pointer` objects.
 /// Without them `Structure.FFIType` cannot be initialised ("FFI types not initialized"), and JNA users such as the
 /// narrator fail at start-up.
