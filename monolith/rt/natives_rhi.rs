@@ -1534,170 +1534,149 @@ pub fn n_mono_rhi_NativeRhi__glClientWaitSync0(sync: i64, flags: i32, timeout_ns
         .unwrap_or(0x911A))
 }
 
-// ------------------------------------------------------------------ OpenAL Dynamic Dispatch
-static AL_NEXT_ID: AtomicI32 = AtomicI32::new(1);
-
-fn al_lib() -> *mut c_void {
-    static H: OnceLock<usize> = OnceLock::new();
-    *H.get_or_init(|| dl_open_any(&["libopenal.so.1", "libopenal.so"]) as usize) as *mut c_void
+// ------------------------------------------------------------------ OpenAL-compatible audio (audio.rs, audio_dev.rs)
+// The Java side (runtime/java/mono/rhi/NativeRhi.java) keeps its names; the work is done by the Rust mixer.
+fn al_ctx() -> std::sync::Arc<std::sync::Mutex<crate::audio::Context>> {
+    crate::audio_dev::context()
 }
 
-pub fn n_mono_rhi_NativeRhi__alcOpenDevice0(name_ref: Ref) -> Res<i64> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alcOpenDevice", extern "C" fn(*const c_char) -> *mut c_void) {
-        let p = if name_ref.is_null() {
-            f(std::ptr::null())
-        } else {
-            let cs = rt::c_str_arg(name_ref)?;
-            f(cs.as_ptr())
-        };
-        return Ok(p as usize as i64);
-    }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
+pub fn n_mono_rhi_NativeRhi__alcOpenDevice0(_name_ref: Ref) -> Res<i64> {
+    crate::audio_dev::start();
     Ok(1)
 }
-pub fn n_mono_rhi_NativeRhi__alcCloseDevice0(d: i64) -> Res<i32> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alcCloseDevice", extern "C" fn(*mut c_void) -> u8) {
-        return Ok((f(d as usize as *mut c_void) != 0) as i32);
-    }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
+pub fn n_mono_rhi_NativeRhi__alcCloseDevice0(_d: i64) -> Res<i32> {
+    crate::audio_dev::stop();
     Ok(1)
 }
-pub fn n_mono_rhi_NativeRhi__alcCreateContext0(d: i64, attr: i64) -> Res<i64> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alcCreateContext", extern "C" fn(*mut c_void, *const i32) -> *mut c_void) {
-        return Ok(f(d as usize as *mut c_void, attr as usize as *const i32) as usize as i64);
-    }
-    Ok(1)
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
+pub fn n_mono_rhi_NativeRhi__alcCreateContext0(d: i64, _attr: i64) -> Res<i64> {
+    Ok(if d != 0 { 1 } else { 0 })
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alcMakeContextCurrent0(c: i64) -> Res<i32> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alcMakeContextCurrent", extern "C" fn(*mut c_void) -> u8) {
-        return Ok((f(c as usize as *mut c_void) != 0) as i32);
-    }
-    Ok(1)
+    Ok((c != 0) as i32)
 }
-pub fn n_mono_rhi_NativeRhi__alcDestroyContext0(c: i64) -> Res<()> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alcDestroyContext", extern "C" fn(*mut c_void)) {
-        f(c as usize as *mut c_void);
-    }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
+pub fn n_mono_rhi_NativeRhi__alcDestroyContext0(_c: i64) -> Res<()> {
     Ok(())
 }
-pub fn n_mono_rhi_NativeRhi__alcGetInteger0(d: i64, p: i32) -> Res<i32> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alcGetIntegerv", extern "C" fn(*mut c_void, i32, i32, *mut i32)) {
-        let mut v = 0i32;
-        f(d as usize as *mut c_void, p, 1, &mut v);
-        return Ok(v);
-    }
-    Ok(match p { 0x1007 => 44100, 0x1008 => 60, 0x1010 => 255, _ => 1 })
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
+pub fn n_mono_rhi_NativeRhi__alcGetInteger0(_d: i64, p: i32) -> Res<i32> {
+    // ALC_FREQUENCY, ALC_REFRESH, ALC_SYNC, ALC_MONO_SOURCES, ALC_STEREO_SOURCES
+    Ok(match p {
+        0x1007 => crate::audio::MIX_RATE as i32,
+        0x1008 => 60,
+        0x1009 => 0,
+        0x1010 => 256,
+        0x1011 => 64,
+        _ => 0,
+    })
 }
-pub fn n_mono_rhi_NativeRhi__alcGetString0(d: i64, p: i32) -> Res<Ref> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alcGetString", extern "C" fn(*mut c_void, i32) -> *const c_char) {
-        let s = f(d as usize as *mut c_void, p);
-        if !s.is_null() {
-            return Ok(rt::new_str(unsafe { CStr::from_ptr(s).to_string_lossy().into_owned() }));
-        }
-    }
-    Ok(rt::new_str("Monolith OpenAL".to_string()))
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
+pub fn n_mono_rhi_NativeRhi__alcGetString0(_d: i64, p: i32) -> Res<Ref> {
+    // ALC_DEVICE_SPECIFIER, ALC_EXTENSIONS
+    Ok(match p {
+        0x1005 => rt::new_str("Monolith Audio".to_string()),
+        0x1006 => rt::new_str(String::new()),
+        _ => Ref::NULL,
+    })
 }
+
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alGenBuffer0() -> Res<i32> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alGenBuffers", extern "C" fn(i32, *mut u32)) {
-        let mut id = 0u32;
-        f(1, &mut id);
-        if id != 0 { return Ok(id as i32); }
-    }
-    Ok(AL_NEXT_ID.fetch_add(1, Ordering::Relaxed))
+    Ok(al_ctx().lock().unwrap().gen_buffers(1)[0] as i32)
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alDeleteBuffer0(id: i32) -> Res<()> {
-    let libs = [al_lib()];
-    let uid = id as u32;
-    if let Some(f) = sym_fn!(&libs, "alDeleteBuffers", extern "C" fn(i32, *const u32)) { f(1, &uid); }
+    al_ctx().lock().unwrap().delete_buffers(&[id as u32]);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alBufferData0(b: i32, fmt: i32, addr: i64, sz: i32, freq: i32) -> Res<()> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alBufferData", extern "C" fn(u32, i32, *const c_void, i32, i32)) {
-        f(b as u32, fmt, addr as usize as *const c_void, sz, freq);
-    }
+    let data: &[u8] = if addr == 0 || sz <= 0 {
+        &[]
+    } else {
+        // the address of a direct ByteBuffer of the caller: valid for the call
+        unsafe { std::slice::from_raw_parts(addr as usize as *const u8, sz as usize) }
+    };
+    al_ctx().lock().unwrap().buffer_data(b as u32, fmt, data, freq);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alGenSource0() -> Res<i32> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alGenSources", extern "C" fn(i32, *mut u32)) {
-        let mut id = 0u32;
-        f(1, &mut id);
-        if id != 0 { return Ok(id as i32); }
-    }
-    Ok(AL_NEXT_ID.fetch_add(1, Ordering::Relaxed))
+    Ok(al_ctx().lock().unwrap().gen_sources(1)[0] as i32)
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alDeleteSource0(id: i32) -> Res<()> {
-    let libs = [al_lib()];
-    let uid = id as u32;
-    if let Some(f) = sym_fn!(&libs, "alDeleteSources", extern "C" fn(i32, *const u32)) { f(1, &uid); }
+    al_ctx().lock().unwrap().delete_sources(&[id as u32]);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alSourcePlay0(s: i32) -> Res<()> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alSourcePlay", extern "C" fn(u32)) { f(s as u32); }
+    al_ctx().lock().unwrap().play(s as u32);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alSourcePause0(s: i32) -> Res<()> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alSourcePause", extern "C" fn(u32)) { f(s as u32); }
+    al_ctx().lock().unwrap().pause(s as u32);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alSourceStop0(s: i32) -> Res<()> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alSourceStop", extern "C" fn(u32)) { f(s as u32); }
+    al_ctx().lock().unwrap().stop(s as u32);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alSourceQueueBuffer0(s: i32, b: i32) -> Res<()> {
-    let libs = [al_lib()];
-    let ub = b as u32;
-    if let Some(f) = sym_fn!(&libs, "alSourceQueueBuffers", extern "C" fn(u32, i32, *const u32)) { f(s as u32, 1, &ub); }
+    al_ctx().lock().unwrap().queue_buffers(s as u32, &[b as u32]);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alSourceUnqueueBuffer0(s: i32) -> Res<i32> {
-    let libs = [al_lib()];
-    let mut ub = 0u32;
-    if let Some(f) = sym_fn!(&libs, "alSourceUnqueueBuffers", extern "C" fn(u32, i32, *mut u32)) { f(s as u32, 1, &mut ub); }
-    Ok(ub as i32)
+    let ctx = al_ctx();
+    let mut c = ctx.lock().unwrap();
+    Ok(match c.unqueue_buffers(s as u32, 1) {
+        Ok(v) => v.first().copied().unwrap_or(0) as i32,
+        Err(_) => 0,
+    })
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alGetSourcei0(s: i32, p: i32) -> Res<i32> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alGetSourcei", extern "C" fn(u32, i32, *mut i32)) {
-        let mut out = 0i32;
-        f(s as u32, p, &mut out);
-        return Ok(out);
-    }
-    Ok(if p == 0x1010 { 0x1014 } else { 0 })
+    let ctx = al_ctx();
+    let mut c = ctx.lock().unwrap();
+    Ok(match c.get_source_i(s as u32, p) {
+        Ok(v) => v,
+        Err(code) => {
+            c.fail(code);
+            0
+        }
+    })
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alSourcei0(s: i32, p: i32, v: i32) -> Res<()> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alSourcei", extern "C" fn(u32, i32, i32)) { f(s as u32, p, v); }
+    al_ctx().lock().unwrap().set_source_i(s as u32, p, v);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alSourcef0(s: i32, p: i32, v: f32) -> Res<()> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alSourcef", extern "C" fn(u32, i32, f32)) { f(s as u32, p, v); }
+    al_ctx().lock().unwrap().set_source_f(s as u32, p, v);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alSource3f0(s: i32, p: i32, x: f32, y: f32, z: f32) -> Res<()> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alSource3f", extern "C" fn(u32, i32, f32, f32, f32)) { f(s as u32, p, x, y, z); }
+    al_ctx().lock().unwrap().set_source_3f(s as u32, p, [x, y, z]);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alListener3f0(p: i32, x: f32, y: f32, z: f32) -> Res<()> {
-    let libs = [al_lib()];
-    if let Some(f) = sym_fn!(&libs, "alListener3f", extern "C" fn(i32, f32, f32, f32)) { f(p, x, y, z); }
+    al_ctx().lock().unwrap().set_listener_3f(p, [x, y, z]);
     Ok(())
 }
+#[inline(never)] // exported symbol: the generated code links to it (small leaf fns are otherwise not exported)
 pub fn n_mono_rhi_NativeRhi__alGetError0() -> Res<i32> {
-    let libs = [al_lib()];
-    Ok(sym_fn!(&libs, "alGetError", extern "C" fn() -> i32).map(|f| f()).unwrap_or(0))
+    Ok(al_ctx().lock().unwrap().error())
 }
 pub fn n_mono_rhi_NativeRhi__wrapDirectByteBuffer0(addr: i64, cap: i32) -> Res<Ref> {
     rt::new_direct_byte_buffer(addr, cap.max(0) as i64)

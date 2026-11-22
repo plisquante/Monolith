@@ -164,7 +164,9 @@ impl Context {
         Context { listener_gain: 1.0, next_id: 1, ..Default::default() }
     }
 
-    fn fail(&mut self, code: i32) -> i32 {
+
+    /// Records an error (the first one since the last `error()` is kept).
+    pub fn fail(&mut self, code: i32) -> i32 {
         if self.err == AL_NO_ERROR {
             self.err = code;
         }
