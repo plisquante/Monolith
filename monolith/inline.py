@@ -43,8 +43,9 @@ def _width(d: str) -> int:
 
 
 class Inliner:
-    def __init__(self, prog, patches=None, caller_sensitive=None):
+    def __init__(self, prog, patches=None, caller_sensitive=None, keep_ctors=()):
         self.p = prog
+        self.keep_ctors = frozenset(keep_ctors)   # classes whose constructor call must stay (the recycling matches `new C; dup; ..; invokespecial C.<init>`)
         self.w = prog.w
         self.patches = patches
         self.caller_sensitive = caller_sensitive or (lambda dc, m: False)
@@ -176,6 +177,10 @@ class Inliner:
         for i, ins in enumerate(orig):
             base = ins.pc * K
             tgt = self._single_target(ci, ins) if ins.op in ("invokestatic", "invokespecial", "invokevirtual", "invokeinterface") else None
+            if tgt is not None and ins.arg.name == "<init>" and ins.arg.owner in self.keep_ctors:
+                tgt = None
+            if tgt is not None and ins.arg.name in ("iterator", "listIterator") and ins.arg.desc.endswith(("Ljava/util/Iterator;", "Ljava/util/ListIterator;")):
+                tgt = None      # stays a call: the for-each recycling (rustgen.find_iterator_scopes) matches `iterator()` + `astore`
             body = None
             if tgt is not None and len(out) + len(orig) < MAX_CALLER:
                 dc, cm = tgt
@@ -262,9 +267,9 @@ class Inliner:
         return dc.cf.method("<clinit>", "()V") is not None or any(f.is_static and f.constant_value is not None for f in dc.cf.fields)
 
 
-def inline_program(prog, patches=None, caller_sensitive=None) -> dict:
+def inline_program(prog, patches=None, caller_sensitive=None, keep_ctors=()) -> dict:
     """Inlines small callees into every reachable method. Returns statistics."""
-    inl = Inliner(prog, patches, caller_sensitive)
+    inl = Inliner(prog, patches, caller_sensitive, keep_ctors)
     for cn, key in sorted(prog.reachable):
         ci = prog.w.classes.get(cn)
         if ci is None:

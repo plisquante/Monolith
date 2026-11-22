@@ -53,5 +53,21 @@ with tempfile.TemporaryDirectory() as work:
     # iterator): 5 x 3000 rounds stay on the heap, every other loop is served from the pool
     check(f"ArrayList$Itr: {n_on[1]:,} of {n_on[0]:,} served by recycling; heap {heap_on:,} (expected ~15,000 from the excluded loops)",
           heap_off == n_off[0] and n_on[1] >= 80_000 and 14_000 <= heap_on <= 16_000, f"on {n_on} off {n_off}")
+    # the same loops with the inliner and the escape analysis on: inlining must not take `iterator()` out of the
+    # `iterator()` + `astore` shape that the recycling recognizes (it did once: 1.4 GiB recycled -> 53 MiB in the game)
+    out2 = os.path.join(work, "out2")
+    g2 = subprocess.run([sys.executable, "-m", "monolith.rustgen", "--cp", cdir, "--main", "Iter1", "-o", out2, "--shards", "4", "--shard-jobs", "2",
+                         "--opt", "2", "--inline", "--escape", "--compile"], cwd=ROOT, capture_output=True, text=True, env=ENV)
+    if g2.returncode:
+        sys.exit("build (inline + escape) failed:\n" + g2.stderr[-1500:])
+    exe2 = os.path.join(out2, "prog")
+    src2 = "".join(open(os.path.join(out2, f)).read() for f in os.listdir(out2) if f.startswith("shard_") and f.endswith(".rs"))
+    check("inline + escape: loops still recognized", src2.count("rt::recycle_scope(") >= 10, f"{src2.count('rt::recycle_scope(')} sites")
+    prof2 = os.path.join(work, "p_inl.json")
+    run2 = subprocess.run([exe2], capture_output=True, text=True, env=dict(ENV, MONO_RECYCLE="1", MONO_ALLOC_PROFILE=prof2, MONO_ALLOC_DUMP_SECS="1", MONO_ARENA_CHECK="abort"))
+    check("inline + escape == HotSpot", run2.stdout == java.stdout and run2.returncode == java.returncode, run2.stderr[-600:])
+    P2 = {c["name"]: (c["an"], c["arn"]) for c in json.load(open(prof2))["classes"]}
+    n2 = P2.get("java/util/ArrayList$Itr", (0, 0))
+    check(f"inline + escape: ArrayList$Itr {n2[1]:,} of {n2[0]:,} served by recycling", n2[1] >= 80_000, f"{n2}")
 print("FAILED" if fails else "ALL PASSED")
 sys.exit(1 if fails else 0)

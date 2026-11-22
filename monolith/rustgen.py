@@ -1750,7 +1750,7 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
         def _caller_sensitive(dc, m):
             return m.code is not None and any(i.op == "invokestatic" and i.arg.owner == "jdk/internal/reflect/Reflection"
                                               and i.arg.name == "getCallerClass" for i in prog.insns(dc, m))
-        st = inline_program(prog, pset, _caller_sensitive)
+        st = inline_program(prog, pset, _caller_sensitive, RECYCLABLE_ITERATORS)
         sys.stderr.write(f"monolith: inlined {st['sites']} call sites in {st['methods']} methods\n")
     esc_res = None
     if use_escape:
