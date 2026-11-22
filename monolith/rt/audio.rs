@@ -20,6 +20,25 @@ pub const AL_INVALID_OPERATION: i32 = 0xA004;
 pub const AL_FALSE: i32 = 0;
 pub const AL_TRUE: i32 = 1;
 pub const AL_POSITION: i32 = 0x1004;
+pub const AL_DIRECTION: i32 = 0x1005;
+pub const AL_VELOCITY: i32 = 0x1006;
+pub const AL_CONE_INNER_ANGLE: i32 = 0x1001;
+pub const AL_CONE_OUTER_ANGLE: i32 = 0x1002;
+pub const AL_REFERENCE_DISTANCE: i32 = 0x1020;
+pub const AL_ROLLOFF_FACTOR: i32 = 0x1021;
+pub const AL_CONE_OUTER_GAIN: i32 = 0x1022;
+pub const AL_MAX_DISTANCE: i32 = 0x1023;
+pub const AL_SEC_OFFSET: i32 = 0x1024;
+pub const AL_SAMPLE_OFFSET: i32 = 0x1025;
+pub const AL_BYTE_OFFSET: i32 = 0x1026;
+pub const AL_SOURCE_TYPE: i32 = 0x1027;
+pub const AL_STATIC: i32 = 0x1028;
+pub const AL_STREAMING: i32 = 0x1029;
+pub const AL_UNDETERMINED: i32 = 0x1030;
+pub const AL_MIN_GAIN: i32 = 0x100D;
+pub const AL_MAX_GAIN: i32 = 0x100E;
+pub const AL_ORIENTATION: i32 = 0x100F;
+pub const AL_SOURCE_RELATIVE: i32 = 0x202;
 pub const AL_GAIN: i32 = 0x100A;
 pub const AL_PITCH: i32 = 0x1003;
 pub const AL_LOOPING: i32 = 0x1007;
@@ -131,6 +150,18 @@ pub struct Source {
     pub pitch: f32,
     pub looping: bool,
     pub position: [f32; 3],
+    /// AL_SOURCE_RELATIVE: the position is relative to the listener
+    pub relative: bool,
+    pub velocity: [f32; 3],
+    pub direction: [f32; 3],
+    pub reference_distance: f32,
+    pub max_distance: f32,
+    pub rolloff: f32,
+    pub min_gain: f32,
+    pub max_gain: f32,
+    pub cone_inner: f32,
+    pub cone_outer: f32,
+    pub cone_outer_gain: f32,
 }
 
 impl Source {
@@ -144,6 +175,17 @@ impl Source {
             pitch: 1.0,
             looping: false,
             position: [0.0, 0.0, 0.0],
+            relative: false,
+            velocity: [0.0; 3],
+            direction: [0.0; 3],
+            reference_distance: 1.0,
+            max_distance: f32::MAX,
+            rolloff: 1.0,
+            min_gain: 0.0,
+            max_gain: 1.0,
+            cone_inner: 360.0,
+            cone_outer: 360.0,
+            cone_outer_gain: 0.0,
         }
     }
 }
@@ -154,6 +196,7 @@ pub struct Context {
     pub sources: HashMap<u32, Source>,
     pub listener_pos: [f32; 3],
     pub listener_gain: f32,
+    pub listener_vel: [f32; 3],
     /// error of the last failed call (AL_NO_ERROR when none); `error()` returns it and clears it
     err: i32,
     next_id: u32,
@@ -344,6 +387,26 @@ impl Context {
             AL_BUFFERS_PROCESSED => s.processed.len() as i32,
             AL_LOOPING => s.looping as i32,
             AL_BUFFER => s.queue.front().or(s.processed.front()).copied().unwrap_or(0) as i32,
+            AL_SOURCE_RELATIVE => s.relative as i32,
+            AL_SOURCE_TYPE => {
+                // one buffer that loops is static; a queue is streaming; nothing queued is undetermined
+                if s.queue.is_empty() && s.processed.is_empty() {
+                    AL_UNDETERMINED
+                } else if s.looping && s.queue.len() + s.processed.len() == 1 {
+                    AL_STATIC
+                } else {
+                    AL_STREAMING
+                }
+            }
+            AL_SAMPLE_OFFSET | AL_BYTE_OFFSET | AL_SEC_OFFSET => {
+                // offset inside the current buffer, in frames (sample), bytes (16-bit stereo) or seconds
+                let freq = s.queue.front().and_then(|b| self.buffers.get(b)).map(|b| b.freq as f64).unwrap_or(MIX_RATE as f64);
+                match param {
+                    AL_SAMPLE_OFFSET => s.pos as i32,
+                    AL_BYTE_OFFSET => (s.pos * 4.0) as i32,
+                    _ => (s.pos / freq) as i32,
+                }
+            }
             _ => return Err(AL_INVALID_ENUM),
         })
     }
@@ -352,6 +415,7 @@ impl Context {
         let Some(s) = self.sources.get_mut(&src) else { return self.fail(AL_INVALID_NAME) };
         match param {
             AL_LOOPING => s.looping = value != AL_FALSE,
+            AL_SOURCE_RELATIVE => s.relative = value != AL_FALSE,
             AL_BUFFER => {
                 if value != 0 && !self.buffers.contains_key(&(value as u32)) {
                     return self.fail(AL_INVALID_VALUE);
@@ -393,6 +457,44 @@ impl Context {
                 }
                 s.pitch = value;
             }
+            AL_REFERENCE_DISTANCE => {
+                if value < 0.0 {
+                    return self.fail(AL_INVALID_VALUE);
+                }
+                s.reference_distance = value;
+            }
+            AL_MAX_DISTANCE => {
+                if value < 0.0 {
+                    return self.fail(AL_INVALID_VALUE);
+                }
+                s.max_distance = value;
+            }
+            AL_ROLLOFF_FACTOR => {
+                if value < 0.0 {
+                    return self.fail(AL_INVALID_VALUE);
+                }
+                s.rolloff = value;
+            }
+            AL_MIN_GAIN => {
+                if !(0.0..=1.0).contains(&value) {
+                    return self.fail(AL_INVALID_VALUE);
+                }
+                s.min_gain = value;
+            }
+            AL_MAX_GAIN => {
+                if !(0.0..=1.0).contains(&value) {
+                    return self.fail(AL_INVALID_VALUE);
+                }
+                s.max_gain = value;
+            }
+            AL_CONE_INNER_ANGLE => s.cone_inner = value,
+            AL_CONE_OUTER_ANGLE => s.cone_outer = value,
+            AL_CONE_OUTER_GAIN => {
+                if !(0.0..=1.0).contains(&value) {
+                    return self.fail(AL_INVALID_VALUE);
+                }
+                s.cone_outer_gain = value;
+            }
             _ => return self.fail(AL_INVALID_ENUM),
         }
         AL_NO_ERROR
@@ -402,6 +504,8 @@ impl Context {
         let Some(s) = self.sources.get_mut(&src) else { return self.fail(AL_INVALID_NAME) };
         match param {
             AL_POSITION => s.position = v,
+            AL_VELOCITY => s.velocity = v,
+            AL_DIRECTION => s.direction = v,
             _ => return self.fail(AL_INVALID_ENUM),
         }
         AL_NO_ERROR
@@ -410,6 +514,7 @@ impl Context {
     pub fn set_listener_3f(&mut self, param: i32, v: [f32; 3]) -> i32 {
         match param {
             AL_POSITION => self.listener_pos = v,
+            AL_VELOCITY => self.listener_vel = v,
             _ => return self.fail(AL_INVALID_ENUM),
         }
         AL_NO_ERROR
@@ -449,7 +554,7 @@ impl Context {
                         s.pos = 0.0;
                         continue;
                     }
-                    let (gl, gr) = pan_gains(&self.listener_pos, &s.position, s.gain * self.listener_gain);
+                    let (gl, gr) = source_gains(&self.listener_pos, &s, self.listener_gain);
                     let step = buf.freq as f64 / MIX_RATE as f64 * s.pitch as f64;
                     let idx = s.pos as usize;
                     let frac = (s.pos - idx as f64) as f32;
@@ -489,18 +594,28 @@ impl Context {
     }
 }
 
-/// Gains (left, right) from the source position relative to the listener: OpenAL default attenuation
-/// (inverse distance clamped, reference distance 1, rolloff 1) and a constant-power pan on the x axis.
-fn pan_gains(listener: &[f32; 3], src: &[f32; 3], gain: f32) -> (f32, f32) {
-    let dx = src[0] - listener[0];
-    let dy = src[1] - listener[1];
-    let dz = src[2] - listener[2];
+/// Gains (left, right) of a source for the listener: OpenAL 1.1 distance model (inverse clamped, the default):
+/// gain = ref / (ref + rolloff * (clamp(d, ref, max) - ref)), then clamped to [min_gain, max_gain] and multiplied by
+/// the source gain. The pan follows the x axis of the listener with a constant-power law. A source at the origin
+/// without AL_SOURCE_RELATIVE is treated as not positioned (no attenuation, centred).
+fn source_gains(listener: &[f32; 3], s: &Source, listener_gain: f32) -> (f32, f32) {
+    let (dx, dy, dz) = if s.relative {
+        (s.position[0], s.position[1], s.position[2])
+    } else {
+        (s.position[0] - listener[0], s.position[1] - listener[1], s.position[2] - listener[2])
+    };
     let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-    let atten = if dist <= 1.0 { 1.0 } else { 1.0 / dist };
-    // position 0,0,0 means "not positioned" in the stereo/mono sense: no attenuation, centered
-    let (atten, pan) = if src == &[0.0, 0.0, 0.0] { (1.0, 0.0) } else { (atten, (dx / dist.max(1e-6)).clamp(-1.0, 1.0)) };
+    let positioned = s.relative || s.position != [0.0, 0.0, 0.0];
+    let (atten, pan) = if !positioned {
+        (1.0, 0.0)
+    } else {
+        let d = dist.clamp(s.reference_distance, s.max_distance.max(s.reference_distance));
+        let denom = s.reference_distance + s.rolloff * (d - s.reference_distance);
+        let a = if denom > 0.0 { s.reference_distance / denom } else { 1.0 };
+        (a.clamp(0.0, 1.0), (dx / dist.max(1e-6)).clamp(-1.0, 1.0))
+    };
+    let g = (s.gain * atten * listener_gain).clamp(s.min_gain, s.max_gain.max(s.min_gain));
     let angle = (pan + 1.0) * std::f32::consts::FRAC_PI_4;
-    let g = gain * atten;
     (g * angle.cos(), g * angle.sin())
 }
 
@@ -696,14 +811,49 @@ mod tests {
 
     #[test]
     fn gain_and_attenuation() {
-        let quiet = pan_gains(&[0.0, 0.0, 0.0], &[0.0, 0.0, 10.0], 1.0);
-        let near = pan_gains(&[0.0, 0.0, 0.0], &[0.0, 0.0, 2.0], 1.0);
-        let half = pan_gains(&[0.0, 0.0, 0.0], &[0.0, 0.0, 0.0], 0.5);
+        let src = |p: [f32; 3]| {
+            let mut s = Source::new();
+            s.position = p;
+            s
+        };
+        let l0 = [0.0, 0.0, 0.0];
+        let quiet = source_gains(&l0, &src([0.0, 0.0, 10.0]), 1.0);
+        let near = source_gains(&l0, &src([0.0, 0.0, 2.0]), 1.0);
+        let half = source_gains(&l0, &src([0.0, 0.0, 0.0]), 0.5);
         assert!(quiet.0 < near.0 && near.0 < 1.0, "attenuation with distance");
-        assert!((half.0 - 0.5 * std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6, "centered, gain 0.5 (equal power)");
-        let left = pan_gains(&[0.0, 0.0, 0.0], &[-5.0, 0.0, 0.0], 1.0);
-        let right = pan_gains(&[0.0, 0.0, 0.0], &[5.0, 0.0, 0.0], 1.0);
+        assert!((half.0 - 0.5 * std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6, "not positioned: gain 0.5, equal power");
+        let left = source_gains(&l0, &src([-5.0, 0.0, 0.0]), 1.0);
+        let right = source_gains(&l0, &src([5.0, 0.0, 0.0]), 1.0);
         assert!(left.0 > left.1 && right.1 > right.0, "pan follows x");
+    }
+
+    #[test]
+    fn openal_distance_model_and_relative_sources() {
+        let mut ctx = Context::new();
+        let s = ctx.gen_sources(1)[0];
+        // ref 1, rolloff 1: gain at distance 3 is 1 / (1 + 2) = 1/3 (inverse clamped model)
+        assert_eq!(ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 3.0]), AL_NO_ERROR);
+        let src = ctx.sources.get(&s).unwrap();
+        let g = source_gains(&[0.0; 3], src, 1.0).0;
+        // pan 0 (straight ahead): left = gain * cos(pi/4)
+        assert!((g - (1.0f32 / 3.0) * std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-4, "gain {g}");
+        // the parameters Minecraft's sound engine sets must not be errors
+        assert_eq!(ctx.set_source_i(s, AL_SOURCE_RELATIVE, AL_TRUE), AL_NO_ERROR);
+        assert_eq!(ctx.set_source_f(s, AL_REFERENCE_DISTANCE, 8.0), AL_NO_ERROR);
+        assert_eq!(ctx.set_source_f(s, AL_MAX_DISTANCE, 16.0), AL_NO_ERROR);
+        assert_eq!(ctx.set_source_f(s, AL_ROLLOFF_FACTOR, 1.0), AL_NO_ERROR);
+        assert_eq!(ctx.set_source_f(s, AL_CONE_OUTER_GAIN, 0.0), AL_NO_ERROR);
+        assert_eq!(ctx.set_source_3f(s, AL_VELOCITY, [0.0; 3]), AL_NO_ERROR);
+        assert_eq!(ctx.set_source_3f(s, AL_DIRECTION, [0.0, 0.0, 1.0]), AL_NO_ERROR);
+        assert_eq!(ctx.get_source_i(s, AL_SOURCE_TYPE), Ok(AL_UNDETERMINED));
+        assert_eq!(ctx.get_source_i(s, AL_SOURCE_RELATIVE), Ok(AL_TRUE));
+        assert_eq!(ctx.error(), AL_NO_ERROR);
+        // inside the reference distance there is no attenuation
+        ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 4.0]);
+        let g_in = source_gains(&[0.0; 3], ctx.sources.get(&s).unwrap(), 1.0).0;
+        ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 0.5]);
+        let g_near = source_gains(&[0.0; 3], ctx.sources.get(&s).unwrap(), 1.0).0;
+        assert!(g_near >= g_in);
     }
 
     #[test]
