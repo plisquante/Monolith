@@ -1,6 +1,6 @@
 # Monolith ana planı (sürüm yoluna kadar)
 
-Tek geçerli plan bu dosyadır. `YOL_HARITASI_TR.md` (Zig dönemi) ve `STATUS.md` (kronolojik kayıt) tarihîdir. GC ve bellek ayrıntısı:
+Tek geçerli plan bu dosyadır; uygulanabilir görev listesi ve kapalı kararlar için `IMPL_SPEC.md`. `YOL_HARITASI_TR.md` (Zig dönemi) ve `STATUS.md` (kronolojik kayıt) tarihîdir. GC ve bellek ayrıntısı:
 `GC_PLAN.md`. Bu plan sözdür: bir madde bitmiş sayılmak için "çıkış ölçütü" sütunu ölçülmüş olmalı.
 
 ## 1. Ürün tanımı
@@ -53,19 +53,19 @@ Büyüklük: S ≈ bir tur, M ≈ birkaç tur, L ≈ çok tur, XL ≈ çok tur +
 * Masaüstü: OpenGL 4.5 çekirdek (Linux/Windows), Android: GLES 3.2. Vulkan 1.0 sonrasına bırakıldı (kaplama taslakları var, ana yol değil).
 * Gölgelendirici derleme: shaderc + SPIRV-Cross (sistem paketi) yerine saf Rust `naga` ya da gömülü derleyici; sistem bağımlılığı sıfır.
 * Pencere/giriş: X11 (var, xdotool testi), Wayland (XWayland yeterli, yerli Wayland sürüm sonrası), Windows: Win32+WGL, macOS: Cocoa. Yerleşik ortak soyutlama `Platform` trait'i.
-* **macOS kararı (açık, ölçülecek):** macOS OpenGL en çok 4.1 çekirdek; oyunun gölgelendiricileri 4.5 istiyor. Seçenekler: (a) GL 4.1 uyumlu gölgelendirici yolu, (b) Vulkan→Metal (MoltenVK). Bir probe ile karar verilir; öncesinde macOS sözü verilmez.
+* **macOS (karar kapandı, bkz. IMPL_SPEC D3):** OpenGL 3.3 core. Bağlam zaten 3.3 core isteniyor, oyunun gölgelendiricileri `#version 330`, macOS 4.1 core'a kadar destekler. Vulkan/MoltenVK yok.
 * Gerçek GPU: llvmpipe dışında en az bir gerçek GPU (Mesa/NVIDIA/AMD) ve bir mobil GPU (Adreno/Mali) ile görsel+kare süresi testi.
 Çıkış: her platformda menü + dünya + 10 dk gezinme, gerçek GPU'da görüntü hatası yok, karşılaştırma ekran görüntüsü farkı eşik altında.
 
 ### WS4 Ses: Rust Audio (L2), L
 * OpenAL API alt kümesini Rust'ta gerçekle (kaynak, tampon, dinleyici, mesafe modeli, akış tamponları, HRTF yok). Oyun yalnız bu alt kümeyi kullanıyor; kapsam envanterle çıkarılır.
 * Çıkış aygıtları: Linux (ALSA/PulseAudio/PipeWire dlopen), Windows (WASAPI), macOS (CoreAudio), Android (AAudio).
-* Ogg Vorbis çözücü Rust'ta (stb_vorbis yerine); WAV/PCM.
+* Ogg çözme: oyun JOrbis (saf Java, zaten çevriliyor) kullanıyor; Rust çözücü şimdilik gerekmez.
 * Bağımlılık politikası: bölüm 7.
 Çıkış: tüm ses olayları (müzik, blok, çevre, 3B konum) çalar, 30 dk oynanışta underrun sayacı ~0, ses kodu `libopenal` bağımlılığı olmadan çalışır.
 
 ### WS5 Ağ ve çevrimiçi (L2), M
-* Soketler (`natives_net.rs`) var; eksik olan **TLS**. Oturum doğrulama, kaplama/doku indirme, Realms HTTPS ister. JDK'nın JSSE'si çevrilerek çalıştırmak ağır ve kırılgan; plan: sınıf seviyesi yamayla `SSLContext/SSLSocket` yerine Rust TLS (rustls sınıfı).
+* Soketler (`natives_net.rs`) var; eksik olan **TLS**. Karar kuralı (IMPL_SPEC D7): önce çevrilmiş JSSE soketlerimizin üzerinde denenir (B5), çalışmazsa rustls yaması. Oturum doğrulama, kaplama/doku indirme, Realms HTTPS ister. JDK'nın JSSE'si çevrilerek çalıştırmak ağır ve kırılgan; plan: sınıf seviyesi yamayla `SSLContext/SSLSocket` yerine Rust TLS (rustls sınıfı).
 * Hesap girişi launcher'da (Microsoft akışı), oyuna yalnız erişim belirteci verilir.
 Çıkış: gerçek sunucuya katılma testi (çevrimiçi mod), kaplama indirme, şifreli oturum.
 
