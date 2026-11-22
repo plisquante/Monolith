@@ -73,8 +73,8 @@ def main() -> int:
         print(f"done: {os.path.join(rust, 'libminecraft_mono.so')}")
         return 0
     mb.extract_resources(jars, os.path.join(out, "resources"))
-    mb.apply_branding(os.path.join(out, "resources"))
     mb.download_assets(meta, os.path.join(out, "assets"))
+    mb.apply_branding(os.path.join(out, "resources"), os.path.join(out, "assets"))
     run = os.path.join(out, "run.sh")
     with open(run, "w", newline="\n") as fh:
         fh.write(RUN_SH.format(vid=vid, idx=meta["assetIndex"]["id"]))

@@ -387,10 +387,29 @@ def reflection_metadata(jars: list[str]) -> list[str]:
     return sorted(set(out))
 
 
-def apply_branding(resources: str):
-    """Monolith title screen: the logo (brand/title.png, our own artwork) replaces the
-    vanilla "MINECRAFT" title texture, and the "JAVA EDITION" subtitle texture becomes transparent
-    (the logo already carries "Monolith")."""
+MODDED_LABEL = " Rust\u00a76+"  # version line of the title screen: "Minecraft 26.3 Rust+" with a gold plus
+
+
+def _patch_modded_label(path: str, src: str | None = None) -> bool:
+    """Set menu.modded in a lang file (read from `src`, default `path`) and write it to `path`."""
+    try:
+        with open(src or path, encoding="utf-8") as fh:
+            lang = json.load(fh)
+    except (OSError, ValueError):
+        return False
+    if "menu.modded" not in lang:
+        return False
+    lang["menu.modded"] = MODDED_LABEL
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(lang, fh, ensure_ascii=False, indent=2)
+    return True
+
+
+def apply_branding(resources: str, assets: str | None = None):
+    """Monolith title screen: the Monolith logo (brand/title.png) replaces the vanilla "MINECRAFT" title
+    texture, the "JAVA EDITION" subtitle texture becomes transparent (the logo carries its own edition line),
+    and the "(Modded)" suffix of the version line reads "Rust+"."""
     d = os.path.join(resources, "assets", "minecraft", "textures", "gui", "title")
     if not os.path.isdir(d):
         log("branding: no title textures in the resources, skipped")
@@ -401,7 +420,19 @@ def apply_branding(resources: str):
             continue
         for n in names:
             shutil.copyfile(src_path, os.path.join(d, n))
-    log("branding: Monolith title screen applied")
+    lang_dir = os.path.join(resources, "assets", "minecraft", "lang")
+    n_lang = int(_patch_modded_label(os.path.join(lang_dir, "en_us.json")))
+    if assets:  # the other languages live in the asset index, not in the jar
+        idx_dir = os.path.join(assets, "indexes")
+        for idx in (os.listdir(idx_dir) if os.path.isdir(idx_dir) else []):
+            with open(os.path.join(idx_dir, idx), encoding="utf-8") as fh:
+                objs = json.load(fh).get("objects", {})
+            for name, o in objs.items():
+                if name.startswith("minecraft/lang/") and name.endswith(".json") and not name.endswith("en_us.json"):
+                    h = o["hash"]
+                    obj = os.path.join(assets, "objects", h[:2], h)
+                    n_lang += _patch_modded_label(os.path.join(resources, "assets", name), obj)
+    log(f"branding: Monolith title screen applied ({n_lang} language files)")
 
 
 def extract_resources(jars, dest: str):
@@ -579,7 +610,7 @@ def main() -> int:
     if not a.skip_assets:
         download_assets(meta, os.path.join(out, "assets"))
     extract_resources([jar] + libs, os.path.join(out, "resources"))
-    apply_branding(os.path.join(out, "resources"))
+    apply_branding(os.path.join(out, "resources"), None if a.skip_assets else os.path.join(out, "assets"))
 
     reflect_file = os.path.join(out, "reflect-classes.txt")
     with open(reflect_file, "w") as fh:
