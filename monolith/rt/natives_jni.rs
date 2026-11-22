@@ -774,6 +774,9 @@ fn jna_addr(ptr: Ref, base: i64, off: i64) -> usize {
 /// Without them `Structure.FFIType` cannot be initialised ("FFI types not initialized"), and JNA users such as the
 /// narrator fail at start-up.
 pub fn n_com_sun_jna_Native__initIDs() -> Res<()> {
+    if std::env::var_os("MONO_JNA_TRACE").is_some() {
+        eprintln!("jna: initIDs entered");
+    }
     let Some(ffi) = rt::find_class("com.sun.jna.Structure$FFIType$FFITypes") else {
         return rt::throw("java/lang/Error", "JNA: FFITypes class missing".to_string());
     };
