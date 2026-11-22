@@ -9,10 +9,13 @@ import java.util.Random;
 public class SecureRandom extends Random {
     private static final long serialVersionUID = 4940670005562187L;
     private final String algorithm;
+    // service provider implementation, when the instance was made from one (protected constructor below)
+    private final SecureRandomSpi spi;
 
     public SecureRandom() {
         super(0);
         this.algorithm = "NativePRNG";
+        this.spi = null;
     }
 
     public SecureRandom(byte[] seed) {
@@ -22,6 +25,15 @@ public class SecureRandom extends Random {
     private SecureRandom(String algorithm) {
         super(0);
         this.algorithm = algorithm;
+        this.spi = null;
+    }
+
+    /** Used by provider code that has its own SecureRandomSpi: draws through that implementation. */
+    protected SecureRandom(SecureRandomSpi secureRandomSpi, Provider provider) {
+        super(0);
+        if (secureRandomSpi == null) throw new NullPointerException("secureRandomSpi");
+        this.spi = secureRandomSpi;
+        this.algorithm = provider == null ? "SPI" : provider.getName();
     }
 
     public static SecureRandom getInstance(String algorithm) throws NoSuchAlgorithmException {
@@ -48,13 +60,17 @@ public class SecureRandom extends Random {
 
     @Override
     public void nextBytes(byte[] bytes) {
+        if (spi != null) {
+            spi.engineNextBytes(bytes);
+            return;
+        }
         fill0(bytes);
     }
 
     @Override
     protected final int next(int numBits) {
         byte[] b = new byte[4];
-        fill0(b);
+        nextBytes(b);
         int next = (b[0] & 0xff) << 24 | (b[1] & 0xff) << 16 | (b[2] & 0xff) << 8 | (b[3] & 0xff);
         return next >>> (32 - numBits);
     }

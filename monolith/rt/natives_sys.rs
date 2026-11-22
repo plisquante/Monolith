@@ -805,3 +805,56 @@ pub fn n_jdk_jfr_internal_JVM__abort(msg: Ref) -> Res<()> {
     let s = if msg.is_null() { "JFR abort".to_string() } else { rt::str_to_rust(msg) };
     rt::abort(&s)
 }
+
+// ------------------------------------------------------------------ java.io.Console, jdk.internal.io.JdkConsoleImpl
+extern "C" {
+    fn isatty(fd: c_int) -> c_int;
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    fn tcgetattr(fd: c_int, t: *mut u8) -> c_int;
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    fn tcsetattr(fd: c_int, action: c_int, t: *const u8) -> c_int;
+}
+
+/// Bits: 1 = stdin, 2 = stdout, 4 = stderr is a character device (java.io.Console.TTY_*_MASK).
+pub fn n_java_io_Console__ttyStatus() -> Res<i32> {
+    let mut s = 0;
+    unsafe {
+        if isatty(0) != 0 {
+            s |= 1;
+        }
+        if isatty(1) != 0 {
+            s |= 2;
+        }
+        if isatty(2) != 0 {
+            s |= 4;
+        }
+    }
+    Ok(s)
+}
+
+/// Turns the echo of the terminal on stdin on or off; returns whether echo was on before.
+/// termios on Linux and Android: c_lflag is the fourth 32-bit field (byte offset 12); ECHO is 0o10.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub fn n_jdk_internal_io_JdkConsoleImpl__echo(on: i32) -> Res<i32> {
+    const TCSANOW: c_int = 0;
+    const ECHO: u32 = 0o10;
+    let mut t = [0u8; 64];
+    unsafe {
+        if tcgetattr(0, t.as_mut_ptr()) != 0 {
+            return rt::throw("java/io/IOException", "echo: stdin is not a terminal".to_string());
+        }
+        let lflag = u32::from_ne_bytes([t[12], t[13], t[14], t[15]]);
+        let was_on = lflag & ECHO != 0;
+        let new = if on != 0 { lflag | ECHO } else { lflag & !ECHO };
+        t[12..16].copy_from_slice(&new.to_ne_bytes());
+        if tcsetattr(0, TCSANOW, t.as_ptr()) != 0 {
+            return rt::throw("java/io/IOException", "echo: cannot change the terminal".to_string());
+        }
+        Ok(was_on as i32)
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+pub fn n_jdk_internal_io_JdkConsoleImpl__echo(_on: i32) -> Res<i32> {
+    rt::throw("java/lang/UnsupportedOperationException", "console echo control is implemented on Linux and Android".to_string())
+}
