@@ -12,7 +12,7 @@ for every reachable method. Nothing is rewritten by hand and nothing is decompil
 
 ```
 python3 -m monolith.rustgen --cp app.jar --main com.example.Main -o out/ --run   # Rust back end (docs/MONOLITH.md)
-python3 tools/mcbuild_android.py client.jar                                      # Minecraft -> libminecraft_mono.so (Android arm64)
+python3 tools/mcbuild_rust.py --android client.jar                                      # Minecraft -> libminecraft_mono.so (Android arm64)
 python3 -m monolith build --cp app.jar:lib.jar --main com.example.Main -o out/   # -> out/Main
 python3 tools/mcbuild.py client.jar --no-lwjgl --graphics auto                 # Minecraft client transpile via RHI (experimental — see below)
 python3 tests/run_client_core_e2e.py -O Debug --shards 16 --shard-jobs 1       # Unified 4-subsystem Java+Zig E2E
@@ -56,7 +56,7 @@ powered by MONOLITH Client Core v2 (`mem_pool.zig`, `thread_pool.zig`, `rhi.zig`
   isometric 9-slot hotbar, and full visual layout editor (`ControlsEditorActivity`)
 - Vulkan 1.1+ / OpenGL ES 3.0+ RHI settings, resolution scale, render distance, FPS cap, FOV,
   explicit Demo Mode vs external `libminecraft_mono.so` (`mono_android_entry`) loader without silent fallback
-- Engine library for the app (`libminecraft_mono.so`): `python3 tools/mcbuild_android.py <client.jar>` (Rust back end, needs the Android NDK and
+- Engine library for the app (`libminecraft_mono.so`): `python3 tools/mcbuild_rust.py --android <client.jar>` (Rust back end, needs the Android NDK and
   `rustup target add aarch64-linux-android`; the same pipeline is `python3 -m monolith.rustgen --android`).
   The older Zig route: `python3 tools/mcbuild.py build-lib <client.jar> -dynamic --target aarch64-linux-android.26`
 

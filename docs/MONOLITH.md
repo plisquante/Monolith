@@ -44,4 +44,4 @@ builds `libminecraft_mono.so` for `aarch64-linux-android`: `mono_rt.rlib`, one o
 assetsDir, input)`. The entry starts the game on its own 256 MiB thread and returns at once, so the Android UI thread
 never blocks. The TouchCore host (`libtouchcore_mono.so`) supplies EGL, input and the surface through the `tc_android_*`
 symbols that `natives_rhi.rs` resolves. JNA needs libffi, which is built once as a static library from the official
-release (checksum pinned). `tools/mcbuild_android.py` wraps jar, library and asset download plus this command.
+release (checksum pinned). `tools/mcbuild_rust.py --android` wraps jar, library and asset download plus this command.
