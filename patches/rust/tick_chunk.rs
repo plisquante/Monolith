@@ -45,7 +45,7 @@ pub fn tick_chunk(this: rt::Ref, chunk: rt::Ref, speed: i32) -> rt::Res<()> {
         let mut si = 0;
         while si < n {
             let section: rt::Ref = unsafe { array::<rt::Ref>(sections)[si as usize] };
-            if v_section_ticking(section)? {
+            if v_section_ticking(section)? != 0 {
                 let base_y = v_section_y(chunk, si)?.wrapping_shl(4); // SectionPos.sectionToBlockCoord
                 let mut k = 0;
                 while k < speed {
@@ -53,13 +53,13 @@ pub fn tick_chunk(this: rt::Ref, chunk: rt::Ref, speed: i32) -> rt::Res<()> {
                     v_prof_push(prof, str_random_tick())?;
                     let state = v_section_state(section, x.wrapping_sub(min_x), y.wrapping_sub(base_y), z.wrapping_sub(min_z))?;
                     let mut pos = rt::Ref::NULL;
-                    if v_state_ticking(state)? {
+                    if v_state_ticking(state)? != 0 {
                         pos = n_block_pos(x, y, z)?;
                         let random: rt::Ref = unsafe { get(this, F_level_random) };
                         v_state_random_tick(state, this, pos, random)?;
                     }
                     let fluid = v_state_fluid(state)?;
-                    if v_fluid_ticking(fluid)? {
+                    if v_fluid_ticking(fluid)? != 0 {
                         if pos.is_null() {
                             pos = n_block_pos(x, y, z)?;
                         }
