@@ -192,3 +192,23 @@ A Rust patch for these allocates nothing (stack values, reused buffers, iterator
 - Without a collector the program would allocate 3.9 GiB per minute; a 16 GiB machine lasts 4.1 minutes.
 - If every TEMP allocation stops reaching the heap, about 24% of today's volume remains (0.93 GiB/min): that part must be owned and freed (chunks, worlds), not leaked.
 - Data that really stays (LONG plus the kept part of MIXED) is about 11% of the volume.
+
+## Inliner + iteration-local escape analysis + frame allocation + tickChunk patch (prof5)
+
+201 s window after 160 s, same scripted play (`tools/headless_play.sh`, 240 s, `MONO_ARENA_CHECK=abort`): no crash, no arena violation.
+
+| | prof4 (iterator recycling) | prof5 (this version) |
+|---|---:|---:|
+| allocated (heap and recycled, frame objects not counted) | 7,309.8 MiB, 36.5 MiB/s | 6,369.9 MiB, 31.7 MiB/s |
+| objects | 180.8 M | 151.3 M |
+| served without the collected heap (recycled iterators, arenas) | 1,437.6 MiB (19.7 %) | 53.1 MiB (0.8 %) |
+| BlockPos | 745.4 MiB | 284.7 MiB (tickChunk) |
+| Vec3 / AABB | 596.3 / 436.5 MiB | 435.8 / 413.9 MiB |
+| collections | 6, longest 1,302 ms, total 7,396 ms | 6, longest 1,787 ms, total 8,940 ms |
+
+Findings:
+* Recycling of for-each iterators was lost: the inliner opened `iterator()` and the iterator constructors, so the shapes that `find_iterator_scopes` / `recycle_slot` match were gone. Fixed afterwards (`iterator()` calls and recyclable constructors stay calls) and covered by `recycle_tests.py` with `--inline --escape`. Not yet measured in the game.
+* Frame-allocated objects are not counted by the profiler; their effect shows only as lower totals (BlockPos, Vec3).
+* Every collection stops the game for 1.3-1.8 s, about every 31 s (heap 1.17 GiB, live ~500 MiB). This is the number the idle collector (`GC_PLAN.md`) must remove.
+* Live bytes after a collection grow ~2 MiB per 30 s (492 -> 501 MiB in 150 s): to be split into chunk loading and real growth by the leak tool.
+* The environment has no sound device and no network (OpenAL device and Realms errors in the log): not regressions.
