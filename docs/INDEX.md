@@ -11,6 +11,8 @@
 
 ## Task-Specific Topics (Load As Needed)
 
+- [`MASTER_PLAN_TR.md`](MASTER_PLAN_TR.md) — **Güncel ana plan**: mimari, iş akışları, sürüm yolu, 1.0 onay listesi
+- [`GC_PLAN.md`](GC_PLAN.md) — Bellek mimarisi planı (katmanlar, rölanti toplayıcı, kaçak bütçesi)
 - [`YOL_HARITASI_TR.md`](YOL_HARITASI_TR.md) — Türkçe güncel durum, client'ı %100 çalıştırma ve RAM/hızda JVM'i geçme eksikleri
 - [`STATUS.md`](STATUS.md) — Kronolojik doğrulama kayıtları (güncel durum için §16–§19'a bakın)
 - [`BENCHMARK.md`](BENCHMARK.md) — Alt sistem mikrobenchmarkları ve tarihsel HotSpot vs native ölçümleri

@@ -1,3 +1,5 @@
+> **Tarihî belge (Zig dönemi).** Güncel plan: [`MASTER_PLAN_TR.md`](MASTER_PLAN_TR.md). Bellek planı: [`GC_PLAN.md`](GC_PLAN.md).
+
 # MONOLITH Client Yol Haritası: %100 Çalışır Hale Gelmek ve JVM Minecraft'ı Geçmek İçin Eksikler
 
 Bu doküman, repodaki güncel kod tabanı ve doğrulanmış ölçümler esas alınarak hazırlanmıştır. Eski `.md` bölümlerindeki tarihî notlarla karışmaması için yalnızca **şu an kodda gerçekten var olanlar**, **doğrulananlar** ve **somut eksikler** ayrılmıştır.
