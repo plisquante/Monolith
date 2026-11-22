@@ -1159,7 +1159,13 @@ fn cmdline() -> Vec<String> {
 }
 /// `-Dkey=value` arguments are system properties; the others are program arguments.
 pub fn user_props() -> Vec<String> {
-    cmdline().into_iter().filter(|a| a.starts_with("-D")).map(|a| a[2..].to_string()).collect()
+    let mut v: Vec<String> = cmdline().into_iter().filter(|a| a.starts_with("-D")).map(|a| a[2..].to_string()).collect();
+    // Netty's native transports (epoll/kqueue) are JNI code emulated in Rust (174 natives). Without them Netty uses its
+    // NIO transport, which is plain Java and needs no native code. A launcher or user can still set the value.
+    if !v.iter().any(|p| p.starts_with("io.netty.transport.noNative=")) {
+        v.push("io.netty.transport.noNative=true".to_string());
+    }
+    v
 }
 pub fn program_args() -> Res<Ref> {
     let args: Vec<String> = cmdline().into_iter().filter(|a| !a.starts_with("-D")).collect();
