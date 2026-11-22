@@ -573,6 +573,20 @@ pub fn new_str(s: String) -> Ref {
     mk_string(&u)
 }
 /// Interned literal: created once per use site (thread-safe CAS + GC root registration).
+/// Canonical instance of a string value: `String.intern()` and string literals share this table, so
+/// `"x" == name.intern()` holds (the JDK compares reflected member names with `==`, e.g. AnnotationInvocationHandler).
+pub fn intern_string(s: Ref) -> Ref {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static TABLE: OnceLock<Mutex<HashMap<Vec<u16>, usize>>> = OnceLock::new();
+    let key = str_units(s);
+    let mut t = TABLE.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap();
+    let ptr = *t.entry(key).or_insert_with(|| {
+        crate::gc::pin_ref(s);
+        s.0 as usize
+    });
+    Ref(ptr as *mut Obj)
+}
 pub unsafe fn lit(slot: *mut Ref, data: &'static [u16]) -> Ref {
     use std::sync::atomic::{AtomicPtr, Ordering};
     let ap = &*(slot as *const AtomicPtr<Obj>);
@@ -580,7 +594,7 @@ pub unsafe fn lit(slot: *mut Ref, data: &'static [u16]) -> Ref {
     if !p.is_null() {
         return Ref(p);
     }
-    let r = mk_string(data);
+    let r = intern_string(mk_string(data));
     match ap.compare_exchange(std::ptr::null_mut(), r.0, Ordering::AcqRel, Ordering::Acquire) {
         Ok(_) => {
             crate::gc::register_static_slot(slot);

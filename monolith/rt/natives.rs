@@ -390,17 +390,8 @@ pub fn n_java_util_concurrent_atomic_AtomicInteger__cas(this: Ref, expected: i32
     Ok(a.compare_exchange(expected, new, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst).is_ok() as i32)
 }
 pub fn n_java_lang_String__intern(this: Ref) -> Res<Ref> {
-    use std::collections::HashMap;
-    use std::sync::{Mutex, OnceLock};
-    static TABLE: OnceLock<Mutex<HashMap<Vec<u16>, usize>>> = OnceLock::new();
     rt::nn(this)?;
-    let key = rt::str_units(this);
-    let mut t = TABLE.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap();
-    let ptr = *t.entry(key).or_insert_with(|| {
-        crate::gc::pin_ref(this);
-        this.0 as usize
-    });
-    Ok(Ref(ptr as *mut Obj))
+    Ok(rt::intern_string(this))
 }
 
 // ------------------------------------------------------------------ monitors and threads (sync.rs)
