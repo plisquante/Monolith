@@ -23,7 +23,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 export MONO_RESOURCES="$HERE/resources"
 GAME_DIR="${{MC_GAME_DIR:-$HERE/game}}"
 mkdir -p "$GAME_DIR"
-exec "$HERE/rust/prog" -Dmono.graphics.backend="${{MC_GRAPHICS:-opengl}}" --version {vid} --gameDir "$GAME_DIR" \\
+exec "$HERE/rust/prog" -Djavax.net.ssl.trustStore="$HERE/resources/cacerts" -Djavax.net.ssl.trustStoreType=JKS -Dmono.graphics.backend="${{MC_GRAPHICS:-opengl}}" --version {vid} --gameDir "$GAME_DIR" \\
   --assetsDir "$HERE/assets" --assetIndex {idx} --username "${{MC_USERNAME:-Player}}" --accessToken 0 --userType legacy "$@"
 """
 
@@ -61,7 +61,9 @@ def main() -> int:
     if not a.resume:
         reflect = os.path.join(out, "reflect-classes.txt")
         with open(reflect, "w") as fh:
-            fh.write("\n".join(sorted(set(mb.reflection_metadata(jars)))))
+            # library metadata plus the JDK provider classes (created by name at run time: JCA, JSSE, X.509)
+            import jdk_runtime_data
+            fh.write("\n".join(sorted(set(mb.reflection_metadata(jars)) | set(jdk_runtime_data.provider_classes(os.environ["MONO_JDK_HOME"])))))
         gen = [sys.executable, "-m", "monolith.rustgen", "--cp", os.pathsep.join(jars), "--reflect-class", "@" + reflect,
                "--main", mb.MAIN_CLASS, "--no-lwjgl", "--shards", str(a.shards), "-o", rust] + (["--android"] if a.android else [])
         if subprocess.run(gen, cwd=ROOT).returncode:
@@ -73,6 +75,11 @@ def main() -> int:
         print(f"done: {os.path.join(rust, 'libminecraft_mono.so')}")
         return 0
     mb.extract_resources(jars, os.path.join(out, "resources"))
+    # JDK data the runtime reads by name (ICU normalisation for X.500 names) and the trust store (public CA roots)
+    import jdk_runtime_data, shutil
+    jdk = os.environ["MONO_JDK_HOME"]
+    jdk_runtime_data.main_copy(jdk, os.path.join(out, "resources"))
+    shutil.copy(os.path.join(jdk, "lib", "security", "cacerts"), os.path.join(out, "resources", "cacerts"))
     mb.download_assets(meta, os.path.join(out, "assets"))
     mb.apply_branding(os.path.join(out, "resources"), os.path.join(out, "assets"))
     run = os.path.join(out, "run.sh")

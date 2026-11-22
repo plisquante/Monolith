@@ -138,7 +138,7 @@ Etiket: **[H]** = sınırları net, küçük modelle yapılabilir; **[S]** = der
 | B2 ses çekirdeği (OpenAL alt kümesi, karıştırıcı, WAV çıkış) | tamam (çekirdek; aygıt yok) | `rustc --test monolith/rt/audio.rs`: 7/7 |
 | B3 ses bağlama + aygıt arka uçları | kısmen: OpenAL natives Rust karıştırıcısına bağlı (23 fonksiyon), ALSA dlopen + sessiz yedek çalışıyor, `MONO_AUDIO_TRACE` ile hata izi. Oyunda 60 sn'de ses hatası 0 (öncesi 379). WASAPI/CoreAudio/AAudio açık | `monolith/rt/audio_dev.rs`, `tests/rust/audio_main.rs` (CI), `278461f`, `aee7d36` |
 | CI lint | düzeltildi: pyflakes 20 bulgu → 0; ses testleri ve rt_deps çevrimdışı derleme CI'a eklendi | `4bfb0cf` |
-| B5 TLS spike | HotSpot'ta HTTPS 200 (HTTP/2), çevrilmiş çalışma zamanı sonucu bekleniyor | `monolith/tests/tls/TlsProbe.java` |
+| B5 TLS spike | **sonuç D7a: JSSE korunur.** Çevrilmiş çalışma zamanından HTTPS GET 200 (HTTP/2). Bulunan engeller ve çözümler: sağlayıcı sınıfları yansımayla oluşur (tüm sağlayıcı paketleri yansıma listesine alındı), X.509 uzantıları, ICU veri dosyaları (`MONO_RESOURCES`), güven deposu (`javax.net.ssl.trustStore`, `run.sh` ve `resources/cacerts`). Hepsi `tools/jdk_runtime_data.py` ve `tools/mcbuild_rust.py` içinde | `monolith/tests/tls/TlsProbe.java`, `tools/jdk_runtime_data.py` |
 | B4 pencere spike (winit/glutin, SDL3) | açık | Windows/macOS koşucusu gerekir |
 | B6 GLES gölgelendirici dönüşümü | açık | |
 | B7 paketleme | açık | |
