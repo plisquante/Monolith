@@ -1709,7 +1709,7 @@ fn shader_libs() -> [*mut c_void; 3] {
     let a = *H.get_or_init(|| {
         [
             dl_open_any(&["libmonoshader.so"]) as usize,
-            dl_open_any(&["libshaderc.so", "libshaderc_shared.so.1"]) as usize,
+            dl_open_any(&["libshaderc.so", "libshaderc_shared.so.1", "libshaderc.so.1"]) as usize,
             dl_open_any(&["libspirv-cross.so", "libspirv-cross-c-shared.so.0"]) as usize,
         ]
     });

@@ -52,7 +52,8 @@ def title_svg():
     u = 7
     body, wc, hc = wordmark_body(u)
     W, H = 1024, 256
-    ox, oy = (W - wc * u) // 2, (H - hc * u) // 2
+    # the game draws only the top 176 px of the 1024x256 texture (44 of 64 rows at 4x): keep the wordmark inside that band
+    ox, oy = (W - wc * u) // 2, (176 - hc * u) // 2
     body, _, _ = wordmark_body(u, ox, oy)
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" shape-rendering="crispEdges"><title>Monolith</title>{body}</svg>'
 
