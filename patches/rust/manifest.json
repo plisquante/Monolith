@@ -31,6 +31,42 @@
       "calls": {
         "completed": "java/util/concurrent/CompletableFuture.completedFuture(Ljava/lang/Object;)Ljava/util/concurrent/CompletableFuture;"
       }
+    },
+    "tick_chunk.rs": {
+      "fields": {
+        "level_random": "net/minecraft/world/level/Level.random",
+        "level_rand_value": "net/minecraft/world/level/Level.randValue",
+        "chunkpos_x": "net/minecraft/world/level/ChunkPos.x",
+        "chunkpos_z": "net/minecraft/world/level/ChunkPos.z"
+      },
+      "calls": {
+        "profiler_get": "net/minecraft/util/profiling/Profiler.get()Lnet/minecraft/util/profiling/ProfilerFiller;"
+      },
+      "vcalls": {
+        "chunk_pos": "net/minecraft/world/level/chunk/LevelChunk.getPos()Lnet/minecraft/world/level/ChunkPos;",
+        "chunk_sections": "net/minecraft/world/level/chunk/LevelChunk.getSections()[Lnet/minecraft/world/level/chunk/LevelChunkSection;",
+        "section_y": "net/minecraft/world/level/chunk/LevelChunk.getSectionYFromSectionIndex(I)I",
+        "prof_push": "net/minecraft/util/profiling/ProfilerFiller.push(Ljava/lang/String;)V",
+        "prof_pop_push": "net/minecraft/util/profiling/ProfilerFiller.popPush(Ljava/lang/String;)V",
+        "prof_pop": "net/minecraft/util/profiling/ProfilerFiller.pop()V",
+        "next_int": "net/minecraft/util/RandomSource.nextInt(I)I",
+        "tick_precipitation": "net/minecraft/server/level/ServerLevel.tickPrecipitation(Lnet/minecraft/core/BlockPos;)V",
+        "section_ticking": "net/minecraft/world/level/chunk/LevelChunkSection.isRandomlyTicking()Z",
+        "section_state": "net/minecraft/world/level/chunk/LevelChunkSection.getBlockState(III)Lnet/minecraft/world/level/block/state/BlockState;",
+        "state_ticking": "net/minecraft/world/level/block/state/BlockState.isRandomlyTicking()Z",
+        "state_random_tick": "net/minecraft/world/level/block/state/BlockState.randomTick(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/util/RandomSource;)V",
+        "state_fluid": "net/minecraft/world/level/block/state/BlockState.getFluidState()Lnet/minecraft/world/level/material/FluidState;",
+        "fluid_ticking": "net/minecraft/world/level/material/FluidState.isRandomlyTicking()Z",
+        "fluid_random_tick": "net/minecraft/world/level/material/FluidState.randomTick(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/util/RandomSource;)V"
+      },
+      "news": {
+        "block_pos": "net/minecraft/core/BlockPos.<init>(III)V"
+      },
+      "strings": {
+        "iceandsnow": "iceandsnow",
+        "tick_blocks": "tickBlocks",
+        "random_tick": "randomTick"
+      }
     }
   },
   "patches": [
@@ -98,6 +134,13 @@
       "fn": "optimize",
       "orig": true,
       "verify": false
+    },
+    {
+      "class": "net/minecraft/server/level/ServerLevel",
+      "method": "tickChunk",
+      "desc": "(Lnet/minecraft/world/level/chunk/LevelChunk;I)V",
+      "file": "tick_chunk.rs",
+      "fn": "tick_chunk"
     }
   ]
 }

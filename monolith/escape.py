@@ -58,6 +58,7 @@ class MethodResult:
     rloop_pcs: frozenset = EMPTY      # rsite pcs inside a loop
     rtargets: dict = field(default_factory=dict)   # rsite pc -> [(class, key)] the call may reach
     cparams: tuple = ()               # per reference parameter: True = something read out of the object may escape
+    iter_pcs: frozenset = EMPTY       # loop alloc pcs whose object never survives one iteration of any loop around it
 
 
 @dataclass
@@ -71,7 +72,7 @@ class Result:
         r = self.methods.get((cn, key))
         if r is None:
             return EMPTY
-        return frozenset(pc for pc in r.sites if pc not in r.escaped and pc not in r.loop_pcs)
+        return frozenset(pc for pc in r.sites if pc not in r.escaped and (pc not in r.loop_pcs or pc in r.iter_pcs))
 
 
 def _ref_params(m, is_static: bool) -> list[tuple[int, int]]:
@@ -412,6 +413,10 @@ class EscapeAnalysis:
                 elif op in ("monitorenter", "monitorexit"):
                     v = stk.pop()
                     esc(v[0], "monitor")
+                elif op == "nullchk":          # pseudo instruction of the inliner: null check of the receiver
+                    stk.pop()
+                elif op == "initclass":        # pseudo instruction of the inliner: class initialization
+                    pass
                 elif op == "invokedynamic":
                     args, ret = parse_method_desc(a.desc)
                     for _ in args:
@@ -524,8 +529,98 @@ class EscapeAnalysis:
             for o in vals:
                 if o[0] not in ("A", "R") or reasons_of[o] - {"areturn"}:
                     fresh = False
+        iter_pcs = self._iteration_local(insns, idx, loops, loop_pcs, escaped, in_states, contents, code)
         return MethodResult(params, sites, esc_sites, loop_pcs, frozenset(callees), fresh,
-                            frozenset(rsites), resc, rloop, dict(rsites), cparams)
+                            frozenset(rsites), resc, rloop, dict(rsites), cparams, iter_pcs)
+
+    # ------------------------------------------------------------------ allocation sites that live one loop iteration
+    def _iteration_local(self, insns, idx, loops, loop_pcs, escaped, in_states, contents, code) -> frozenset:
+        """Loop allocation sites whose object cannot be seen by the next iteration.
+
+        The site must not escape the method (checked by the caller) and, for every loop around it, no local that is
+        live at the loop header and no stack entry may hold the object, nor anything that holds it (through the stored
+        contents). Then the object is dead when the iteration ends, and one slot (stack or arena) is enough for all
+        iterations. Liveness matters: javac leaves dead locals holding last iteration's object, which must not count."""
+        cand = [pc for pc in loop_pcs if ("A", pc) not in escaped]
+        if not cand:
+            return EMPTY
+        n = len(insns)
+        # liveness of locals, backward over instructions
+        gen: list = [None] * n
+        kill: list = [None] * n
+        succ: list = [None] * n
+        LOAD = ("iload", "lload", "fload", "dload", "aload")
+        STORE_ = ("istore", "lstore", "fstore", "dstore", "astore")
+        for i, x in enumerate(insns):
+            g = k = ()
+            if x.op in LOAD:
+                g = (x.arg, x.arg + 1) if x.op in ("lload", "dload") else (x.arg,)
+            elif x.op in STORE_:
+                k = (x.arg, x.arg + 1) if x.op in ("lstore", "dstore") else (x.arg,)
+            elif x.op == "iinc":
+                g = (x.arg,)
+            gen[i], kill[i] = frozenset(g), frozenset(k)
+            sc = [idx[t] for t in x.targets if t in idx]
+            if x.op not in ("goto", "ireturn", "lreturn", "freturn", "dreturn", "areturn", "return", "athrow", "tableswitch", "lookupswitch") and i + 1 < n:
+                sc.append(i + 1)
+            succ[i] = sc
+        for h in code.handlers:
+            hi = idx.get(h.handler_pc)
+            if hi is None:
+                continue
+            for i, x in enumerate(insns):
+                if h.start_pc <= x.pc < h.end_pc:
+                    succ[i].append(hi)
+        live_in = [frozenset()] * n
+        changed = True
+        rounds = 0
+        while changed and rounds < 60:
+            changed = False
+            rounds += 1
+            for i in range(n - 1, -1, -1):
+                out = frozenset().union(*(live_in[j] for j in succ[i])) if succ[i] else frozenset()
+                li = gen[i] | (out - kill[i])
+                if li != live_in[i]:
+                    live_in[i] = li
+                    changed = True
+        if changed:
+            return EMPTY                      # no fixpoint in budget: give up (sound)
+        carried_by_loop: dict = {}
+        for (t, b) in loops:
+            st = in_states.get(t)
+            if st is None:
+                carried_by_loop[(t, b)] = None            # unreachable header: nothing to check
+                continue
+            locs, stk = st
+            live = live_in[idx[t]]
+            roots = set()
+            for j in live:
+                if j < len(locs):
+                    roots.update(locs[j])
+            for v, _ in stk:
+                roots.update(v)
+            reach = set(roots)
+            work = [o for o in roots if o[0] in ("A", "R")]
+            while work:
+                o = work.pop()
+                for c in contents.get(o, ()):
+                    if c not in reach:
+                        reach.add(c)
+                        if c[0] in ("A", "R"):
+                            work.append(c)
+            carried_by_loop[(t, b)] = reach
+        ok = []
+        for pc in cand:
+            good = True
+            for (t, b) in loops:
+                if t <= pc <= b:
+                    reach = carried_by_loop[(t, b)]
+                    if reach is not None and ("A", pc) in reach:
+                        good = False
+                        break
+            if good:
+                ok.append(pc)
+        return frozenset(ok)
 
     # ------------------------------------------------------------------ driver
     def run(self) -> Result:

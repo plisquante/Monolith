@@ -847,7 +847,14 @@ pub fn collect() {
     let mut arena_ranges: Vec<(usize, usize)> = Vec::new();
     if check != 0 {
         for &tp in &h.threads {
-            unsafe { for ch in &(*tp).arena { arena_ranges.push((ch.ptr as usize, ch.ptr as usize + ch.cap)); } }
+            unsafe {
+                for ch in &(*tp).arena { arena_ranges.push((ch.ptr as usize, ch.ptr as usize + ch.cap)); }
+                // objects kept in a frame (rt::stack_obj) live on the thread's stack: a heap reference to one is the same violation
+                let bot = (*tp).stack_bot.load(Ordering::Acquire);
+                let top = (*tp).stack_top;
+                let (lo, hi) = if bot <= top { (bot, top) } else { (top, bot) };
+                arena_ranges.push((lo, hi));
+            }
         }
         arena_ranges.sort_unstable();
     }

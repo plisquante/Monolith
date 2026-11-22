@@ -500,6 +500,20 @@ pub fn alloc(class: &'static Class) -> Ref {
 }
 
 #[inline(always)]
+/// An object kept in the frame of the function that creates it (the escape analysis proved it dies with that call or loop
+/// iteration). `p` is the function's slot for this allocation site; it is cleared and given the class header on every
+/// execution of the `new`. The collector ignores it (not a heap address) and finds what it references by scanning stacks.
+#[inline(always)]
+pub fn stack_obj(p: *mut u8, class: &'static Class) -> Ref {
+    unsafe {
+        std::ptr::write_bytes(p, 0, class.size.max(16));
+        let o = p as *mut Obj;
+        (*o).class = class;
+        (*o).gc = crate::gc::GC_ARENA;
+        Ref(o)
+    }
+}
+
 /// `new` of a class whose instances are recycled at the end of their scope (iterators of for-each loops).
 pub fn alloc_recyclable(class: &'static Class, slot: usize) -> Ref {
     crate::gc::alloc_recyclable(class, slot)

@@ -194,6 +194,7 @@ class MethodGen:
         self.where = f"{ci.name}.{m.name}{m.desc}"
         self.noescape = gen.noescape_sites(ci.name, m.key)
         self.has_arena = False
+        self.stack_slots: dict[int, tuple] = {}   # `new` sites kept in this function's frame: pc -> (variable, struct)
 
     # ---------------------------------------------------------------- helpers
     def err(self, msg: str):
@@ -554,8 +555,10 @@ class MethodGen:
             self.init_class(ci2, e)
             rslot = self.g.recycle_slot(a.name)
             if ins.pc in self.noescape:
-                self.has_arena = True
-                push("A", f"rt::alloc_arena({cr})")
+                # the object cannot outlive this call (or this loop iteration): a slot in this function's frame
+                var = f"stk{ins.pc}"
+                self.stack_slots[ins.pc] = (var, self.g.struct_name(ci2))
+                push("A", f"rt::stack_obj(&raw mut {var} as *mut u8, {cr})")
             elif rslot is not None:
                 push("A", f"rt::alloc_recyclable({cr}, {rslot})")
             else:
@@ -776,6 +779,10 @@ class MethodGen:
                 push(kind_of(ret), call)
         elif op in ("monitorenter", "monitorexit"):
             e(f"rt::{op}({pop()})?;")
+        elif op == "nullchk":            # pseudo instruction of the inliner (monolith/inline.py)
+            e(f"rt::nn({pop()})?;")
+        elif op == "initclass":
+            self.init_class(self.app_class(a), e)
         elif op == "athrow":
             e(f"return rt::throw_ref({pop()});")
             return []
@@ -868,6 +875,8 @@ class MethodGen:
             body.append(f"    let mut {n}: {RT[k]} = {DEFAULT[k]};")
         for ln in init:
             body.append("    " + ln)
+        for pc_, (var, sn) in sorted(self.stack_slots.items()):
+            body.append(f"    let mut {var}: std::mem::MaybeUninit<{sn}> = std::mem::MaybeUninit::uninit();")
         if self.has_arena:
             body.append("    let _arena_guard = rt::ArenaGuard::enter();")
         if has_sp:
@@ -1705,7 +1714,7 @@ def _sym_scan(text: str) -> set[str]:
 def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = False,
                     no_lwjgl: bool = False, reflect_classes: list[str] | None = None,
                     shards: int = 1, use_escape: bool = False, use_patches: bool = True,
-                    analyze_only: bool = False, escape_budget: int = 120) -> tuple[dict[str, str], Gen]:
+                    analyze_only: bool = False, escape_budget: int = 120, use_inline: bool = False) -> tuple[dict[str, str], Gen]:
     sys.path.insert(0, ROOT)
     import heapq
     from . import __main__ as M
@@ -1735,6 +1744,14 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
     prog.run(main, extra_roots=pset.roots(), extra_vroots=pset.virtual_roots())
     if analyze_only:
         return world, prog, cp
+    if use_inline:
+        from .inline import inline_program
+
+        def _caller_sensitive(dc, m):
+            return m.code is not None and any(i.op == "invokestatic" and i.arg.owner == "jdk/internal/reflect/Reflection"
+                                              and i.arg.name == "getCallerClass" for i in prog.insns(dc, m))
+        st = inline_program(prog, pset, _caller_sensitive)
+        sys.stderr.write(f"monolith: inlined {st['sites']} call sites in {st['methods']} methods\n")
     esc_res = None
     if use_escape:
         from .escape import analyze as escape_analyze
@@ -2419,6 +2436,9 @@ def main() -> int:
     ap.add_argument("--escape", action="store_true",
                     help="run the whole-program escape analysis: allocation sites whose object cannot outlive the method "
                          "use the scope arena (rt::alloc_arena) instead of the collected heap")
+    ap.add_argument("--inline", action="store_true",
+                    help="inline small callees into their callers before the analysis (monolith/inline.py): the allocations "
+                         "of `a.subtract(b)`-style helpers become the caller's own and can be proven non-escaping")
     ap.add_argument("--escape-budget", type=int, default=1800, help="seconds the escape analysis may take (the result is all or nothing)")
     ap.add_argument("--android", action="store_true",
                     help="build libminecraft_mono.so (aarch64-linux-android cdylib exporting mono_android_entry) instead of an executable")
@@ -2458,7 +2478,7 @@ def main() -> int:
         files["main.rs"] = open(os.path.join(a.output, "main.rs"), encoding="utf-8").read()
         return _host_build(a, files, rt_dir)
     files, g = _generate_parts(a.main, natives, cp_dirs, a.strict, no_lwjgl=a.no_lwjgl, reflect_classes=ref_classes, shards=a.shards,
-                                use_escape=a.escape, escape_budget=a.escape_budget)
+                                use_escape=a.escape, escape_budget=a.escape_budget, use_inline=a.inline)
     if a.android:
         files["main.rs"] = _to_library_entry(files["main.rs"])
     os.makedirs(a.output, exist_ok=True)
