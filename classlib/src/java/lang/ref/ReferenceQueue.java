@@ -1,6 +1,6 @@
 package java.lang.ref;
 
-/** j2zig overlay. */
+/** monolith overlay. */
 public class ReferenceQueue<T> {
     private Reference<? extends T> head;
     private final Object lock = new Object();
@@ -11,7 +11,7 @@ public class ReferenceQueue<T> {
         synchronized (lock) {
             if (r.queue == null) return false;
             r.queue = null;
-            r.j2zNext = head;
+            r.monoNext = head;
             head = r;
             lock.notifyAll();
             return true;
@@ -23,8 +23,8 @@ public class ReferenceQueue<T> {
         synchronized (lock) {
             Reference<? extends T> r = head;
             if (r != null) {
-                head = (Reference<? extends T>) r.j2zNext;
-                r.j2zNext = null;
+                head = (Reference<? extends T>) r.monoNext;
+                r.monoNext = null;
             }
             return r;
         }

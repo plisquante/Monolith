@@ -8,7 +8,7 @@
 //!   call; NewGlobalRef pins objects in a global root list.
 //! * Native code runs in the GC-safe state; JNI functions that touch the heap switch back to
 //!   the running state first.
-//! * Libraries are dlopen()ed from the natives directory (J2Z_NATIVES, default
+//! * Libraries are dlopen()ed from the natives directory (MONO_NATIVES, default
 //!   <exe dir>/natives) and their JNI_OnLoad is called with our JavaVM.
 //! * JNI functions that are not implemented abort with their name (never a silent result).
 const std = @import("std");
@@ -56,7 +56,7 @@ fn arr(a: jobject) *rt.Array {
 
 fn fatal(comptime fmt: []const u8, args: anytype) noreturn {
     var buf: [512]u8 = undefined;
-    rt.writeFd(2, std.fmt.bufPrint(&buf, "j2zig: JNI: " ++ fmt ++ "\n", args) catch "j2zig: JNI: fatal\n");
+    rt.writeFd(2, std.fmt.bufPrint(&buf, "monolith: JNI: " ++ fmt ++ "\n", args) catch "monolith: JNI: fatal\n");
     std.process.abort();
 }
 
@@ -187,7 +187,7 @@ const Impl = struct {
     }
     fn ExceptionDescribe(e: EnvPtr) callconv(.c) void {
         _ = e;
-        rt.writeFd(2, "j2zig: JNI: ExceptionDescribe: exception pending in native code\n");
+        rt.writeFd(2, "monolith: JNI: ExceptionDescribe: exception pending in native code\n");
     }
     fn ExceptionClear(e: EnvPtr) callconv(.c) void {
         _ = e;
@@ -481,7 +481,7 @@ fn lookupImpl(comptime name: []const u8) ?*const anyopaque {
 fn Missing(comptime idx: usize) type {
     return struct {
         fn f() callconv(.c) noreturn {
-            fatal("JNI function {s} is not implemented by the j2zig runtime", .{T.names[idx]});
+            fatal("JNI function {s} is not implemented by the monolith runtime", .{T.names[idx]});
         }
     };
 }
@@ -564,7 +564,7 @@ pub fn markAttached() void {
 // ------------------------------------------------------------------ library loading
 
 fn nativesDir(buf: []u8) []const u8 {
-    return rt.getenv("J2Z_NATIVES") orelse blk: {
+    return rt.getenv("MONO_NATIVES") orelse blk: {
         var exe_buf: [std.fs.max_path_bytes]u8 = undefined;
         const exe = std.fs.selfExePath(&exe_buf) catch break :blk "natives";
         const d = std.fs.path.dirname(exe) orelse ".";

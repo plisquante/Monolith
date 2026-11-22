@@ -1,7 +1,7 @@
 package jdk.internal.loader;
 
 /**
- * j2zig overlay of jdk.internal.loader.ClassLoaders: delegates directly to the native image's
+ * monolith overlay of jdk.internal.loader.ClassLoaders: delegates directly to the native image's
  * platform and system ClassLoaders without instantiating BuiltinClassLoader / URLClassPath /
  * JarVerifier.
  */
@@ -9,7 +9,7 @@ public class ClassLoaders {
     private ClassLoaders() {}
 
     static BuiltinClassLoader bootLoader() {
-        throw new UnsupportedOperationException("j2zig: ClassLoaders.bootLoader");
+        throw new UnsupportedOperationException("monolith: ClassLoaders.bootLoader");
     }
 
     public static ClassLoader platformClassLoader() {

@@ -1,7 +1,7 @@
 package java.security;
 
 /**
- * j2zig overlay: there is no SecurityManager in a native image (as in JDK 24+), so privileged
+ * monolith overlay: there is no SecurityManager in a native image (as in JDK 24+), so privileged
  * actions simply run, exactly like the JDK does when no security manager is installed.
  */
 public final class AccessController {

@@ -1,7 +1,7 @@
 package jdk.internal.misc;
 
 /**
- * j2zig overlay: HotSpot injects these values at startup (the JDK's Java initializer only has
+ * monolith overlay: HotSpot injects these values at startup (the JDK's Java initializer only has
  * placeholders). The native image targets 64-bit little-endian platforms with 4 KiB pages.
  */
 final class UnsafeConstants {

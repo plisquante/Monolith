@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report methods/fields that the selected JDK declares on a class but the j2zig overlay of
+"""Report methods/fields that the selected JDK declares on a class but the monolith overlay of
 that class lacks (public, protected and package-private members; private ones are ignored).
 Run after switching JDK versions: missing members turn into link errors at transpile time.
 
@@ -9,9 +9,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from j2zig.classpath import ClassPath, jdk_jmods  # noqa: E402
-from j2zig.classfile import ACC_PRIVATE, ACC_SYNTHETIC  # noqa: E402
-from j2zig.__main__ import build_classlib  # noqa: E402
+from monolith.classpath import ClassPath, jdk_jmods  # noqa: E402
+from monolith.classfile import ACC_PRIVATE, ACC_SYNTHETIC  # noqa: E402
+from monolith.__main__ import build_classlib  # noqa: E402
 
 
 def members(cf):

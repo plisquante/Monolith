@@ -1,6 +1,6 @@
 package java.lang;
 
-/** j2zig overlay of java.lang.Integer. */
+/** monolith overlay of java.lang.Integer. */
 public final class Integer extends Number implements Comparable<Integer> {
     public static final int MIN_VALUE = 0x80000000;
     public static final int MAX_VALUE = 0x7fffffff;

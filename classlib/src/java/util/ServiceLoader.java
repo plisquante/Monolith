@@ -6,7 +6,7 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 /**
- * j2zig overlay of ServiceLoader. Providers are resolved at build time from the
+ * monolith overlay of ServiceLoader. Providers are resolved at build time from the
  * META-INF/services files of the application class path and compiled into a table;
  * instances are created by the runtime through each provider's public no-arg constructor.
  */

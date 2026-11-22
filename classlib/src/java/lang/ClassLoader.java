@@ -7,9 +7,9 @@ import java.util.Collections;
 import java.util.Enumeration;
 
 /**
- * j2zig overlay of ClassLoader. A native image is a closed world: every class is linked in at
+ * monolith overlay of ClassLoader. A native image is a closed world: every class is linked in at
  * build time, so loaders only resolve names against the built-in class table. Resources are
- * served from the directory named by the {@code j2z.resources} system property / J2Z_RESOURCES
+ * served from the directory named by the {@code mono.resources} system property / MONO_RESOURCES
  * environment variable (the application JAR's contents, extracted at build time).
  */
 public abstract class ClassLoader {
@@ -67,11 +67,11 @@ public abstract class ClassLoader {
     }
 
     protected final Class<?> defineClass(String name, byte[] b, int off, int len) throws ClassFormatError {
-        throw new UnsupportedOperationException("j2zig: classes cannot be defined at run time (" + name + ")");
+        throw new UnsupportedOperationException("monolith: classes cannot be defined at run time (" + name + ")");
     }
 
     protected final Class<?> defineClass(String name, byte[] b, int off, int len, java.security.ProtectionDomain pd) {
-        throw new UnsupportedOperationException("j2zig: classes cannot be defined at run time (" + name + ")");
+        throw new UnsupportedOperationException("monolith: classes cannot be defined at run time (" + name + ")");
     }
 
 
@@ -88,8 +88,8 @@ public abstract class ClassLoader {
     }
 
     static String resourceRoot() {
-        String r = System.getProperty("j2z.resources");
-        if (r == null) r = System.getenv("J2Z_RESOURCES");
+        String r = System.getProperty("mono.resources");
+        if (r == null) r = System.getenv("MONO_RESOURCES");
         return r;
     }
 
@@ -181,7 +181,7 @@ public abstract class ClassLoader {
 
     // ---- class definition: impossible in a closed-world image, reported precisely
     private static UnsupportedOperationException noDefine() {
-        return new UnsupportedOperationException("j2zig: classes cannot be defined at run time in a native image");
+        return new UnsupportedOperationException("monolith: classes cannot be defined at run time in a native image");
     }
 
     protected final Class<?> defineClass(byte[] b, int off, int len) throws ClassFormatError { throw noDefine(); }

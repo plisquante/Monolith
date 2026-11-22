@@ -1,6 +1,6 @@
 package java.lang;
 
-/** j2zig overlay. */
+/** monolith overlay. */
 public final class StringBuffer extends AbstractStringBuilder implements java.io.Serializable, Comparable<StringBuffer>, CharSequence {
     public StringBuffer() { super(); }
     public StringBuffer(int capacity) { super(capacity); }

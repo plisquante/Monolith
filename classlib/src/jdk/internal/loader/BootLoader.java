@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 /**
- * j2zig overlay of the boot class loader facade. Native libraries are linked into the
+ * monolith overlay of the boot class loader facade. Native libraries are linked into the
  * executable at build time, so loadLibrary has nothing to do; classes come from the
  * built-in class table; there is no module system.
  */
@@ -19,11 +19,11 @@ public class BootLoader {
     private static final ConcurrentHashMap<?, ?> CLASS_LOADER_VALUE_MAP = new ConcurrentHashMap<>();
 
     public static Module getUnnamedModule() {
-        throw new UnsupportedOperationException("j2zig: modules are not available");
+        throw new UnsupportedOperationException("monolith: modules are not available");
     }
 
     public static jdk.internal.module.ServicesCatalog getServicesCatalog() {
-        throw new UnsupportedOperationException("j2zig: module services catalog is not available");
+        throw new UnsupportedOperationException("monolith: module services catalog is not available");
     }
 
     public static ConcurrentHashMap<?, ?> getClassLoaderValueMap() {

@@ -6,8 +6,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
 /**
- * j2zig overlay of MethodHandles. VarHandles resolve to field offsets / static field addresses;
- * method handles are built on the reflection layer (see the MethodHandle overlay and J2zMH).
+ * monolith overlay of MethodHandles. VarHandles resolve to field offsets / static field addresses;
+ * method handles are built on the reflection layer (see the MethodHandle overlay and MonoMH).
  * Lookups resolve members reflectively; the transpiler keeps constant lookup targets reachable.
  * Access checks are not enforced (a closed-world image has no untrusted code to defend against).
  */
@@ -52,11 +52,11 @@ public class MethodHandles {
     public static MethodHandle insertArguments(MethodHandle target, int pos, Object... values) {
         MethodType t = target.type();
         if (pos < 0 || pos + values.length > t.parameterCount()) throw new IllegalArgumentException("too many values to insert");
-        return new J2zMH.Bound(target, pos, convertAll(values, t, pos), t.dropParameterTypes(pos, pos + values.length));
+        return new MonoMH.Bound(target, pos, convertAll(values, t, pos), t.dropParameterTypes(pos, pos + values.length));
     }
 
     public static MethodHandle dropArguments(MethodHandle target, int pos, java.util.List<Class<?>> valueTypes) {
-        return new J2zMH.Drop(target, pos, valueTypes.size(), target.type().insertParameterTypes(pos, valueTypes));
+        return new MonoMH.Drop(target, pos, valueTypes.size(), target.type().insertParameterTypes(pos, valueTypes));
     }
 
     public static MethodHandle dropArguments(MethodHandle target, int pos, Class<?>... valueTypes) {
@@ -69,16 +69,16 @@ public class MethodHandles {
 
     public static MethodHandle constant(Class<?> type, Object value) {
         if (type == void.class) throw new IllegalArgumentException("void type");
-        return new J2zMH.Constant(MethodHandle.convert(value, type, false), MethodType.methodType(type));
+        return new MonoMH.Constant(MethodHandle.convert(value, type, false), MethodType.methodType(type));
     }
 
     public static MethodHandle identity(Class<?> type) {
         if (type == void.class) throw new IllegalArgumentException("void type");
-        return new J2zMH.Identity(MethodType.methodType(type, type));
+        return new MonoMH.Identity(MethodType.methodType(type, type));
     }
 
     public static MethodHandle zero(Class<?> type) {
-        return new J2zMH.Constant(MethodHandle.zero(type), MethodType.methodType(type));
+        return new MonoMH.Constant(MethodHandle.zero(type), MethodType.methodType(type));
     }
 
     public static MethodHandle empty(MethodType type) {
@@ -88,18 +88,18 @@ public class MethodHandles {
     public static MethodHandle explicitCastArguments(MethodHandle target, MethodType newType) {
         if (newType.parameterCount() != target.type().parameterCount())
             throw new WrongMethodTypeException("cannot explicitly cast " + target + " to " + newType);
-        return new J2zMH.AsType(target, newType, true);
+        return new MonoMH.AsType(target, newType, true);
     }
 
     public static MethodHandle filterArguments(MethodHandle target, int pos, MethodHandle... filters) {
         MethodType t = target.type();
         for (int i = 0; i < filters.length; i++)
             if (filters[i] != null) t = t.changeParameterType(pos + i, filters[i].type().parameterType(0));
-        return new J2zMH.FilterArgs(target, pos, filters.clone(), t);
+        return new MonoMH.FilterArgs(target, pos, filters.clone(), t);
     }
 
     public static MethodHandle filterReturnValue(MethodHandle target, MethodHandle filter) {
-        return new J2zMH.FilterReturn(target, filter, target.type().changeReturnType(filter.type().returnType()));
+        return new MonoMH.FilterReturn(target, filter, target.type().changeReturnType(filter.type().returnType()));
     }
 
     public static MethodHandle foldArguments(MethodHandle target, MethodHandle combiner) {
@@ -109,37 +109,37 @@ public class MethodHandles {
     public static MethodHandle foldArguments(MethodHandle target, int pos, MethodHandle combiner) {
         MethodType t = target.type();
         if (combiner.type().returnType() != void.class) t = t.dropParameterTypes(pos, pos + 1);
-        return new J2zMH.Fold(target, pos, combiner, false, t);
+        return new MonoMH.Fold(target, pos, combiner, false, t);
     }
 
     public static MethodHandle collectArguments(MethodHandle target, int pos, MethodHandle filter) {
         MethodType t = target.type();
         if (filter.type().returnType() != void.class) t = t.dropParameterTypes(pos, pos + 1);
         t = t.insertParameterTypes(pos, filter.type().parameterList());
-        return new J2zMH.Fold(target, pos, filter, true, t);
+        return new MonoMH.Fold(target, pos, filter, true, t);
     }
 
     public static MethodHandle guardWithTest(MethodHandle test, MethodHandle target, MethodHandle fallback) {
-        return new J2zMH.Guard(test, target, fallback);
+        return new MonoMH.Guard(test, target, fallback);
     }
 
     public static MethodHandle permuteArguments(MethodHandle target, MethodType newType, int... reorder) {
         if (reorder.length != target.type().parameterCount()) throw new IllegalArgumentException("bad reorder array");
-        return new J2zMH.Permute(target, newType, reorder.clone());
+        return new MonoMH.Permute(target, newType, reorder.clone());
     }
 
     public static MethodHandle catchException(MethodHandle target, Class<? extends Throwable> exType, MethodHandle handler) {
-        return new J2zMH.Catch(target, exType, handler);
+        return new MonoMH.Catch(target, exType, handler);
     }
 
     public static MethodHandle throwException(Class<?> returnType, Class<? extends Throwable> exType) {
-        return new J2zMH.Thrower(MethodType.methodType(returnType, exType));
+        return new MonoMH.Thrower(MethodType.methodType(returnType, exType));
     }
 
     public static MethodHandle collectReturnValue(MethodHandle target, MethodHandle filter) {
         // filter(result, args...) is the new result: target's result is collected as filter's first argument
         MethodType ft = filter.type();
-        return new J2zMH.Fold(target, 0, filter, true, target.type()) {
+        return new MonoMH.Fold(target, 0, filter, true, target.type()) {
             @Override Object invokeImpl(Object[] a) throws Throwable {
                 Object r = target.invokeImpl(a);
                 if (target.type().returnType() == void.class) return filter.invokeImpl(a);
@@ -152,11 +152,11 @@ public class MethodHandles {
     }
 
     public static MethodHandle tryFinally(MethodHandle target, MethodHandle cleanup) {
-        return new J2zMH.TryFinally(target, cleanup);
+        return new MonoMH.TryFinally(target, cleanup);
     }
 
     public static MethodHandle tableSwitch(MethodHandle fallback, MethodHandle... targets) {
-        return new J2zMH.TableSwitch(fallback, targets.clone());
+        return new MonoMH.TableSwitch(fallback, targets.clone());
     }
 
     public static MethodHandle dropArguments(MethodHandle target, int pos, Class<?> valueType) {
@@ -174,38 +174,38 @@ public class MethodHandles {
     }
 
     public static MethodHandle whileLoop(MethodHandle init, MethodHandle pred, MethodHandle body) {
-        return new J2zMH.While(init, pred, body, false);
+        return new MonoMH.While(init, pred, body, false);
     }
 
     public static MethodHandle doWhileLoop(MethodHandle init, MethodHandle body, MethodHandle pred) {
-        return new J2zMH.While(init, pred, body, true);
+        return new MonoMH.While(init, pred, body, true);
     }
 
     public static MethodHandle countedLoop(MethodHandle iterations, MethodHandle init, MethodHandle body) {
-        return new J2zMH.Counted(null, iterations, init, body);
+        return new MonoMH.Counted(null, iterations, init, body);
     }
 
     public static MethodHandle countedLoop(MethodHandle start, MethodHandle end, MethodHandle init, MethodHandle body) {
-        return new J2zMH.Counted(start, end, init, body);
+        return new MonoMH.Counted(start, end, init, body);
     }
 
     public static MethodHandle iteratedLoop(MethodHandle iterator, MethodHandle init, MethodHandle body) {
-        return new J2zMH.Iterated(iterator, init, body);
+        return new MonoMH.Iterated(iterator, init, body);
     }
 
     public static <T extends java.lang.reflect.Member> T reflectAs(Class<T> expected, MethodHandle target) {
-        if (target instanceof J2zMH.DirectMethod d) return expected.cast(d.m);
-        if (target instanceof J2zMH.DirectConstructor d) return expected.cast(d.c);
-        if (target instanceof J2zMH.FieldAccess d) return expected.cast(d.f);
+        if (target instanceof MonoMH.DirectMethod d) return expected.cast(d.m);
+        if (target instanceof MonoMH.DirectConstructor d) return expected.cast(d.c);
+        if (target instanceof MonoMH.FieldAccess d) return expected.cast(d.f);
         throw new IllegalArgumentException("not a direct method handle");
     }
 
     public static MethodHandle invoker(MethodType type) {
-        return new J2zMH.Invoker(type);
+        return new MonoMH.Invoker(type);
     }
 
     public static MethodHandle exactInvoker(MethodType type) {
-        return new J2zMH.Invoker(type);
+        return new MonoMH.Invoker(type);
     }
 
     public static MethodHandle spreadInvoker(MethodType type, int leadingArgCount) {
@@ -213,19 +213,19 @@ public class MethodHandles {
     }
 
     public static MethodHandle arrayElementGetter(Class<?> arrayClass) {
-        return new J2zMH.ArrayOp(J2zMH.ArrayOp.GET, arrayClass, MethodType.methodType(arrayClass.getComponentType(), arrayClass, int.class));
+        return new MonoMH.ArrayOp(MonoMH.ArrayOp.GET, arrayClass, MethodType.methodType(arrayClass.getComponentType(), arrayClass, int.class));
     }
 
     public static MethodHandle arrayElementSetter(Class<?> arrayClass) {
-        return new J2zMH.ArrayOp(J2zMH.ArrayOp.SET, arrayClass, MethodType.methodType(void.class, arrayClass, int.class, arrayClass.getComponentType()));
+        return new MonoMH.ArrayOp(MonoMH.ArrayOp.SET, arrayClass, MethodType.methodType(void.class, arrayClass, int.class, arrayClass.getComponentType()));
     }
 
     public static MethodHandle arrayLength(Class<?> arrayClass) {
-        return new J2zMH.ArrayOp(J2zMH.ArrayOp.LENGTH, arrayClass, MethodType.methodType(int.class, arrayClass));
+        return new MonoMH.ArrayOp(MonoMH.ArrayOp.LENGTH, arrayClass, MethodType.methodType(int.class, arrayClass));
     }
 
     public static MethodHandle arrayConstructor(Class<?> arrayClass) {
-        return new J2zMH.ArrayOp(J2zMH.ArrayOp.NEW, arrayClass, MethodType.methodType(arrayClass, int.class));
+        return new MonoMH.ArrayOp(MonoMH.ArrayOp.NEW, arrayClass, MethodType.methodType(arrayClass, int.class));
     }
 
     public static VarHandle filterValue(VarHandle target, MethodHandle filterToTarget, MethodHandle filterFromTarget) {
@@ -333,19 +333,19 @@ public class MethodHandles {
         public MethodHandle findVirtual(Class<?> refc, String name, MethodType type) throws NoSuchMethodException, IllegalAccessException {
             Method m = findMethod(refc, name, type);
             if (Modifier.isStatic(m.getModifiers())) throw new IllegalAccessException("no such method: expected instance method " + m);
-            return new J2zMH.DirectMethod(m, type.insertParameterTypes(0, refc), true);
+            return new MonoMH.DirectMethod(m, type.insertParameterTypes(0, refc), true);
         }
 
         public MethodHandle findStatic(Class<?> refc, String name, MethodType type) throws NoSuchMethodException, IllegalAccessException {
             Method m = findMethod(refc, name, type);
             if (!Modifier.isStatic(m.getModifiers())) throw new IllegalAccessException("no such method: expected static method " + m);
-            return new J2zMH.DirectMethod(m, type, false);
+            return new MonoMH.DirectMethod(m, type, false);
         }
 
         public MethodHandle findSpecial(Class<?> refc, String name, MethodType type, Class<?> specialCaller) throws NoSuchMethodException, IllegalAccessException {
             Method m = findMethod(refc, name, type);
             if (Modifier.isStatic(m.getModifiers())) throw new IllegalAccessException("no such method: expected instance method " + m);
-            return new J2zMH.DirectMethod(m, type.insertParameterTypes(0, specialCaller), false);
+            return new MonoMH.DirectMethod(m, type.insertParameterTypes(0, specialCaller), false);
         }
 
         public MethodHandle findConstructor(Class<?> refc, MethodType type) throws NoSuchMethodException, IllegalAccessException {
@@ -378,31 +378,31 @@ public class MethodHandles {
 
         public MethodHandle unreflect(Method m) throws IllegalAccessException {
             MethodType t = MethodType.methodType(m.getReturnType(), m.getParameterTypes());
-            MethodHandle mh = Modifier.isStatic(m.getModifiers()) ? new J2zMH.DirectMethod(m, t, false)
-                    : new J2zMH.DirectMethod(m, t.insertParameterTypes(0, m.getDeclaringClass()), true);
+            MethodHandle mh = Modifier.isStatic(m.getModifiers()) ? new MonoMH.DirectMethod(m, t, false)
+                    : new MonoMH.DirectMethod(m, t.insertParameterTypes(0, m.getDeclaringClass()), true);
             return m.isVarArgs() ? mh.asVarargsCollector(m.getParameterTypes()[m.getParameterCount() - 1]) : mh;
         }
 
         public MethodHandle unreflectSpecial(Method m, Class<?> specialCaller) throws IllegalAccessException {
             MethodType t = MethodType.methodType(m.getReturnType(), m.getParameterTypes());
-            return new J2zMH.DirectMethod(m, t.insertParameterTypes(0, specialCaller), false);
+            return new MonoMH.DirectMethod(m, t.insertParameterTypes(0, specialCaller), false);
         }
 
         public MethodHandle unreflectConstructor(Constructor<?> c) throws IllegalAccessException {
-            MethodHandle mh = new J2zMH.DirectConstructor(c, MethodType.methodType(c.getDeclaringClass(), c.getParameterTypes()));
+            MethodHandle mh = new MonoMH.DirectConstructor(c, MethodType.methodType(c.getDeclaringClass(), c.getParameterTypes()));
             return c.isVarArgs() ? mh.asVarargsCollector(c.getParameterTypes()[c.getParameterCount() - 1]) : mh;
         }
 
         public MethodHandle unreflectGetter(Field f) throws IllegalAccessException {
             MethodType t = Modifier.isStatic(f.getModifiers()) ? MethodType.methodType(f.getType())
                     : MethodType.methodType(f.getType(), f.getDeclaringClass());
-            return new J2zMH.FieldAccess(f, false, t);
+            return new MonoMH.FieldAccess(f, false, t);
         }
 
         public MethodHandle unreflectSetter(Field f) throws IllegalAccessException {
             MethodType t = Modifier.isStatic(f.getModifiers()) ? MethodType.methodType(void.class, f.getType())
                     : MethodType.methodType(void.class, f.getDeclaringClass(), f.getType());
-            return new J2zMH.FieldAccess(f, true, t);
+            return new MonoMH.FieldAccess(f, true, t);
         }
 
         public VarHandle unreflectVarHandle(Field f) throws IllegalAccessException {

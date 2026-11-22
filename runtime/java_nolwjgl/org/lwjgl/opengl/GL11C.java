@@ -1,6 +1,6 @@
 package org.lwjgl.opengl;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -114,9 +114,9 @@ public class GL11C {
         String drv = NativeRhi.glGetString(name);
         if (drv != null && !drv.isEmpty()) return drv;
         return switch (name) {
-            case GL_VENDOR -> "J2ZIG";
-            case GL_RENDERER -> "J2ZIG RHI (Vulkan 1.1+ / GLES 3.0+)";
-            case GL_VERSION -> "3.3.0 J2ZIG RHI";
+            case GL_VENDOR -> "MONOLITH";
+            case GL_RENDERER -> "MONOLITH RHI (Vulkan 1.1+ / GLES 3.0+)";
+            case GL_VERSION -> "3.3.0 MONOLITH RHI";
             default -> "";
         };
     }

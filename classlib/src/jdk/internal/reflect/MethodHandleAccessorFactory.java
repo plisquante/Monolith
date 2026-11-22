@@ -8,10 +8,10 @@ import java.lang.reflect.Modifier;
 import jdk.internal.misc.Unsafe;
 
 /**
- * j2zig overlay: reflective access without method handles.
+ * monolith overlay: reflective access without method handles.
  * Fields are read/written through Unsafe offsets; methods and constructors are invoked by
  * runtime-generated invokers keyed by the method's erased signature (runtime/natives.zig
- * J2Z reflection natives + classes.zig reflectInvoke).
+ * MONO reflection natives + classes.zig reflectInvoke).
  */
 final class MethodHandleAccessorFactory {
     private MethodHandleAccessorFactory() {}
@@ -55,11 +55,11 @@ final class MethodHandleAccessorFactory {
     }
 
     static ConstructorAccessorImpl newSerializableConstructorAccessor(Class<?> decl, Constructor<?> ctor) {
-        throw new UnsupportedOperationException("j2zig: serialization constructors");
+        throw new UnsupportedOperationException("monolith: serialization constructors");
     }
 
     static FieldAccessorImpl newFieldAccessor(Field field, boolean isReadOnly) {
-        return new J2zFieldAccessor(field, isReadOnly);
+        return new MonoFieldAccessor(field, isReadOnly);
     }
 
     /** Argument checks of Method.invoke (count, unboxing + widening conversion, reference types). */

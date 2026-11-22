@@ -1111,7 +1111,7 @@ public abstract class NumberFormat extends Format  {
     // =======================privates===============================
 
     /*
-     * j2zig: the CLDR/JRE locale data providers are not part of the native image (see the DecimalFormatSymbols
+     * monolith: the CLDR/JRE locale data providers are not part of the native image (see the DecimalFormatSymbols
      * overlay), so the factory builds the formats directly from the patterns the JDK uses for Locale.ROOT/US.
      * Currency formats use two fraction digits whatever the locale's currency is.
      */
@@ -1131,7 +1131,7 @@ public abstract class NumberFormat extends Format  {
                 break;
             default:
                 throw new UnsupportedOperationException(
-                        "NumberFormat style " + choice + " needs locale data that the j2zig runtime does not include");
+                        "NumberFormat style " + choice + " needs locale data that the monolith runtime does not include");
         }
         DecimalFormat format = new DecimalFormat(pattern, DecimalFormatSymbols.getInstance(desiredLocale));
         if (choice == INTEGERSTYLE) {

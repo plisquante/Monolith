@@ -1,6 +1,6 @@
 package java.lang;
 
-/** j2zig overlay of StackTraceElement. */
+/** monolith overlay of StackTraceElement. */
 public final class StackTraceElement implements java.io.Serializable {
     private final String declaringClass;
     private final String methodName;

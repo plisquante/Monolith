@@ -392,7 +392,7 @@ pub fn n_java_lang_StackWalker__frames0() -> Res<Ref> {
 }
 
 pub fn n_java_lang_invoke_MethodHandle__invoke(this: Ref, args: Ref) -> Res<Ref> {
-    rt::call_reflective("java/lang/invoke/MethodHandle", "j2zInvoke", "([Ljava/lang/Object;)Ljava/lang/Object;", this, &[args])
+    rt::call_reflective("java/lang/invoke/MethodHandle", "monoInvoke", "([Ljava/lang/Object;)Ljava/lang/Object;", this, &[args])
 }
 
 fn mn_field(mn: Ref) -> Res<(&'static rt::Class, &'static rt::FInfo)> {

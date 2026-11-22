@@ -1,13 +1,13 @@
 /*
- * Desktop stand-in for the TouchCore Android host (libtouchcore_j2z.so).
+ * Desktop stand-in for the TouchCore Android host (libtouchcore_mono.so).
  *
  * The engine (runtime/gl_shim.zig) finds its window, size, GL context and input through five functions of that
  * library. This mock provides them on a Linux desktop with Mesa EGL (pbuffer surface, OpenGL ES 3), so the whole
  * Minecraft start-up, window creation and GLES rendering path can be exercised without a phone:
  *
- *   gcc -shared -fPIC -O1 tools/mock_android_host.c -o <dir>/libtouchcore_j2z.so -lEGL -ldl
+ *   gcc -shared -fPIC -O1 tools/mock_android_host.c -o <dir>/libtouchcore_mono.so -lEGL -ldl
  *   ln -s libGLESv2.so.2 <dir>/libGLESv3.so            # the engine dlopens libGLESv3.so
- *   LD_LIBRARY_PATH=<dir>:<natives> J2Z_RHI=1 J2Z_NO_LWJGL=1 <engine> ...
+ *   LD_LIBRARY_PATH=<dir>:<natives> MONO_RHI=1 MONO_NO_LWJGL=1 <engine> ...
  *
  * MOCK_FRAMES=N dumps frame N as a PPM to MOCK_DUMP (default /tmp/mock_frame.ppm); MOCK_EXIT_AFTER=M exits after M
  * frames. Both go to stderr/stdout of the engine as "MOCK_HOST ..." lines.

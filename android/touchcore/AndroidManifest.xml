@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.j2zig.touchcore"
+    package="com.monolith.touchcore"
     android:versionCode="20261116"
-    android:versionName="2.0.0-zig">
+    android:versionName="2.0.0">
 
     <uses-sdk
         android:minSdkVersion="26"
@@ -35,7 +35,7 @@
         <meta-data android:name="moe.shizuku.client.V3_SUPPORT" android:value="true" />
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="com.j2zig.touchcore.shizuku"
+            android:authorities="com.monolith.touchcore.shizuku"
             android:enabled="true"
             android:exported="true"
             android:multiprocess="false"

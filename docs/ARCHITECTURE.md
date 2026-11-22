@@ -1,4 +1,4 @@
-# j2zig — Java bytecode → Zig transpiler: architecture
+# monolith — Java bytecode → Zig transpiler: architecture
 
 ```
  app.jar + libs ─┐
@@ -13,7 +13,7 @@
  runtime/*.zig (GC-free pool, RHI, world culling, instancing, threads) ┴─► zig build-exe ─► native executable (no JVM)
 ```
 
-## Front end (`j2zig/`)
+## Front end (`monolith/`)
 
 | module | role |
 |---|---|

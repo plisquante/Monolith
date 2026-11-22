@@ -922,11 +922,11 @@ pub extern "C" fn unreachable_slot() -> ! {
     abort("call of a method the reachability analysis did not keep")
 }
 
-/// java.lang.Class instance of a runtime class (first field of the overlay Class is the long `j2zClass`).
+/// java.lang.Class instance of a runtime class (first field of the overlay Class is the long `monoClass`).
 #[repr(C)]
 pub struct ClassObj {
     pub hdr: Obj,
-    pub j2z_class: i64,
+    pub mono_class: i64,
 }
 pub fn class_mirror(c: &'static Class) -> Res<Ref> {
     use std::sync::atomic::Ordering;
@@ -935,14 +935,14 @@ pub fn class_mirror(c: &'static Class) -> Res<Ref> {
         return Ok(Ref(p));
     }
     let r = alloc(hooks().class_class);
-    unsafe { (*(r.0 as *mut ClassObj)).j2z_class = c as *const Class as i64 };
+    unsafe { (*(r.0 as *mut ClassObj)).mono_class = c as *const Class as i64 };
     match c.mirror.0.compare_exchange(std::ptr::null_mut(), r.0, Ordering::AcqRel, Ordering::Acquire) {
         Ok(_) => Ok(r),
         Err(old) => Ok(Ref(old)),
     }
 }
 pub fn class_of_mirror(m: Ref) -> &'static Class {
-    unsafe { &*((*(m.0 as *mut ClassObj)).j2z_class as *const Class) }
+    unsafe { &*((*(m.0 as *mut ClassObj)).mono_class as *const Class) }
 }
 
 pub fn array_clone(a: Ref) -> Res<Ref> {
@@ -1112,12 +1112,24 @@ pub fn find_class(dotted: &str) -> Option<&'static Class> {
     let all = hooks().all_classes;
     all.binary_search_by_key(&n.as_str(), |c| c.name).ok().map(|i| all[i])
 }
+/// Command line of the program. A shared library host (Android) installs it with `set_host_args`;
+/// an executable reads the process arguments.
+static HOST_ARGS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+pub fn set_host_args(args: Vec<String>) {
+    let _ = HOST_ARGS.set(args);
+}
+fn cmdline() -> Vec<String> {
+    match HOST_ARGS.get() {
+        Some(a) => a.clone(),
+        None => std::env::args().skip(1).collect(),
+    }
+}
 /// `-Dkey=value` arguments are system properties; the others are program arguments.
 pub fn user_props() -> Vec<String> {
-    std::env::args().skip(1).filter(|a| a.starts_with("-D")).map(|a| a[2..].to_string()).collect()
+    cmdline().into_iter().filter(|a| a.starts_with("-D")).map(|a| a[2..].to_string()).collect()
 }
 pub fn program_args() -> Res<Ref> {
-    let args: Vec<String> = std::env::args().skip(1).filter(|a| !a.starts_with("-D")).collect();
+    let args: Vec<String> = cmdline().into_iter().filter(|a| !a.starts_with("-D")).collect();
     let arr = new_obj_array(hooks().string_class, args.len() as i32)?;
     for (i, a) in args.iter().enumerate() {
         aastore_ref(arr, i as i32, new_str(a.clone()))?;

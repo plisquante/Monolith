@@ -1,12 +1,12 @@
 package java.lang;
 
 /**
- * j2zig overlay of java.lang.Class. Each instance mirrors a runtime rt.Class
- * (address kept in {@code j2zClass}). Reflection over members is not available
+ * monolith overlay of java.lang.Class. Each instance mirrors a runtime rt.Class
+ * (address kept in {@code monoClass}). Reflection over members is not available
  * in the closed-world native image (reported by the transpiler).
  */
 public final class Class<T> implements java.io.Serializable, java.lang.reflect.Type, java.lang.reflect.GenericDeclaration {
-    private long j2zClass;
+    private long monoClass;
     private transient String name;
     /** used by java.lang.ClassValue */
     transient ClassValue.ClassValueMap classValueMap;
@@ -629,7 +629,7 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
         return sun.reflect.annotation.AnnotationParser.toArray(annotationData().declaredAnnotations);
     }
 
-    // ---- resources: served from the resources directory (J2Z_RESOURCES), like the class path root
+    // ---- resources: served from the resources directory (MONO_RESOURCES), like the class path root
     private String resolveName(String name) {
         if (!name.startsWith("/")) {
             String base = getPackageName();
@@ -649,11 +649,11 @@ public final class Class<T> implements java.io.Serializable, java.lang.reflect.T
     }
 
     // ---- misc API completed for libraries that probe it
-    private static final java.security.ProtectionDomain J2Z_PD = new java.security.ProtectionDomain(null, null);
+    private static final java.security.ProtectionDomain MONO_PD = new java.security.ProtectionDomain(null, null);
     private static final java.util.concurrent.ConcurrentHashMap<String, Package> PACKAGES = new java.util.concurrent.ConcurrentHashMap<>();
 
     public java.security.ProtectionDomain getProtectionDomain() {
-        return J2Z_PD;
+        return MONO_PD;
     }
 
     public Package getPackage() {

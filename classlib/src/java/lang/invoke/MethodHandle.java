@@ -8,14 +8,14 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * j2zig overlay of java.lang.invoke.MethodHandle.
+ * monolith overlay of java.lang.invoke.MethodHandle.
  *
  * <p>The native image has no LambdaForms or bytecode spinning. A method handle is a tree of
  * small Java objects evaluated by {@link #invokeImpl}: direct handles call the compiled method
  * through the reflection natives (classes.zig reflectInvoke), combinators transform argument
  * arrays. The signature-polymorphic call sites {@code invokeExact}/{@code invoke} are rewritten by
- * the transpiler (j2zig/program.py: mh_invoker) into static stubs that box the arguments, call
- * {@link #j2zInvoke} and unbox the result with {@code j2zTo*}. {@code invokeExact} is evaluated
+ * the transpiler (monolith/program.py: mh_invoker) into static stubs that box the arguments, call
+ * {@link #monoInvoke} and unbox the result with {@code monoTo*}. {@code invokeExact} is evaluated
  * with {@code invoke} (asType) semantics: correct programs behave identically, programs relying on
  * WrongMethodTypeException for an inexact call site do not get it.
  */
@@ -47,7 +47,7 @@ public abstract class MethodHandle implements Constable {
     public final native Object invokeBasic(Object... args) throws Throwable;
 
     /** Entry point of the transpiler's invoke/invokeExact stubs. */
-    final Object j2zInvoke(Object[] args) throws Throwable {
+    final Object monoInvoke(Object[] args) throws Throwable {
         return invokeImpl(adapt(args));
     }
 
@@ -76,22 +76,22 @@ public abstract class MethodHandle implements Constable {
     }
 
     public Object invokeWithArguments(Object... arguments) throws Throwable {
-        return j2zInvoke(arguments == null ? new Object[0] : arguments.clone());
+        return monoInvoke(arguments == null ? new Object[0] : arguments.clone());
     }
 
     public Object invokeWithArguments(List<?> arguments) throws Throwable {
-        return j2zInvoke(arguments.toArray());
+        return monoInvoke(arguments.toArray());
     }
 
     // ---- return-value conversions used by the call-site stubs
-    static boolean j2zToBoolean(Object o) { return (Boolean) convert(o, boolean.class, false); }
-    static byte j2zToByte(Object o) { return (Byte) convert(o, byte.class, false); }
-    static char j2zToChar(Object o) { return (Character) convert(o, char.class, false); }
-    static short j2zToShort(Object o) { return (Short) convert(o, short.class, false); }
-    static int j2zToInt(Object o) { return (Integer) convert(o, int.class, false); }
-    static long j2zToLong(Object o) { return (Long) convert(o, long.class, false); }
-    static float j2zToFloat(Object o) { return (Float) convert(o, float.class, false); }
-    static double j2zToDouble(Object o) { return (Double) convert(o, double.class, false); }
+    static boolean monoToBoolean(Object o) { return (Boolean) convert(o, boolean.class, false); }
+    static byte monoToByte(Object o) { return (Byte) convert(o, byte.class, false); }
+    static char monoToChar(Object o) { return (Character) convert(o, char.class, false); }
+    static short monoToShort(Object o) { return (Short) convert(o, short.class, false); }
+    static int monoToInt(Object o) { return (Integer) convert(o, int.class, false); }
+    static long monoToLong(Object o) { return (Long) convert(o, long.class, false); }
+    static float monoToFloat(Object o) { return (Float) convert(o, float.class, false); }
+    static double monoToDouble(Object o) { return (Double) convert(o, double.class, false); }
 
     private static int rank(Object v) {
         if (v instanceof Byte) return 1;
@@ -195,7 +195,7 @@ public abstract class MethodHandle implements Constable {
         if (newType.equals(type)) return this;
         if (newType.parameterCount() != type.parameterCount())
             throw new WrongMethodTypeException("cannot convert " + this + " to " + newType);
-        return new J2zMH.AsType(this, newType, false);
+        return new MonoMH.AsType(this, newType, false);
     }
 
     public MethodHandle bindTo(Object x) {
@@ -212,7 +212,7 @@ public abstract class MethodHandle implements Constable {
     public MethodHandle asSpreader(int spreadArgPos, Class<?> arrayType, int arrayLength) {
         if (!arrayType.isArray() || arrayLength < 0 || spreadArgPos < 0 || spreadArgPos + arrayLength > type.parameterCount())
             throw new IllegalArgumentException("bad spread array type / length");
-        return new J2zMH.Spreader(this, spreadArgPos, arrayType, arrayLength);
+        return new MonoMH.Spreader(this, spreadArgPos, arrayType, arrayLength);
     }
 
     public MethodHandle asCollector(Class<?> arrayType, int arrayLength) {
@@ -222,14 +222,14 @@ public abstract class MethodHandle implements Constable {
     public MethodHandle asCollector(int collectArgPos, Class<?> arrayType, int arrayLength) {
         if (!arrayType.isArray() || arrayLength < 0)
             throw new IllegalArgumentException("bad collect array type / length");
-        return new J2zMH.Collector(this, collectArgPos, arrayType, arrayLength);
+        return new MonoMH.Collector(this, collectArgPos, arrayType, arrayLength);
     }
 
     public MethodHandle asVarargsCollector(Class<?> arrayType) {
         if (!arrayType.isArray() || type.parameterCount() == 0
                 || !type.parameterType(type.parameterCount() - 1).isAssignableFrom(arrayType))
             throw new IllegalArgumentException("not an array type for the last parameter: " + arrayType);
-        return new J2zMH.Varargs(this.asFixedArity(), arrayType);
+        return new MonoMH.Varargs(this.asFixedArity(), arrayType);
     }
 
     public boolean isVarargsCollector() {

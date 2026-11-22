@@ -1,6 +1,6 @@
 package org.lwjgl.sdl;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryUtil;
 
@@ -38,8 +38,8 @@ public final class SDLVideo {
     public static long SDL_CreateWindow(CharSequence title, int w, int h, long flags) {
         SDLInit.SDL_Init(SDLInit.SDL_INIT_VIDEO);
         boolean attached = NativeRhi.attachOsSurface();
-        if (!attached && !"1".equals(System.getenv("J2Z_HEADLESS_WINDOW"))) {
-            SDLError.setError("j2zig --no-lwjgl: native OS window creation requires an attached ANativeWindow/EGL surface");
+        if (!attached && !"1".equals(System.getenv("MONO_HEADLESS_WINDOW"))) {
+            SDLError.setError("monolith --no-lwjgl: native OS window creation requires an attached ANativeWindow/EGL surface");
             return 0L;
         }
         activeWindow = 1L;
@@ -182,7 +182,7 @@ public final class SDLVideo {
     public static boolean SDL_SetWindowIcon(long window, SDL_Surface icon) { return true; }
     public static boolean SDL_SetWindowMaximumSize(long window, int max_w, int max_h) { return true; }
     public static boolean SDL_SetWindowMinimumSize(long window, int min_w, int min_h) { return true; }
-    public static boolean SDL_SetWindowMouseGrab(long window, boolean grabbed) { relativeMouse = grabbed; j2z.rhi.NativeRhi.setMouseGrabbed(grabbed); return true; }
+    public static boolean SDL_SetWindowMouseGrab(long window, boolean grabbed) { relativeMouse = grabbed; mono.rhi.NativeRhi.setMouseGrabbed(grabbed); return true; }
     public static boolean SDL_SetWindowPosition(long window, int x, int y) { return true; }
 
     public static boolean SDL_SetWindowSize(long window, int w, int h) {

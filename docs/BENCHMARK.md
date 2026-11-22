@@ -43,12 +43,12 @@ Harness: `tools/bench.py` (samples /proc each second; F3 screenshots for fps/tic
 
 *Note: All rows below were captured **before** removing the stop-the-world GC and **before** introducing the custom Zero-LWJGL RHI, vanilla-safe culling, and GPU-driven instancing.*
 
-Targets: vanilla = `client.jar` + libraries on OpenJDK 25.0.5 (G1, -Xmx4g, JIT). Native = j2zig build,
+Targets: vanilla = `client.jar` + libraries on OpenJDK 25.0.5 (G1, -Xmx4g, JIT). Native = monolith build,
 ReleaseFast with the self-hosted Zig backend (`--backend native`); the LLVM ReleaseFast build of the full
 game needs more than the 15 GiB of this machine and was killed by the OOM killer, so the optimized
 native build could not be measured here.
 
-| metric | vanilla (HotSpot) | native (j2zig, self-hosted backend) |
+| metric | vanilla (HotSpot) | native (monolith, self-hosted backend) |
 |---|---|---|
 | launch to window | 13 s | 215 s |
 | launch to integrated server opened world | 10.8 s | 197 s |
@@ -69,9 +69,9 @@ only represented by time-to-playable and by the saved region data; no chunks/s c
 
 ## GC share (native, same run conditions)
 
-With `J2Z_GC_VERBOSE=1` the native build reports 9 collections before the world is playable, 22.7 s of
+With `MONO_GC_VERBOSE=1` the native build reports 9 collections before the world is playable, 22.7 s of
 total stop-the-world pause, i.e. about 3.5 % of the 657 s start-to-world time. Raising the minimum
-collection trigger from 64 MiB to 256 MiB (`J2Z_GC_MIN_MB`) did not change time-to-world (646 s before,
+collection trigger from 64 MiB to 256 MiB (`MONO_GC_MIN_MB`) did not change time-to-world (646 s before,
 657 s after: noise) or RSS (7.1 GiB average). Garbage collection is therefore not the bottleneck; the gap to
 HotSpot (21.7 s) is execution speed of the generated code (self-hosted Zig backend, no inlining or register
 allocation across calls, shadow-stack frames) plus a larger heap footprint (live data 1.5 GiB at the 9th GC).
@@ -122,7 +122,7 @@ code itself, not in the GC.
 | + inline small-object zeroing, more intrinsics, class lookup by hash table | 33.3 s | 6843 MiB | 4.5 s |
 | vanilla (HotSpot, same machine, earlier run) | 21.7 s | 2255 MiB | n/a |
 
-`J2Z_PATCH_VERIFY=1` run of the same build: no mismatch in `SimpleBitStorage.get/cellIndex` (set returns void and is
+`MONO_PATCH_VERIFY=1` run of the same build: no mismatch in `SimpleBitStorage.get/cellIndex` (set returns void and is
 not self-checked). One run per row; the lazy-frame change alone moved world-ready by 0.7 s (noise).
 Profile (gdb sampling, 60 samples, busy threads only) before this round: chunk generation dominates
 (NoiseBasedChunkGenerator buildTerrain/doFill, MaterialSystem.buildSurface, BiomeManager) plus small accessors
@@ -136,13 +136,13 @@ The last row changed nothing measurable (33.5 s to 33.3 s, run-to-run noise is a
 Sharded (3 shards) LLVM ReleaseFast vs HotSpot 25, same machine, one run: recursive `fib(40)`, 4e8 interface calls
 (two receiver classes), 8e8 field set plus getter iterations.
 
-| | HotSpot | Zig Edition | ratio |
+| | HotSpot | Monolith | ratio |
 |---|---|---|---|
 | fib(40) | 401 ms | 1066 ms | 2.7x |
 | interface call loop | 309 ms | 1304 ms | 4.2x |
 | setter + getter loop | 294 ms | 2000 ms | 6.8x |
 
-The getter loop is already inlined by j2zig, yet costs ~2.5 ns per iteration. The disassembly shows the
+The getter loop is already inlined by monolith, yet costs ~2.5 ns per iteration. The disassembly shows the
 accumulator and the line counter living in stack memory (a read-modify-write chain per iteration), the
 shadow-stack line store, the reference slot copies through `R[]` and the safepoint poll. This is the structural
 cost of the generated code shape (one labeled switch per method, reference slots in a memory array, frames) and the
@@ -152,4 +152,4 @@ register-resident locals, reference slots without a shadow stack via conservativ
 
 Line-store-on-throw change (`rt.nnF` & co): world ready 33.7 s (a first run right after the build measured 42.1 s, a cold-cache outlier; run-to-run noise is about 1 s otherwise), i.e. no measurable gain in the game although the call-cost microbenchmark improved by about 20% when the line stores were removed by hand.
 
-Round 3 (inline checkcast/itable fast paths, world height patches for Level/ChunkAccess/LevelReader getMinY, Holder.value, Level.dimensionType): world ready 30.8 s (session lock 16.1 s, window 18.3 s), RSS 6959 MiB; `J2Z_PATCH_VERIFY=1` run: 0 mismatches. Vanilla: 21.7 s.
+Round 3 (inline checkcast/itable fast paths, world height patches for Level/ChunkAccess/LevelReader getMinY, Holder.value, Level.dimensionType): world ready 30.8 s (session lock 16.1 s, window 18.3 s), RSS 6959 MiB; `MONO_PATCH_VERIFY=1` run: 0 mismatches. Vanilla: 21.7 s.

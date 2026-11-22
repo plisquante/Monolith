@@ -1,6 +1,6 @@
 package java.util.concurrent.atomic;
 
-/** j2zig overlay. */
+/** monolith overlay. */
 public class AtomicBoolean implements java.io.Serializable {
     private volatile int value;
 

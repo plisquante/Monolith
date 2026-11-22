@@ -111,9 +111,10 @@ class Handler(BaseHTTPRequestHandler):
             html = open(os.path.join(HERE, "ui.html"), encoding="utf-8").read().replace("__TOKEN__", self.token)
             return self._send(200, html, "text/html")
         if self.path.startswith("/brand/"):
-            f = os.path.join(ROOT, "brand", os.path.basename(self.path))
-            if os.path.isfile(f):
-                return self._send(200, open(f, "rb").read(), "image/png")
+            name = os.path.basename(self.path)
+            f = os.path.join(ROOT, "brand", name)
+            if os.path.isfile(f) and name.endswith((".png", ".svg")):
+                return self._send(200, open(f, "rb").read(), "image/svg+xml" if name.endswith(".svg") else "image/png")
         if self.path == "/api/state":
             return self._send(200, json.dumps({"cfg": load_cfg(), "builds": find_builds(self.extra),
                                               "os": OS_NAME, "running": sum(p.poll() is None for p in self.procs)}))

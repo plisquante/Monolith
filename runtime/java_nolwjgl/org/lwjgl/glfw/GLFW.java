@@ -1,6 +1,6 @@
 package org.lwjgl.glfw;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 
 /**
  * Zero-LWJGL GLFW adapter bound to TouchCore's Android ANativeWindow + g_tc_input surface,
@@ -46,7 +46,7 @@ public final class GLFW {
 
     public static boolean glfwInit() {
         if (initialized) return true;
-        String mode = System.getProperty("j2z.graphics.backend", "auto");
+        String mode = System.getProperty("mono.graphics.backend", "auto");
         int b = NativeRhi.BACKEND_AUTO;
         if ("vulkan".equalsIgnoreCase(mode)) b = NativeRhi.BACKEND_VULKAN;
         else if ("opengl".equalsIgnoreCase(mode)) b = NativeRhi.BACKEND_OPENGL33;
@@ -69,14 +69,14 @@ public final class GLFW {
         if (!initialized) glfwInit();
         boolean attached = NativeRhi.attachOsSurface();
         if (!attached) {
-            if ("1".equals(System.getenv("J2Z_HEADLESS_WINDOW"))) {
+            if ("1".equals(System.getenv("MONO_HEADLESS_WINDOW"))) {
                 activeWindow = 1L;
                 winWidth = Math.max(width, 1);
                 winHeight = Math.max(height, 1);
                 return activeWindow;
             }
             throw new UnsupportedOperationException(
-                    "j2zig --no-lwjgl: native OS window creation requires an attached ANativeWindow/EGL surface (run inside TouchCore APK or X11/Wayland adapter)");
+                    "monolith --no-lwjgl: native OS window creation requires an attached ANativeWindow/EGL surface (run inside TouchCore APK or X11/Wayland adapter)");
         }
         activeWindow = 1L;
         int osW = NativeRhi.osSurfaceWidth();

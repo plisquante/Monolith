@@ -1,7 +1,7 @@
-//! Native method implementations for the j2zig class library.
+//! Native method implementations for the monolith class library.
 //!
 //! Naming: J_<mangled class>__<mangled method>[__<mangled arg descriptor>] (see
-//! j2zig/zigen.py:native_name). Signatures follow the generated calling convention:
+//! monolith/zigen.py:native_name). Signatures follow the generated calling convention:
 //! instance methods take `this: rt.Ref` first, Java int-like types are i32.
 const std = @import("std");
 const rt = @import("rt.zig");
@@ -234,7 +234,7 @@ pub fn J_java_lang_Runtime__totalMemory(this: Ref) E!i64 {
     _ = this;
     return @intCast(@max(rt.heapBytes(), rt.usedBytes()));
 }
-/// J2Z_HEAP_MAX_MB when set; otherwise the heap is bounded only by memory: report the physical memory.
+/// MONO_HEAP_MAX_MB when set; otherwise the heap is bounded only by memory: report the physical memory.
 pub fn J_java_lang_Runtime__maxMemory(this: Ref) E!i64 {
     _ = this;
     if (rt.st.gc_max_heap != 0) return @intCast(rt.st.gc_max_heap);
@@ -1137,14 +1137,14 @@ pub fn J_java_lang_reflect_Proxy__invokeDefault0(m: Ref, proxy: Ref, args: Ref) 
     return P.reflectInvoke(t.shape, t.fp.?, proxy, args);
 }
 
-// ------------------------------------------------------------------ java.lang.invoke.J2zMH (method handles)
-pub fn J_java_lang_invoke_J2zMH__invokeMethod0(m: Ref, recv: Ref, args: Ref, dispatch: i32) E!Ref {
+// ------------------------------------------------------------------ java.lang.invoke.MonoMH (method handles)
+pub fn J_java_lang_invoke_MonoMH__invokeMethod0(m: Ref, recv: Ref, args: Ref, dispatch: i32) E!Ref {
     const mo = P.C_java_lang_reflect_Method.cast(try rt.nn(m));
     const t = try findTarget(cls(mo.f_clazz), @intCast(mo.f_slot), recv, dispatch != 0);
     return P.reflectInvoke(t.shape, t.fp.?, recv, args);
 }
 
-pub fn J_java_lang_invoke_J2zMH__newInstance0(c: Ref, args: Ref) E!Ref {
+pub fn J_java_lang_invoke_MonoMH__newInstance0(c: Ref, args: Ref) E!Ref {
     return J_jdk_internal_reflect_MethodHandleAccessorFactory__newInstance0(c, args);
 }
 

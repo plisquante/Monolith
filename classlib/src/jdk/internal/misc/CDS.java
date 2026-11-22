@@ -1,6 +1,6 @@
 package jdk.internal.misc;
 
-/** j2zig overlay: there is no class data sharing archive in a native image. */
+/** monolith overlay: there is no class data sharing archive in a native image. */
 public class CDS {
     private CDS() {}
     public static boolean isDumpingClassList() { return false; }

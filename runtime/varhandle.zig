@@ -44,16 +44,16 @@ const VH = P.C_java_lang_invoke_VarHandle;
 
 fn address(comptime T: type, vh_ref: Ref, obj: Ref, idx: i32, comptime nc: u8) E!*T {
     const vh = VH.cast(try rt.nn(vh_ref));
-    const kind = vh.f_j2zKind;
+    const kind = vh.f_monoKind;
     switch (nc) {
         0 => {
             if (kind != 1) return rt.throwKind(.UnsupportedOperation, "VarHandle coordinates mismatch (static)");
-            return @ptrFromInt(@as(usize, @bitCast(vh.f_j2zOffset)));
+            return @ptrFromInt(@as(usize, @bitCast(vh.f_monoOffset)));
         },
         1 => {
             if (kind != 0) return rt.throwKind(.UnsupportedOperation, "VarHandle coordinates mismatch (field)");
             const o = try rt.nn(obj);
-            return @ptrFromInt(@intFromPtr(o) +% @as(usize, @bitCast(vh.f_j2zOffset)));
+            return @ptrFromInt(@intFromPtr(o) +% @as(usize, @bitCast(vh.f_monoOffset)));
         },
         else => {
             if (kind != 2) return rt.throwKind(.UnsupportedOperation, "VarHandle coordinates mismatch (array)");
@@ -79,7 +79,7 @@ fn storeCheck(comptime T: type, vh_ref: Ref, obj: Ref, v: T, comptime nc: u8) E!
 /// byteArrayViewVarHandle access: (byte[] array, int byteIndex), unaligned, explicit byte order.
 fn viewPtr(comptime T: type, vh_ref: Ref, obj: Ref, idx: i32) E!?*[@sizeOf(T)]u8 {
     const vh = VH.cast(try rt.nn(vh_ref));
-    if (vh.f_j2zKind != 3) return null;
+    if (vh.f_monoKind != 3) return null;
     const a = rt.asArray(try rt.nn(obj));
     if (idx < 0 or @as(i64, idx) + @sizeOf(T) > a.length) {
         var buf: [96]u8 = undefined;
@@ -89,7 +89,7 @@ fn viewPtr(comptime T: type, vh_ref: Ref, obj: Ref, idx: i32) E!?*[@sizeOf(T)]u8
 }
 
 fn viewBig(vh_ref: Ref) bool {
-    return VH.cast(vh_ref.?).f_j2zBigEndian != 0;
+    return VH.cast(vh_ref.?).f_monoBigEndian != 0;
 }
 
 pub fn get(comptime T: type, comptime volatile_: bool, vh: Ref, obj: Ref, idx: i32, comptime nc: u8) E!St(T) {

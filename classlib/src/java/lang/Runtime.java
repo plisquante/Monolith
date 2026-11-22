@@ -2,7 +2,7 @@ package java.lang;
 
 import java.util.ArrayList;
 
-/** j2zig overlay of java.lang.Runtime. */
+/** monolith overlay of java.lang.Runtime. */
 public class Runtime {
     private static final Runtime currentRuntime = new Runtime();
     private final ArrayList<Thread> hooks = new ArrayList<>();
@@ -66,7 +66,7 @@ public class Runtime {
         }
         for (Thread t : list) {
             if (t.isAlive()) {
-                System.err.println("j2zig: shutdown hook '" + t.getName() + "' did not finish within "
+                System.err.println("monolith: shutdown hook '" + t.getName() + "' did not finish within "
                         + hookTimeoutMs + " ms; halting without it");
             }
         }

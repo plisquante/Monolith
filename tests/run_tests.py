@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Differential test harness: every tests/java/<Name>.java program is run on the JVM and as a
-j2zig native executable; stdout, the first line of stderr and the exit code must match exactly.
+monolith native executable; stdout, the first line of stderr and the exit code must match exactly.
 
 usage: python3 tests/run_tests.py [-O ReleaseSafe] [--min-avail-gib GIB] [Name ...]
 
-Refuses to run when MemAvailable is below --min-avail-gib (env J2Z_TEST_MIN_AVAIL_GIB, default
+Refuses to run when MemAvailable is below --min-avail-gib (env MONO_TEST_MIN_AVAIL_GIB, default
 0.5 GiB) instead of letting the machine thrash: each test peak-RSS is roughly the closure's
 transpiled size and zig holds much of it in memory. Set the floor to 0 to override (not advised).
 """
@@ -36,7 +36,7 @@ ROOT = os.path.dirname(HERE)
 BUILD = os.path.join(HERE, "build")
 ENV = {k: v for k, v in os.environ.items() if k != "JAVA_TOOL_OPTIONS"}
 sys.path.insert(0, ROOT)
-from j2zig.classpath import jdk_tool  # noqa: E402
+from monolith.classpath import jdk_tool  # noqa: E402
 
 
 def _child_preexec():
@@ -77,25 +77,25 @@ def test_one(name: str, opt: str, zig_cache: str, min_avail_gib: float | None = 
     nenv = dict(ENV)
     if os.path.exists(csrc):
         os.makedirs(libdir, exist_ok=True)
-        from j2zig.classpath import jdk_home
+        from monolith.classpath import jdk_home
         inc = os.path.join(jdk_home(), "include")
         r = run(["zig", "cc", "-shared", "-fPIC", "-O2", "-I", inc, "-I", os.path.join(inc, "linux"),
                  "-o", os.path.join(libdir, f"lib{name}.so"), csrc])
         if r.returncode != 0:
             return {"name": name, "ok": False, "stage": "cc", "detail": r.stderr}
         jopts = [f"-Djava.library.path={libdir}", "--enable-native-access=ALL-UNNAMED"]
-        nenv["J2Z_NATIVES"] = libdir
+        nenv["MONO_NATIVES"] = libdir
     t0 = time.time()
     jr = run([jdk_tool("java"), "-Xmx256m", "-XX:+UseSerialGC", "-Xss4m"] + jopts + ["-cp", cdir, name])
     tj = time.time() - t0
     out = os.path.join(BUILD, name, "native")
-    floor = min_avail_gib if min_avail_gib is not None else float(os.environ.get("J2Z_TEST_MIN_AVAIL_GIB", "0.5"))
+    floor = min_avail_gib if min_avail_gib is not None else float(os.environ.get("MONO_TEST_MIN_AVAIL_GIB", "0.5"))
     if floor > 0 and mem_avail_gib() < floor:
         return {"name": name, "ok": False, "stage": "preflight",
-                "detail": f"refusing to build: {mem_avail_gib():.1f} GiB available, floor {floor:.1f} GiB (set J2Z_TEST_MIN_AVAIL_GIB=0 to override)"}
+                "detail": f"refusing to build: {mem_avail_gib():.1f} GiB available, floor {floor:.1f} GiB (set MONO_TEST_MIN_AVAIL_GIB=0 to override)"}
     t0 = time.time()
-    br = run([sys.executable, "-m", "j2zig", "build", "--cp", cdir, "--main", name, "-o", out,
-              "-O", opt, "--backend", os.environ.get("J2Z_TEST_BACKEND", "auto"), "--shards", os.environ.get("J2Z_TEST_SHARDS", "0"), "--zig-cache", zig_cache, "--show-issues", "0"], cwd=ROOT, timeout=int(os.environ.get("J2Z_TEST_TIMEOUT", "3600")))
+    br = run([sys.executable, "-m", "monolith", "build", "--cp", cdir, "--main", name, "-o", out,
+              "-O", opt, "--backend", os.environ.get("MONO_TEST_BACKEND", "auto"), "--shards", os.environ.get("MONO_TEST_SHARDS", "0"), "--zig-cache", zig_cache, "--show-issues", "0"], cwd=ROOT, timeout=int(os.environ.get("MONO_TEST_TIMEOUT", "3600")))
     tb = time.time() - t0
     if br.returncode != 0:
         return {"name": name, "ok": False, "stage": "build", "detail": (br.stdout + br.stderr)[-6000:]}
@@ -126,11 +126,11 @@ def main():
     ap.add_argument("-O", default="Debug")
     ap.add_argument("--json")
     ap.add_argument("--keep", action="store_true", help="keep the build directory of passed tests (about 1.4 GB each)")
-    ap.add_argument("--min-avail-gib", type=float, default=float(os.environ.get("J2Z_TEST_MIN_AVAIL_GIB", "0.5")),
-                    help="refuse to start when MemAvailable is below this (default: 0.5, env J2Z_TEST_MIN_AVAIL_GIB; 0 disables)")
+    ap.add_argument("--min-avail-gib", type=float, default=float(os.environ.get("MONO_TEST_MIN_AVAIL_GIB", "0.5")),
+                    help="refuse to start when MemAvailable is below this (default: 0.5, env MONO_TEST_MIN_AVAIL_GIB; 0 disables)")
     ap.add_argument("names", nargs="*")
     a = ap.parse_args()
-    # ClientCoreE2E needs the built-in j2z.rhi bridge on its classpath and has its own runner
+    # ClientCoreE2E needs the built-in mono.rhi bridge on its classpath and has its own runner
     # (see tests/ directory); name it explicitly to try it here anyway.
     names = a.names or sorted(n for n in (os.path.basename(p)[:-5] for p in glob.glob(os.path.join(HERE, "java", "*.java")))
                               if n != "ClientCoreE2E")

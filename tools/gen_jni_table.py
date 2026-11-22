@@ -5,7 +5,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from j2zig.classpath import jdk_home  # noqa: E402
+from monolith.classpath import jdk_home  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

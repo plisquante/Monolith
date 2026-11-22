@@ -1,6 +1,6 @@
 package java.lang;
 
-/** j2zig overlay of ThreadGroup: a named tree used for daemon/priority defaults and uncaught exceptions. */
+/** monolith overlay of ThreadGroup: a named tree used for daemon/priority defaults and uncaught exceptions. */
 public class ThreadGroup implements Thread.UncaughtExceptionHandler {
     static final ThreadGroup SYSTEM = new ThreadGroup();
     static final ThreadGroup MAIN = new ThreadGroup(SYSTEM, "main");

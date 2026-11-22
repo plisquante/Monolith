@@ -1,4 +1,4 @@
-//! j2zig runtime: object model, mark-sweep GC over a SlabPool heap, exceptions,
+//! monolith runtime: object model, mark-sweep GC over a SlabPool heap, exceptions,
 //! monitors, class initialization (JVMS 5.5), threads and safepoints.
 //!
 //! Memory
@@ -8,8 +8,8 @@
 //! * Objects the transpiler proves method-local, and objects allocated inside `pushArenaScope`, bump in the
 //!   thread's scratch `ArenaAllocator` (header bit ARENA) and are rewound, never collected.
 //! * Non-moving stop-the-world mark & sweep with parallel marking (see "collector"): stacks and registers
-//!   are scanned conservatively, the heap precisely. J2Z_HEAP_MAX_MB caps the heap (OutOfMemoryError
-//!   beyond it), J2Z_GC_MIN_MB / J2Z_GC_FACTOR tune the trigger, J2Z_GC_VERBOSE=1 logs every collection.
+//!   are scanned conservatively, the heap precisely. MONO_HEAP_MAX_MB caps the heap (OutOfMemoryError
+//!   beyond it), MONO_GC_MIN_MB / MONO_GC_FACTOR tune the trigger, MONO_GC_VERBOSE=1 logs every collection.
 const std = @import("std");
 const shardmode = @import("shardmode.zig");
 const builtin = @import("builtin");
@@ -24,12 +24,12 @@ pub fn Shared(comptime T: type, comptime name: []const u8, comptime reserve: usi
         var bytes: [@sizeOf(T)]u8 align(64) = [_]u8{0} ** @sizeOf(T);
         pub const ptr: *T = if (shardmode.sharded) blk: {
             if (@sizeOf(T) > reserve) @compileError("shared state " ++ name ++ " exceeds its reserved size");
-            const p = @extern(*align(64) u8, .{ .name = "j2z_shared_" ++ name });
+            const p = @extern(*align(64) u8, .{ .name = "mono_shared_" ++ name });
             break :blk @ptrCast(@alignCast(p));
         } else @ptrCast(&bytes);
     };
 }
-/// Upper bound of compile units (shards) of a sharded build; j2zig/shard.py refuses more.
+/// Upper bound of compile units (shards) of a sharded build; monolith/shard.py refuses more.
 pub const MAX_SHARDS = 256;
 pub const StateT = struct {
     patch_verify: bool = false,
@@ -51,12 +51,12 @@ pub const StateT = struct {
     gc_done_mutex: std.Thread.Mutex = .{},
     gc_done_cond: std.Thread.Condition = .{},
     bytes_since_gc: std.atomic.Value(usize) = std.atomic.Value(usize).init(0),
-    /// smallest collection trigger (bytes allocated since the last GC); J2Z_GC_MIN_MB overrides
+    /// smallest collection trigger (bytes allocated since the last GC); MONO_GC_MIN_MB overrides
     gc_min_threshold: usize = 256 * 1024 * 1024,
     gc_threshold: usize = 256 * 1024 * 1024,
-    /// next collection when bytes allocated since the last one exceed live * gc_factor_pct / 100 (J2Z_GC_FACTOR)
+    /// next collection when bytes allocated since the last one exceed live * gc_factor_pct / 100 (MONO_GC_FACTOR)
     gc_factor_pct: usize = 100,
-    /// heap ceiling in bytes (J2Z_HEAP_MAX_MB, 0: none): allocation beyond it collects, then throws OutOfMemoryError
+    /// heap ceiling in bytes (MONO_HEAP_MAX_MB, 0: none): allocation beyond it collects, then throws OutOfMemoryError
     gc_max_heap: usize = 0,
     /// bytes held by large (malloc'd) objects
     large_bytes: std.atomic.Value(usize) = std.atomic.Value(usize).init(0),
@@ -66,7 +66,7 @@ pub const StateT = struct {
     pending_lock: std.Thread.Mutex = .{},
     /// large objects sorted by address, rebuilt at every collection (conservative pointer lookup)
     large_index: std.ArrayList(*Object) = .empty,
-    /// J2Z_ALLOC_PROFILE=1: heap allocation samples (one per PROF_STEP bytes per thread) by class and allocating
+    /// MONO_ALLOC_PROFILE=1: heap allocation samples (one per PROF_STEP bytes per thread) by class and allocating
     /// method (innermost frame), printed with every collection
     alloc_profile: bool = false,
     prof_lock: std.Thread.Mutex = .{},
@@ -79,14 +79,14 @@ pub const StateT = struct {
     gc_total_ns: u64 = 0,
     gc_max_pause_ns: u64 = 0,
     /// System.gc() is a hint: a request this soon (ms) after a collection ended is skipped, so a caller that asks
-    /// over and over (direct-buffer reservation, engine housekeeping) cannot keep the game stopped (J2Z_GC_EXPLICIT_GAP_MS)
+    /// over and over (direct-buffer reservation, engine housekeeping) cannot keep the game stopped (MONO_GC_EXPLICIT_GAP_MS)
     gc_explicit_gap_ms: i64 = 10_000,
     /// most garbage (bytes allocated since the last collection) the heap may collect before the next one, whatever the
-    /// live size: keeps the heap from growing past what the phone can spare (J2Z_GC_MAX_GARBAGE_MB, 0 = no cap)
+    /// live size: keeps the heap from growing past what the phone can spare (MONO_GC_MAX_GARBAGE_MB, 0 = no cap)
     gc_max_garbage: usize = 0,
-    /// J2Z_HEAP_CENSUS=N: print live bytes by class at every Nth collection (0 = off)
+    /// MONO_HEAP_CENSUS=N: print live bytes by class at every Nth collection (0 = off)
     census_every: u32 = 0,
-    /// start of initRuntime, for the startup timeline lines (J2Z_GC_VERBOSE)
+    /// start of initRuntime, for the startup timeline lines (MONO_GC_VERBOSE)
     t0_ns: i128 = 0,
     gc_last_end_ms: i64 = 0,
     gc_explicit_skipped: u64 = 0,
@@ -243,7 +243,7 @@ pub const StaticFieldMeta = struct {
     annotations: ?[]const u8 = null,
 };
 
-/// Compact constant pool entry (only what annotation bytes reference; see j2zig/reflectmeta.py).
+/// Compact constant pool entry (only what annotation bytes reference; see monolith/reflectmeta.py).
 pub const CpEntry = union(enum) {
     none,
     utf8: []const u8,
@@ -447,7 +447,7 @@ pub const ThreadState = struct {
     /// per-thread bump arena for transient/scoped zero-malloc frame allocations (max 2 chunks = 512 KiB warm)
     scratch_arena: mem_pool.ArenaAllocator = mem_pool.ArenaAllocator.init(mem_pool.DEFAULT_CHUNK_SIZE, 2),
     use_arena_depth: u32 = 0,
-    /// heap bytes allocated since this thread's last allocation-profile sample (J2Z_ALLOC_PROFILE)
+    /// heap bytes allocated since this thread's last allocation-profile sample (MONO_ALLOC_PROFILE)
     prof_acc: usize = 0,
     /// heap bytes allocated since the last flush into st.bytes_since_gc (flushed every 64 KiB)
     alloc_acc: usize = 0,
@@ -539,7 +539,7 @@ noinline fn spillRegs(t: *ThreadState) void {
             :
             : [p] "{rdi}" (p),
             : .{ .memory = true }),
-        else => @compileError("j2zig GC: spillRegs has no register list for this architecture"),
+        else => @compileError("monolith GC: spillRegs has no register list for this architecture"),
     }
 }
 
@@ -567,7 +567,7 @@ pub const MAX_NATIVE_DEPTH: usize = 16;
 pub inline fn enterNative() void {
     const t = cur;
     spillRegs(t);
-    if (t.jni_depth >= MAX_NATIVE_DEPTH) @panic("j2zig: Java -> native -> Java nesting deeper than rt.MAX_NATIVE_DEPTH");
+    if (t.jni_depth >= MAX_NATIVE_DEPTH) @panic("monolith: Java -> native -> Java nesting deeper than rt.MAX_NATIVE_DEPTH");
     t.jni_snaps[t.jni_depth] = t.saved_regs;
     t.jni_depth += 1;
     t.state.store(SAFE, .seq_cst);
@@ -613,7 +613,7 @@ pub inline fn lockSafe(m: *std.Thread.Mutex) void {
 
 // ------------------------------------------------------------------ allocation & GC
 /// Smallest collection trigger (bytes allocated since the last GC). Large enough that start-up, which
-/// allocates a few GiB of mostly long-lived data, does not collect every 64 MiB; J2Z_GC_MIN_MB overrides.
+/// allocates a few GiB of mostly long-lived data, does not collect every 64 MiB; MONO_GC_MIN_MB overrides.
 
 /// JNI global references (each NewGlobalRef appends; DeleteGlobalRef removes one occurrence).
 
@@ -894,7 +894,7 @@ fn collect(force: bool) void {
 noinline fn reportStuckThread(th: *ThreadState) void {
     var buf: [512]u8 = undefined;
     const m = if (th.top) |f| f.meth else &rt_meta;
-    const msg = std.fmt.bufPrint(&buf, "j2zig GC: waiting for thread {*} to reach a safepoint for 2 s; its innermost Java frame is {s}.{s}{s} (a blocking or native call there lacks enterSafe/leaveSafe)\n", .{ th, m.class, m.name, m.desc }) catch "j2zig GC: a thread does not reach a safepoint\n";
+    const msg = std.fmt.bufPrint(&buf, "monolith GC: waiting for thread {*} to reach a safepoint for 2 s; its innermost Java frame is {s}.{s}{s} (a blocking or native call there lacks enterSafe/leaveSafe)\n", .{ th, m.class, m.name, m.desc }) catch "monolith GC: a thread does not reach a safepoint\n";
     writeFd(2, msg);
 }
 
@@ -1244,7 +1244,7 @@ fn markAndSweep() void {
 
 const CensusEnt = struct { c: *Class, count: u64, bytes: u64 };
 
-/// Live bytes by class (J2Z_HEAP_CENSUS): walks every slab and large object right after the mark phase, world stopped.
+/// Live bytes by class (MONO_HEAP_CENSUS): walks every slab and large object right after the mark phase, world stopped.
 fn heapCensus() void {
     var map: std.AutoHashMapUnmanaged(*Class, [2]u64) = .empty;
     defer map.deinit(gpa);
@@ -1368,7 +1368,7 @@ pub fn ensureWorkers() *thread_pool.WorkerPool {
     st.workers_lock.lock();
     defer st.workers_lock.unlock();
     if (!st.workers_started.load(.monotonic)) {
-        st.workers.start(0) catch @panic("j2zig: failed to start worker pool");
+        st.workers.start(0) catch @panic("monolith: failed to start worker pool");
         st.workers_started.store(true, .release);
     }
     return &st.workers;
@@ -1434,7 +1434,7 @@ pub fn throwKind(k: Exc, msg: ?[]const u8) E {
     defer throw_depth -= 1;
     if (throw_depth > 8) {
         var buf: [512]u8 = undefined;
-        writeFd(2, std.fmt.bufPrint(&buf, "j2zig: fatal: recursive failure while creating {s}: {s}\n", .{ @tagName(k), msg orelse "" }) catch "j2zig: fatal: recursive exception\n");
+        writeFd(2, std.fmt.bufPrint(&buf, "monolith: fatal: recursive failure while creating {s}: {s}\n", .{ @tagName(k), msg orelse "" }) catch "monolith: fatal: recursive exception\n");
         hardExit(134);
     }
     const ex = hooks.make_exception(k, msg) catch return error.Throw;
@@ -1488,12 +1488,12 @@ pub fn abstractMethod(msg: []const u8) E!noreturn {
 
 /// vtable / itable entry for a method that RTA proved unreachable.
 pub fn prunedMethod() callconv(.c) noreturn {
-    @panic("j2zig: RTA-pruned method was invoked (static analysis unsoundness, e.g. reflection)");
+    @panic("monolith: RTA-pruned method was invoked (static analysis unsoundness, e.g. reflection)");
 }
 pub const pruned: *const anyopaque = @ptrCast(&prunedMethod);
 
 
-// ------------------------------------------------------------------ JDK intrinsics (see INTRINSICS in j2zig/zigen.py)
+// ------------------------------------------------------------------ JDK intrinsics (see INTRINSICS in monolith/zigen.py)
 pub inline fn iFloor(x: f64) f64 {
     return @floor(x);
 }
@@ -1862,7 +1862,7 @@ pub fn initClass(c: *Class) E!void {
                     return;
                 }
                 if (traceInit()) {
-                    writeFd(2, "j2zig: waiting for the initialization of ");
+                    writeFd(2, "monolith: waiting for the initialization of ");
                     writeFd(2, c.name);
                     var tb: [96]u8 = undefined;
                     writeFd(2, std.fmt.bufPrint(&tb, " held by thread {x}, caller {x}\n", .{ @intFromPtr(c.init_thread), @intFromPtr(cur) }) catch " held by another thread\n");
@@ -1908,7 +1908,7 @@ pub fn initClass(c: *Class) E!void {
             f() catch {
                 const ex = cur.exc;
                 if (traceInit()) {
-                    writeFd(2, "j2zig: static initializer failed: ");
+                    writeFd(2, "monolith: static initializer failed: ");
                     writeFd(2, c.name);
                     writeFd(2, "\n");
                     cur.exc = null;
@@ -1934,9 +1934,9 @@ pub fn initClass(c: *Class) E!void {
     if (failed) return error.Throw;
 }
 
-/// J2Z_TRACE_INIT=1 prints the exception of every failing static initializer (diagnostics).
+/// MONO_TRACE_INIT=1 prints the exception of every failing static initializer (diagnostics).
 fn traceInit() bool {
-    if (st.trace_init_cached < 0) st.trace_init_cached = if (getenv("J2Z_TRACE_INIT") != null) 1 else 0;
+    if (st.trace_init_cached < 0) st.trace_init_cached = if (getenv("MONO_TRACE_INIT") != null) 1 else 0;
     return st.trace_init_cached == 1;
 }
 
@@ -2570,7 +2570,7 @@ fn newMonitorIndex() u32 {
     defer st.mon_lock.unlock();
     if (st.mon_free.pop()) |idx| return idx;
     const idx = st.mon_next;
-    if (idx >= MON_MAX) @panic("j2zig: more than 2^30 monitors in use");
+    if (idx >= MON_MAX) @panic("monolith: more than 2^30 monitors in use");
     if (st.mon_dir == null) {
         const d = std.heap.page_allocator.alloc(?[*]?*Monitor, MON_DIR_LEN) catch @panic("out of memory");
         @memset(d, null);
@@ -2775,7 +2775,7 @@ pub fn classMirror(c: *Class) E!Ref {
 }
 
 // ------------------------------------------------------------------ I/O helpers
-/// Startup timeline (J2Z_GC_VERBOSE): milliseconds since initRuntime.
+/// Startup timeline (MONO_GC_VERBOSE): milliseconds since initRuntime.
 pub fn startupMark(what: []const u8) void {
     if (!st.gc_verbose) return;
     var buf: [160]u8 = undefined;
@@ -2807,13 +2807,13 @@ fn setStackLimit(t: *ThreadState, size: usize) void {
     // the collector scans this thread's stack up to its real top: callers of the attaching function (thread
     // entry, JNI host frames) can hold references too
     var attr: std.c.pthread_attr_t = undefined;
-    if (pthread_getattr_np(std.c.pthread_self(), &attr) != 0) @panic("j2zig GC: pthread_getattr_np failed, cannot find the thread's stack");
+    if (pthread_getattr_np(std.c.pthread_self(), &attr) != 0) @panic("monolith GC: pthread_getattr_np failed, cannot find the thread's stack");
     defer _ = pthread_attr_destroy(&attr);
     var addr: ?*anyopaque = null;
     var len: usize = 0;
-    if (pthread_attr_getstack(&attr, &addr, &len) != 0 or addr == null) @panic("j2zig GC: pthread_attr_getstack failed");
+    if (pthread_attr_getstack(&attr, &addr, &len) != 0 or addr == null) @panic("monolith GC: pthread_attr_getstack failed");
     t.stack_hi = @intFromPtr(addr.?) + len;
-    if (t.stack_hi <= base) @panic("j2zig GC: stack bounds do not contain the current frame");
+    if (t.stack_hi <= base) @panic("monolith GC: stack bounds do not contain the current frame");
 }
 
 /// Thread-locals cannot be shared between separately compiled shards: every shard keeps its own `cur` and
@@ -2949,7 +2949,7 @@ pub fn environList() []const [*:0]const u8 {
     return @as([*]const [*:0]const u8, @ptrCast(env))[0..n];
 }
 
-/// Raw-bit equality of two primitive results (J2Z_PATCH_VERIFY): NaNs with equal payload compare equal.
+/// Raw-bit equality of two primitive results (MONO_PATCH_VERIFY): NaNs with equal payload compare equal.
 pub fn patchSame(a: anytype, b: @TypeOf(a)) bool {
     const T = @TypeOf(a);
     return switch (@typeInfo(T)) {
@@ -2960,7 +2960,7 @@ pub fn patchSame(a: anytype, b: @TypeOf(a)) bool {
 
 pub noinline fn patchMismatch(name: []const u8) noreturn {
     var buf: [512]u8 = undefined;
-    writeFd(2, std.fmt.bufPrint(&buf, "j2zig: PATCH MISMATCH in {s}: the hand-written replacement returned a different value than the transpiled original\n", .{name}) catch "j2zig: PATCH MISMATCH\n");
+    writeFd(2, std.fmt.bufPrint(&buf, "monolith: PATCH MISMATCH in {s}: the hand-written replacement returned a different value than the transpiled original\n", .{name}) catch "monolith: PATCH MISMATCH\n");
     std.process.abort();
 }
 
@@ -2968,7 +2968,7 @@ pub fn initState() void {
     st.* = .{};
 }
 
-// ------------------------------------------------------------------ sampling profiler (J2Z_PROF=<file>)
+// ------------------------------------------------------------------ sampling profiler (MONO_PROF=<file>)
 // SIGPROF every ~1 ms of process CPU time records the interrupted instruction pointer; a helper thread rewrites
 // <file> (raw little-endian u64 addresses) every 3 s. Resolve with tools/prof_report.py against the executable.
 const PROF_MAX: usize = 4 * 1024 * 1024;
@@ -2997,7 +2997,7 @@ fn profWriter(path: [:0]const u8) void {
 }
 
 fn startProfiler() void {
-    const path = getenv("J2Z_PROF") orelse return;
+    const path = getenv("MONO_PROF") orelse return;
     const mem = gpa.alloc(u64, PROF_MAX) catch return;
     prof_buf = mem.ptr;
     var sa = std.posix.Sigaction{
@@ -3019,7 +3019,7 @@ fn envNum(name: []const u8) ?usize {
     const n = std.fmt.parseInt(usize, v, 10) catch 0;
     if (n == 0) {
         var buf: [160]u8 = undefined;
-        writeFd(2, std.fmt.bufPrint(&buf, "j2zig: {s} must be a positive whole number, not '{s}'\n", .{ name, v }) catch "j2zig: bad GC setting\n");
+        writeFd(2, std.fmt.bufPrint(&buf, "monolith: {s} must be a positive whole number, not '{s}'\n", .{ name, v }) catch "monolith: bad GC setting\n");
         std.process.exit(2);
     }
     return n;
@@ -3029,18 +3029,18 @@ pub fn initRuntime(h: Hooks) void {
     st.t0_ns = std.time.nanoTimestamp();
     startProfiler();
     hooks.* = h;
-    if (envNum("J2Z_GC_MIN_MB")) |mb| {
+    if (envNum("MONO_GC_MIN_MB")) |mb| {
         st.gc_min_threshold = mb << 20;
         st.gc_threshold = mb << 20;
     }
     // percent of the live heap that may be allocated before the next collection
-    if (envNum("J2Z_GC_FACTOR")) |pct| st.gc_factor_pct = pct;
-    if (envNum("J2Z_HEAP_MAX_MB")) |mb| st.gc_max_heap = mb << 20;
-    if (envNum("J2Z_GC_EXPLICIT_GAP_MS")) |ms| st.gc_explicit_gap_ms = @intCast(ms);
-    if (envNum("J2Z_GC_MAX_GARBAGE_MB")) |mb| st.gc_max_garbage = mb << 20;
-    if (envNum("J2Z_HEAP_CENSUS")) |n| st.census_every = @intCast(n);
-    if (getenv("J2Z_GC_VERBOSE")) |_| st.gc_verbose = true;
-    if (getenv("J2Z_ALLOC_PROFILE")) |_| st.alloc_profile = true;
+    if (envNum("MONO_GC_FACTOR")) |pct| st.gc_factor_pct = pct;
+    if (envNum("MONO_HEAP_MAX_MB")) |mb| st.gc_max_heap = mb << 20;
+    if (envNum("MONO_GC_EXPLICIT_GAP_MS")) |ms| st.gc_explicit_gap_ms = @intCast(ms);
+    if (envNum("MONO_GC_MAX_GARBAGE_MB")) |mb| st.gc_max_garbage = mb << 20;
+    if (envNum("MONO_HEAP_CENSUS")) |n| st.census_every = @intCast(n);
+    if (getenv("MONO_GC_VERBOSE")) |_| st.gc_verbose = true;
+    if (getenv("MONO_ALLOC_PROFILE")) |_| st.alloc_profile = true;
     startupMark("runtime initialised");
     array_ifaces.* = .{ h.cloneable, h.serializable };
     for (h.all_classes, 0..) |c, i| c.id = @intCast(i);
@@ -3054,7 +3054,7 @@ pub fn runMain(entry: *const fn () E!void) u8 {
     return st.exit_code;
 }
 
-/// Non-blocking Android shared-library entry helper (`j2z_android_entry`): spawns `mainThread`
+/// Non-blocking Android shared-library entry helper (`mono_android_entry`): spawns `mainThread`
 /// with full stack capacity and detaches immediately so the Android UI thread never blocks.
 pub fn runMainAsync(entry: *const fn () E!void) i32 {
     const ss = default_stack_size * 4;
@@ -3063,13 +3063,13 @@ pub fn runMainAsync(entry: *const fn () E!void) i32 {
     return 0;
 }
 
-/// Construct JVM argv[] for Android `j2z_android_entry` from env vars with C argument fallbacks.
+/// Construct JVM argv[] for Android `mono_android_entry` from env vars with C argument fallbacks.
 pub fn buildAndroidArgv(user_arg: ?[*:0]const u8, gdir_arg: ?[*:0]const u8, adir_arg: ?[*:0]const u8) [][*:0]u8 {
     const u_slice = getenv("MC_USERNAME") orelse (if (user_arg) |p| std.mem.span(p) else "");
     if (u_slice.len == 0) return &.{};
     const g_slice = getenv("MC_GAME_DIR") orelse (if (gdir_arg) |p| std.mem.span(p) else ".");
     const a_slice = getenv("MC_ASSETS_DIR") orelse (if (adir_arg) |p| std.mem.span(p) else "assets");
-    const ver_slice = getenv("MC_VERSION") orelse "J2ZIG";
+    const ver_slice = getenv("MC_VERSION") orelse "MONOLITH";
     const idx_slice = getenv("MC_ASSET_INDEX") orelse "";
     const has_idx = idx_slice.len > 0;
     const n_args: usize = if (has_idx) 14 else 12;
@@ -3121,7 +3121,7 @@ fn mainThread(entry: *const fn () E!void, ss: usize) void {
 }
 
 fn reportFatal() void {
-    writeFd(2, "j2zig: fatal: exception during runtime startup/shutdown\n");
+    writeFd(2, "monolith: fatal: exception during runtime startup/shutdown\n");
     st.exit_code = 1;
 }
 

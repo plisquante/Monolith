@@ -1,6 +1,6 @@
-//! TouchCore For Minecraft Zig Edition — Native J2ZIG Client Core Substrate (aarch64-linux-android)
+//! TouchCore For Monolith — Native MONOLITH Client Core Substrate (aarch64-linux-android)
 //!
-//! Combines J2ZIG's GC-free `ArenaAllocator`, 3-epoch `SlabPool`, `WorkerPool`, `RhiDevice`,
+//! Combines MONOLITH's GC-free `ArenaAllocator`, 3-epoch `SlabPool`, `WorkerPool`, `RhiDevice`,
 //! 3-stage `world_render` culling (FOV Frustum + CaveCulling Portals + Hi-Z + Resolution LOD),
 //! and GPU-driven `InstanceBatcher` into a clean C ABI consumed by `touchcore_android.c`.
 const std = @import("std");

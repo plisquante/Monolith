@@ -1,5 +1,5 @@
 
-name: Build Minecraft Android SO (J2ZIG)
+name: Build Minecraft Android SO (MONOLITH)
 
 "on":
   workflow_dispatch:
@@ -55,17 +55,17 @@ jobs:
       # BUILD CACHE
       # --------------------------------------------------
 
-      - name: Restore Zig and J2ZIG Cache
+      - name: Restore Zig and MONOLITH Cache
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/zig
-            ~/.cache/j2zig
+            ~/.cache/monolith
             .zig-cache
             zig-cache
-          key: ${{ runner.os }}-j2zig-zig0152-${{ hashFiles('**/*.zig', '**/*.py', '**/*.toml', '**/*.json') }}
+          key: ${{ runner.os }}-monolith-zig0152-${{ hashFiles('**/*.zig', '**/*.py', '**/*.toml', '**/*.json') }}
           restore-keys: |
-            ${{ runner.os }}-j2zig-zig0152-
+            ${{ runner.os }}-monolith-zig0152-
 
       - name: Cache Minecraft Client JAR
         id: mc-cache
@@ -281,7 +281,7 @@ jobs:
           fi
 
           echo "======================================"
-          echo "J2ZIG ANDROID NATIVE BUILD"
+          echo "MONOLITH ANDROID NATIVE BUILD"
           echo "======================================"
 
           echo "Optimization: $MC_OPTIMIZE"
@@ -317,10 +317,10 @@ jobs:
           set -euo pipefail
 
           SO_PATH=$(find out_so -type f \
-            -name "libminecraft_j2z.so" | head -n 1)
+            -name "libminecraft_mono.so" | head -n 1)
 
           if [ -z "$SO_PATH" ]; then
-            echo "ERROR: libminecraft_j2z.so not found."
+            echo "ERROR: libminecraft_mono.so not found."
             exit 1
           fi
 
@@ -343,8 +343,8 @@ jobs:
             exit 1
           fi
 
-          if ! nm -D "$SO_PATH" | grep -q "j2z_android_entry"; then
-            echo "ERROR: Exported j2z_android_entry symbol missing."
+          if ! nm -D "$SO_PATH" | grep -q "mono_android_entry"; then
+            echo "ERROR: Exported mono_android_entry symbol missing."
             exit 1
           fi
 
@@ -363,8 +363,8 @@ jobs:
       - name: Upload Minecraft Native Library
         uses: actions/upload-artifact@v4
         with:
-          name: libminecraft_j2z-${{ inputs.mc_version }}-${{ inputs.optimize }}
-          path: out_so/**/libminecraft_j2z.so
+          name: libminecraft_mono-${{ inputs.mc_version }}-${{ inputs.optimize }}
+          path: out_so/**/libminecraft_mono.so
           if-no-files-found: error
           retention-days: 14
 
@@ -387,5 +387,5 @@ jobs:
             echo "| Shards | ${{ inputs.shards }} |"
             echo "| Parallel jobs | ${{ inputs.shard_jobs }} |"
             echo "| Build duration | ${BUILD_TIME_SECONDS}s |"
-            echo "| Artifact | libminecraft_j2z.so |"
+            echo "| Artifact | libminecraft_mono.so |"
           } >> "$GITHUB_STEP_SUMMARY"

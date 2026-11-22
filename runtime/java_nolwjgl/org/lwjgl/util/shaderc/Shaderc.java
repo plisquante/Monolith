@@ -2,14 +2,14 @@ package org.lwjgl.util.shaderc;
 
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.SharedLibrary;
-import org.lwjgl.util.J2zShader;
+import org.lwjgl.util.MonoShader;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * shaderc through libj2zshader.so (org.lwjgl.util.J2zShader). The call signatures are the ones of LWJGL's binding.
+ * shaderc through libmonoshader.so (org.lwjgl.util.MonoShader). The call signatures are the ones of LWJGL's binding.
  * One difference: #include is resolved here, in Java, before the source reaches shaderc. The resolver and releaser a
  * caller registers with shaderc_compile_options_set_include_callbacks are plain Java objects, and the C library has
  * no way to call back into the runtime.
@@ -37,16 +37,16 @@ public final class Shaderc {
 
     public static SharedLibrary getLibrary() { return LIB; }
 
-    public static long shaderc_compiler_initialize() { return J2zShader.scCompilerInit(); }
+    public static long shaderc_compiler_initialize() { return MonoShader.scCompilerInit(); }
 
-    public static void shaderc_compiler_release(long compiler) { J2zShader.scCompilerRelease(compiler); }
+    public static void shaderc_compiler_release(long compiler) { MonoShader.scCompilerRelease(compiler); }
 
-    public static long shaderc_compile_options_initialize() { return J2zShader.scOptInit(); }
+    public static long shaderc_compile_options_initialize() { return MonoShader.scOptInit(); }
 
     public static void shaderc_compile_options_release(long options) {
         INCLUDES.remove(options);
         PRESERVE_BINDINGS.remove(options);
-        J2zShader.scOptRelease(options);
+        MonoShader.scOptRelease(options);
     }
 
     public static void shaderc_compile_options_add_macro_definition(long options, CharSequence name, CharSequence value) {
@@ -55,7 +55,7 @@ public final class Shaderc {
         ByteBuffer nb = cString(n);
         ByteBuffer vb = cString(v);
         try {
-            J2zShader.scOptMacro(options, MemoryUtil.memAddress(nb), n.length, MemoryUtil.memAddress(vb), v.length);
+            MonoShader.scOptMacro(options, MemoryUtil.memAddress(nb), n.length, MemoryUtil.memAddress(vb), v.length);
         } finally {
             MemoryUtil.memFree(nb);
             MemoryUtil.memFree(vb);
@@ -63,11 +63,11 @@ public final class Shaderc {
     }
 
     public static void shaderc_compile_options_set_auto_bind_uniforms(long options, boolean auto_bind) {
-        J2zShader.scOptAutoBind(options, auto_bind ? 1 : 0);
+        MonoShader.scOptAutoBind(options, auto_bind ? 1 : 0);
     }
 
     public static void shaderc_compile_options_set_generate_debug_info(long options) {
-        J2zShader.scOptDebug(options);
+        MonoShader.scOptDebug(options);
     }
 
     public static void shaderc_compile_options_set_include_callbacks(long options, ShadercIncludeResolveI resolver,
@@ -83,7 +83,7 @@ public final class Shaderc {
     private static final int OPTIMIZATION_ZERO = 0;
 
     public static void shaderc_compile_options_set_optimization_level(long options, int level) {
-        J2zShader.scOptLevel(options, PRESERVE_BINDINGS.containsKey(options) ? OPTIMIZATION_ZERO : level);
+        MonoShader.scOptLevel(options, PRESERVE_BINDINGS.containsKey(options) ? OPTIMIZATION_ZERO : level);
     }
 
     /**
@@ -93,14 +93,14 @@ public final class Shaderc {
     public static void shaderc_compile_options_set_preserve_bindings(long options, boolean preserve_bindings) {
         if (preserve_bindings) {
             PRESERVE_BINDINGS.put(options, Boolean.TRUE);
-            J2zShader.scOptLevel(options, OPTIMIZATION_ZERO);
+            MonoShader.scOptLevel(options, OPTIMIZATION_ZERO);
         } else {
             PRESERVE_BINDINGS.remove(options);
         }
     }
 
     public static void shaderc_compile_options_set_target_env(long options, int target, int version) {
-        J2zShader.scOptTarget(options, target, version);
+        MonoShader.scOptTarget(options, target, version);
     }
 
     public static long shaderc_compile_into_spv(long compiler, ByteBuffer source_text, int shader_kind,
@@ -114,25 +114,25 @@ public final class Shaderc {
         }
         ByteBuffer src = cString(raw);
         try {
-            return J2zShader.scCompile(compiler, MemoryUtil.memAddress(src), raw.length, shader_kind,
+            return MonoShader.scCompile(compiler, MemoryUtil.memAddress(src), raw.length, shader_kind,
                     MemoryUtil.memAddress(input_file_name), MemoryUtil.memAddress(entry_point_name), additional_options);
         } finally {
             MemoryUtil.memFree(src);
         }
     }
 
-    public static void shaderc_result_release(long result) { J2zShader.scResultRelease(result); }
+    public static void shaderc_result_release(long result) { MonoShader.scResultRelease(result); }
 
-    public static int shaderc_result_get_compilation_status(long result) { return J2zShader.scResultStatus(result); }
+    public static int shaderc_result_get_compilation_status(long result) { return MonoShader.scResultStatus(result); }
 
     public static String shaderc_result_get_error_message(long result) {
-        long p = J2zShader.scResultMessage(result);
+        long p = MonoShader.scResultMessage(result);
         return p == 0L ? "" : MemoryUtil.memUTF8(p);
     }
 
     public static ByteBuffer shaderc_result_get_bytes(long result) {
-        long p = J2zShader.scResultBytes(result);
-        long len = J2zShader.scResultLength(result);
+        long p = MonoShader.scResultBytes(result);
+        long len = MonoShader.scResultLength(result);
         return p == 0L ? null : MemoryUtil.memByteBuffer(p, (int) len);
     }
 

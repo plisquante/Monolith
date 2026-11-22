@@ -19,9 +19,9 @@ pub inline fn vkMakeApiVersion(variant: u32, major: u32, minor: u32, patch: u32)
 pub const VkApplicationInfo = extern struct {
     sType: u32 = VK_STRUCTURE_TYPE_APPLICATION_INFO,
     pNext: ?*const anyopaque = null,
-    pApplicationName: ?[*:0]const u8 = "J2ZIG-MC",
+    pApplicationName: ?[*:0]const u8 = "MONOLITH-MC",
     applicationVersion: u32 = 1,
-    pEngineName: ?[*:0]const u8 = "J2ZIG-RHI",
+    pEngineName: ?[*:0]const u8 = "MONOLITH-RHI",
     engineVersion: u32 = 1,
     apiVersion: u32 = vkMakeApiVersion(0, 1, 1, 0),
 };

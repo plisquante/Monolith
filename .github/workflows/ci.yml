@@ -22,8 +22,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyflakes
-          python -m py_compile j2zig/*.py tools/*.py tests/*.py .claude/hooks/guard.py
-          python -m pyflakes j2zig/*.py tools/*.py tests/*.py .claude/hooks/guard.py
+          python -m py_compile monolith/*.py tools/*.py tests/*.py .claude/hooks/guard.py
+          python -m pyflakes monolith/*.py tools/*.py tests/*.py .claude/hooks/guard.py
 
       - name: Zig install and ast-check
         run: |
@@ -43,11 +43,11 @@ jobs:
 
       - name: JDK 25 install
         run: |
-          mkdir -p "$HOME/.cache/j2zig/temurin-25"
+          mkdir -p "$HOME/.cache/monolith/temurin-25"
           curl -sSL --retry 4 -o /tmp/jdk25.tar.gz "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse"
-          tar -xzf /tmp/jdk25.tar.gz -C "$HOME/.cache/j2zig/temurin-25"
-          echo "J2Z_JDK_HOME=$(echo "$HOME"/.cache/j2zig/temurin-25/jdk-*)" >> "$GITHUB_ENV"
-          ls "$HOME"/.cache/j2zig/temurin-25/jdk-*/bin/javac
+          tar -xzf /tmp/jdk25.tar.gz -C "$HOME/.cache/monolith/temurin-25"
+          echo "MONO_JDK_HOME=$(echo "$HOME"/.cache/monolith/temurin-25/jdk-*)" >> "$GITHUB_ENV"
+          ls "$HOME"/.cache/monolith/temurin-25/jdk-*/bin/javac
 
       - name: Zig unit tests (Client Core RHI)
         run: zig test -lc runtime/rhi.zig
@@ -58,9 +58,9 @@ jobs:
 
       - name: Build TouchCore APK (Android arm64-v8a via NDK/SDK)
         run: |
-          python3 tools/build_touchcore_apk.py --out build/TouchCore-For-Minecraft-Zig-Edition.apk
+          python3 tools/build_touchcore_apk.py --out build/Monolith.apk
           ZIPALIGN=$(command -v zipalign || ls -d /usr/local/lib/android/sdk/build-tools/*/zipalign | sort -V | tail -n 1)
-          "$ZIPALIGN" -c -p 4 build/TouchCore-For-Minecraft-Zig-Edition.apk
+          "$ZIPALIGN" -c -p 4 build/Monolith.apk
 
       - name: Android NDK 4-shard --no-lwjgl shared library smoke test
         run: |
@@ -78,15 +78,15 @@ jobs:
               }
           }
           EOF
-          "$J2Z_JDK_HOME/bin/javac" -source 17 -target 17 --add-exports java.base/jdk.internal.misc=ALL-UNNAMED -cp runtime/java_nolwjgl:runtime/java -sourcepath runtime/java_nolwjgl:runtime/java -d build/ci_nolwjgl/classes build/ci_nolwjgl/CiNoLwjgl.java
-          "$J2Z_JDK_HOME/bin/jar" cf build/ci_nolwjgl/CiNoLwjgl.jar -C build/ci_nolwjgl/classes CiNoLwjgl.class
-          python3 -m j2zig build-lib --cp build/ci_nolwjgl/CiNoLwjgl.jar --main CiNoLwjgl --no-lwjgl --shards 4 -dynamic --target aarch64-linux-android.26 --name libminecraft_j2z.so -o build/ci_nolwjgl/out
-          readelf -h build/ci_nolwjgl/out/libminecraft_j2z.so | grep -q "AArch64"
-          nm -D build/ci_nolwjgl/out/libminecraft_j2z.so | grep -q "j2z_android_entry"
+          "$MONO_JDK_HOME/bin/javac" -source 17 -target 17 --add-exports java.base/jdk.internal.misc=ALL-UNNAMED -cp runtime/java_nolwjgl:runtime/java -sourcepath runtime/java_nolwjgl:runtime/java -d build/ci_nolwjgl/classes build/ci_nolwjgl/CiNoLwjgl.java
+          "$MONO_JDK_HOME/bin/jar" cf build/ci_nolwjgl/CiNoLwjgl.jar -C build/ci_nolwjgl/classes CiNoLwjgl.class
+          python3 -m monolith build-lib --cp build/ci_nolwjgl/CiNoLwjgl.jar --main CiNoLwjgl --no-lwjgl --shards 4 -dynamic --target aarch64-linux-android.26 --name libminecraft_mono.so -o build/ci_nolwjgl/out
+          readelf -h build/ci_nolwjgl/out/libminecraft_mono.so | grep -q "AArch64"
+          nm -D build/ci_nolwjgl/out/libminecraft_mono.so | grep -q "mono_android_entry"
 
       - name: Upload TouchCore APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TouchCore-For-Minecraft-Zig-Edition-apk
-          path: build/TouchCore-For-Minecraft-Zig-Edition.apk
+          name: Monolith-apk
+          path: build/Monolith.apk
           retention-days: 14

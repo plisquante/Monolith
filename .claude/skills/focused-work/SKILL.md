@@ -22,7 +22,7 @@ description: Working protocol for medium effort. Use at session start and before
 ## Delegation
 - No sub-agents for lookups, greps, or single edits. Do them inline.
 - Spawn one only for a truly independent long task the user asked to parallelize.
-- One heavy job at a time (see `j2zig-build`).
+- One heavy job at a time (see `monolith-build`).
 
 ## Stop conditions
 - Two failed attempts on the same hypothesis: state the evidence and change approach, do not repeat.

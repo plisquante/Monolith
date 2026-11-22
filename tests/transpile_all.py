@@ -17,11 +17,11 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from j2zig.classpath import ClassPath, ZipSource, DirSource, jdk_jmods  # noqa: E402
-from j2zig.program import Program, Report  # noqa: E402
-from j2zig.world import World, LinkError  # noqa: E402
-from j2zig.zigen import ClassGen, MethodCompiler, ZigGen  # noqa: E402
-from j2zig.__main__ import build_classlib  # noqa: E402
+from monolith.classpath import ClassPath, ZipSource, DirSource, jdk_jmods  # noqa: E402
+from monolith.program import Program, Report  # noqa: E402
+from monolith.world import World, LinkError  # noqa: E402
+from monolith.zigen import ClassGen, MethodCompiler, ZigGen  # noqa: E402
+from monolith.__main__ import build_classlib  # noqa: E402
 
 
 def main() -> int:

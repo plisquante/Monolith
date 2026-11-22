@@ -1,7 +1,7 @@
 package java.lang.invoke;
 
 /**
- * j2zig overlay of VarHandle. A VarHandle is a (kind, base, offset, type) descriptor; the
+ * monolith overlay of VarHandle. A VarHandle is a (kind, base, offset, type) descriptor; the
  * signature-polymorphic access methods (get, set, compareAndSet, getAndAdd, ...) are not
  * declared here: the transpiler lowers every invokevirtual of them to a direct atomic
  * memory operation in the runtime (runtime/varhandle.zig), using the call site descriptor.
@@ -9,12 +9,12 @@ package java.lang.invoke;
 public class VarHandle {
     static final int FIELD = 0, STATIC = 1, ARRAY = 2, BYTE_VIEW = 3;
     final VarForm vform;
-    final int j2zKind;
-    final long j2zOffset;      // field offset, or absolute address of a static field
-    final Class<?> j2zVarType;
-    final Class<?> j2zArrayClass;
-    final boolean j2zFinal;
-    final boolean j2zBigEndian;
+    final int monoKind;
+    final long monoOffset;      // field offset, or absolute address of a static field
+    final Class<?> monoVarType;
+    final Class<?> monoArrayClass;
+    final boolean monoFinal;
+    final boolean monoBigEndian;
 
     VarHandle(int kind, long offset, Class<?> varType, Class<?> arrayClass, boolean isFinal) {
         this(kind, offset, varType, arrayClass, isFinal, false);
@@ -22,12 +22,12 @@ public class VarHandle {
 
     VarHandle(int kind, long offset, Class<?> varType, Class<?> arrayClass, boolean isFinal, boolean bigEndian) {
         this.vform = null;
-        this.j2zBigEndian = bigEndian;
-        this.j2zKind = kind;
-        this.j2zOffset = offset;
-        this.j2zVarType = varType;
-        this.j2zArrayClass = arrayClass;
-        this.j2zFinal = isFinal;
+        this.monoBigEndian = bigEndian;
+        this.monoKind = kind;
+        this.monoOffset = offset;
+        this.monoVarType = varType;
+        this.monoArrayClass = arrayClass;
+        this.monoFinal = isFinal;
     }
 
     VarHandle(VarForm form) {
@@ -36,12 +36,12 @@ public class VarHandle {
 
     VarHandle(VarForm form, boolean exact) {
         this.vform = form;
-        this.j2zKind = FIELD;
-        this.j2zOffset = 0;
-        this.j2zVarType = Object.class;
-        this.j2zArrayClass = null;
-        this.j2zFinal = exact;
-        this.j2zBigEndian = false;
+        this.monoKind = FIELD;
+        this.monoOffset = 0;
+        this.monoVarType = Object.class;
+        this.monoArrayClass = null;
+        this.monoFinal = exact;
+        this.monoBigEndian = false;
     }
 
     MethodType accessModeTypeUncached(AccessType at) {
@@ -61,16 +61,16 @@ public class VarHandle {
     }
 
     public java.util.List<Class<?>> coordinateTypes() {
-        return switch (j2zKind) {
+        return switch (monoKind) {
             case STATIC -> java.util.Collections.emptyList();
-            case ARRAY -> java.util.List.of(j2zArrayClass, int.class);
+            case ARRAY -> java.util.List.of(monoArrayClass, int.class);
             case BYTE_VIEW -> java.util.List.of(byte[].class, int.class);
             default -> java.util.List.of(Object.class);
         };
     }
 
     public Class<?> varType() {
-        return j2zVarType;
+        return monoVarType;
     }
 
     public VarHandle withInvokeExactBehavior() {
@@ -108,7 +108,7 @@ public class VarHandle {
     private static native void fence0();
 
     public String toString() {
-        return "VarHandle[varType=" + j2zVarType.getName() + "]";
+        return "VarHandle[varType=" + monoVarType.getName() + "]";
     }
 
     enum AccessType {

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Builds libj2zshader.so (shaderc + SPIRV-Cross + JNI glue, android/shader) for arm64-v8a with ndk-build.
+"""Builds libmonoshader.so (shaderc + SPIRV-Cross + JNI glue, android/shader) for arm64-v8a with ndk-build.
 
 shaderc, glslang and SPIRV-Tools come from the NDK (sources/third_party/shaderc); SPIRV-Cross is fetched at a pinned
-release tag. Output: <out>/libj2zshader.so (default build/shader). Needs ANDROID_NDK_HOME (or --ndk).
+release tag. Output: <out>/libmonoshader.so (default build/shader). Needs ANDROID_NDK_HOME (or --ndk).
 """
 import argparse
 import os
@@ -16,7 +16,7 @@ SHADER_DIR = REPO_ROOT / "android" / "shader"
 SPIRV_CROSS_URL = "https://github.com/KhronosGroup/SPIRV-Cross"
 SPIRV_CROSS_TAG = "vulkan-sdk-1.4.350.1"
 SPIRV_CROSS_COMMIT = "1a6169566c73d3da552748fc372fe2bbb856e46e"
-CACHE = Path.home() / ".cache" / "j2zig"
+CACHE = Path.home() / ".cache" / "monolith"
 
 
 def run(cmd, **kw):
@@ -55,11 +55,11 @@ def main() -> int:
          f"NDK_PROJECT_PATH={SHADER_DIR}", f"APP_BUILD_SCRIPT={SHADER_DIR / 'jni' / 'Android.mk'}",
          f"NDK_APPLICATION_MK={SHADER_DIR / 'jni' / 'Application.mk'}", f"NDK_OUT={obj}", f"NDK_LIBS_OUT={libs}",
          f"SPIRV_CROSS_DIR={spvx}", f"-j{args.j}"], env=env)
-    so = libs / "arm64-v8a" / "libj2zshader.so"
+    so = libs / "arm64-v8a" / "libmonoshader.so"
     if not so.is_file():
-        raise SystemExit("ndk-build finished without producing libj2zshader.so")
-    shutil.copy2(so, args.out / "libj2zshader.so")
-    print(f"[shader] {args.out / 'libj2zshader.so'} ({so.stat().st_size // 1024} KiB)")
+        raise SystemExit("ndk-build finished without producing libmonoshader.so")
+    shutil.copy2(so, args.out / "libmonoshader.so")
+    print(f"[shader] {args.out / 'libmonoshader.so'} ({so.stat().st_size // 1024} KiB)")
     return 0
 
 

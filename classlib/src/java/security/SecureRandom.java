@@ -3,7 +3,7 @@ package java.security;
 import java.util.Random;
 
 /**
- * j2zig overlay of SecureRandom: every instance draws from the operating system CSPRNG
+ * monolith overlay of SecureRandom: every instance draws from the operating system CSPRNG
  * (getrandom(2)), like the JDK's NativePRNG, without the JCA provider framework.
  */
 public class SecureRandom extends Random {

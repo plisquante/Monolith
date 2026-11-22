@@ -1,7 +1,7 @@
 package jdk.internal.util;
 
 /**
- * j2zig overlay of ClassFileDumper: a closed-world native image never generates or dumps bytecode
+ * monolith overlay of ClassFileDumper: a closed-world native image never generates or dumps bytecode
  * class files at run time, so ClassFileDumper is disabled and does not pull java.nio.file into
  * every MethodType / lambda user.
  */

@@ -1,6 +1,6 @@
 package org.lwjgl.opengl;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 
 public class GL32C extends GL31C {
     public static final int GL_DEPTH_CLAMP = 0x864F;

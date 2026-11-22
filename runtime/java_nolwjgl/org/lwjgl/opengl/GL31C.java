@@ -1,6 +1,6 @@
 package org.lwjgl.opengl;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 
 public class GL31C extends GL30C {
     public static final int GL_UNIFORM_BUFFER = 0x8A11;

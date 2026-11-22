@@ -7,6 +7,6 @@ public final class ALUtil {
     private ALUtil() {}
 
     public static List<String> getStringList(long deviceHandle, int token) {
-        return Collections.singletonList("J2ZIG Audio Output");
+        return Collections.singletonList("MONOLITH Audio Output");
     }
 }

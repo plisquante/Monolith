@@ -4,7 +4,7 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * j2zig overlay of DecimalFormatSymbols. The CLDR/JRE locale data providers are not part of the
+ * monolith overlay of DecimalFormatSymbols. The CLDR/JRE locale data providers are not part of the
  * native image, so every locale gets the symbols the JDK uses for Locale.US / Locale.ROOT
  * (this limitation is listed in docs/STATUS.md).
  */

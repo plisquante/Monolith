@@ -1,6 +1,6 @@
 package org.lwjgl.sdl;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 
 public final class SDLEvents {
     public static final int SDL_EVENT_QUIT = 0x100;
@@ -56,8 +56,8 @@ public final class SDLEvents {
 
     private SDLEvents() {}
 
-    /** Debugging aid: J2Z_TRACE_SDL=<file> appends one line per SDL event (the game replaces System.err with its logger). */
-    private static final String TRACE_FILE = System.getenv("J2Z_TRACE_SDL");
+    /** Debugging aid: MONO_TRACE_SDL=<file> appends one line per SDL event (the game replaces System.err with its logger). */
+    private static final String TRACE_FILE = System.getenv("MONO_TRACE_SDL");
     private static final boolean TRACE = TRACE_FILE != null;
 
     private static void trace(String line) {
@@ -65,7 +65,7 @@ public final class SDLEvents {
             java.nio.file.Files.writeString(java.nio.file.Path.of(TRACE_FILE), line + "\n",
                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
         } catch (java.io.IOException e) {
-            throw new IllegalStateException("J2Z_TRACE_SDL: " + e.getMessage(), e);
+            throw new IllegalStateException("MONO_TRACE_SDL: " + e.getMessage(), e);
         }
     }
 

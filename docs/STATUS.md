@@ -5,7 +5,7 @@ Last updated: 2026-11-15. Toolchain: Zig 0.15.1, OpenJDK 25 (Temurin 25.0.5) cla
 ## 1. Differential test results
 
 `python3 tests/run_tests.py` compiles each `tests/java/*.java` with javac, runs it on the JVM
-and as a j2zig native executable, and requires identical stdout, first stderr line and exit
+and as a monolith native executable, and requires identical stdout, first stderr line and exit
 code. Last run: **10/10 passed against the JDK 25 class library** (Debug builds, i.e. with Zig safety checks enabled).
 
 | test | covers |
@@ -62,7 +62,7 @@ epoll/kqueue/unix 70, `com/mojang/jtracy` 20, `java/util/zip` 17 (implemented si
    splitting the program into separately compiled units (C-ABI boundaries between packages)
    to keep optimized builds tractable. Debug builds use Zig's fast self-hosted backend.
 7. Resource access: the class loader overlay serves `getResourceAsStream` from an extracted
-   resource directory (`J2Z_RESOURCES`); the assets must be extracted at build time.
+   resource directory (`MONO_RESOURCES`); the assets must be extracted at build time.
 
 ## 4. Coverage: transpiling every method (not only reachable ones)
 
@@ -82,8 +82,8 @@ ReleaseFast, 4 cores:
 | | time | peak RSS |
 |---|---|---|
 | HotSpot (OpenJDK 21, default G1) | 1.0 s | 640–830 MB |
-| j2zig, system allocator per object | 8.6–10.6 s | 710 MB |
-| j2zig, segregated-fit allocator | 5.9–6.9 s | 238 MB |
+| monolith, system allocator per object | 8.6–10.6 s | 710 MB |
+| monolith, segregated-fit allocator | 5.9–6.9 s | 238 MB |
 
 Applied: segregated-fit thread-local allocator, CHA devirtualization, elided class-init
 checks, in-place sweep, `volatile`-only atomics. Evaluated next steps, in expected order of
@@ -139,7 +139,7 @@ LLVM optimizes the whole program as one module; a 16 GB machine cannot hold it. 
 (default) therefore picks the LLVM build only when the machine has enough RAM (about 4 GiB per
 10 000 generated files times 1.6) and falls back to the self-hosted backend, also when the LLVM
 build is killed. Small programs (tests) always use LLVM: `GcStress` ReleaseFast runs in 2.8 s
-(HotSpot 0.94 s, previous j2zig baseline 6.4 s).
+(HotSpot 0.94 s, previous monolith baseline 6.4 s).
 
 Optimizations applied this round: leaf methods (no throw/alloc/call/loop) skip the shadow-stack
 frame; allocation counter batched per thread; tiny runtime helpers are force-inlined only on the
@@ -173,7 +173,7 @@ the second (needs a machine with enough RAM, see section 8).
 
 Hand-written Zig replaces hot methods without storing any Mojang code: `patches/manifest.json` names a method
 (class, method, descriptor) and a Zig function in `patches/*.zig`. The transpiler keeps the translated original as
-`<name>_orig` and emits a wrapper; `J2Z_PATCH_VERIFY=1` runs both and aborts on a bitwise difference for primitive
+`<name>_orig` and emits a wrapper; `MONO_PATCH_VERIFY=1` runs both and aborts on a bitwise difference for primitive
 returns. Works unsharded and sharded (patch files are copied into every shard; their `P.C_*` references are
 added to the shard facades). Verified by tests/java/PatchTarget (test-only patches in the manifest, class absent
 from Minecraft builds). Not yet verified: the mismatch abort path, the sharded copy path. See patches/README.md.
@@ -185,8 +185,8 @@ Measured on the same 4 vCPU machine, sharded LLVM ReleaseFast, llvmpipe, world r
 -> 33.5 (inline null/bounds checks) -> 33.3 (small-object zeroing, class lookup hash) -> 33.7 (line stored only on the
 throwing path) -> ~31-33 (world height patches, inline checkcast/itable). Run-to-run noise is about 1-2 s.
 
-Tools: `J2Z_PROF=<file>` (in-process 1 kHz CPU sampling), `tools/prof_report.py`, `tools/bench.py`,
-`tools/microbench/CallBench.java`, `J2Z_PATCH_VERIFY=1`.
+Tools: `MONO_PROF=<file>` (in-process 1 kHz CPU sampling), `tools/prof_report.py`, `tools/bench.py`,
+`tools/microbench/CallBench.java`, `MONO_PATCH_VERIFY=1`.
 
 Findings: the game profile is flat (no method above ~3%); call-heavy code is 2.7x to 6.8x slower than HotSpot
 (docs/BENCHMARK.md); 140k futex calls in 15 s are visible during world generation (one hot lock word, not yet
@@ -203,17 +203,17 @@ weak-reference timing differences); cross-shard inlining (needs fewer, larger sh
 1. **GC-free memory (`runtime/mem_pool.zig`, `runtime/thread_pool.zig`, `runtime/rt.zig`)**:
    - Eliminated stop-the-world mark-and-sweep GC (`collect`, `markAndSweep`, `traceParallel`, `sweepBlocks`), STW barriers, and loop safepoint overhead (`rt.safepoint()` is now a wait-free no-op).
    - Replaced with lock-free per-thread bump `ArenaAllocator` (`pushArenaScope` / `popArenaScope`, `beginFrame` / `endFrame`) + segregated `SlabPool` with 3-epoch quiescent deferred reclamation and a low-power wake-on-demand `WorkerPool`.
-   - Closed JDK 25 `MethodHandleNatives` (`registerNatives`, `getNamedCon`, `init`, `expand`), `NativeImageBuffer.getNativeMap`, `MethodHandles.Lookup.IMPL_LOOKUP`/`checkAccess`, `MethodHandles` VarHandle combinators, `VarHandle` (`VarForm`, `AccessType`, `AccessMode`), `Class.getRecordComponents`, and Foreign `MemorySegment` `VarHandle` lowering (`runtime/varhandle.zig`, `j2zig/program.py`, `j2zig/zigen.py`).
-2. **Custom RHI (`runtime/rhi.zig`, `runtime/rhi_vk.zig`, `runtime/rhi_gl.zig`, `runtime/rhi_bridge.zig`, `runtime/java/j2z/rhi/NativeRhi.java`, `tools/mcbuild.py`)**:
+   - Closed JDK 25 `MethodHandleNatives` (`registerNatives`, `getNamedCon`, `init`, `expand`), `NativeImageBuffer.getNativeMap`, `MethodHandles.Lookup.IMPL_LOOKUP`/`checkAccess`, `MethodHandles` VarHandle combinators, `VarHandle` (`VarForm`, `AccessType`, `AccessMode`), `Class.getRecordComponents`, and Foreign `MemorySegment` `VarHandle` lowering (`runtime/varhandle.zig`, `monolith/program.py`, `monolith/zigen.py`).
+2. **Custom RHI (`runtime/rhi.zig`, `runtime/rhi_vk.zig`, `runtime/rhi_gl.zig`, `runtime/rhi_bridge.zig`, `runtime/java/mono/rhi/NativeRhi.java`, `tools/mcbuild.py`)**:
    - Dynamic Vulkan 1.1+ backend (`libvulkan.so.1` probe, `vkCmdDrawIndexed` / `vkCmdDrawIndexedIndirect` command dispatch) with automatic fallback to strict OpenGL 3.3 Core (`rhi_gl.zig`: triple-buffered `GL_TEXTURE_BUFFER` TBO instancing + `glMapBufferRange` unsynchronized streaming + `glDrawElementsInstancedBaseVertex` for Intel HD 5500) and headless command-verification mode, plus `--no-lwjgl` and `--graphics auto|vulkan|opengl` support in `tools/mcbuild.py`.
 3. **Vanilla-safe world render pipeline (`runtime/world_render.zig`)**:
    - Immutable `SectionSnapshot` culling leaves vanilla tick/redstone/physics/server logic untouched: 6-plane Gribb-Hartmann frustum culling, 6-face CaveCulling portal BFS (`computeSectionPortals`), conservative `HiZPyramid` occlusion, and viewport pixel-coverage LOD culling (`cullAndScheduleWorld`).
 4. **GPU-driven non-block instancing (`runtime/gpu_instancing.zig`)**:
    - Unified 64-byte `GpuInstance` / 32-byte `GpuParticle` compaction (`InstanceBatcher`) across `BlockDisplay`, `ItemDisplay`, `TextDisplay`, mobs, players, dropped items, chests, signs, and particles into RHI indirect/instanced draw batches.
 5. **End-to-end verification (`tests/run_client_core_e2e.py`)**:
-   - `python3 tests/run_client_core_e2e.py -O Debug --shards 16 --shard-jobs 1`: passed in 594.6s (Zig unit tests `mem_pool` 2/2, `thread_pool` 1/1, `rhi` 3/3, `world_render` 4/4, `gpu_instancing` 6/6, 4-subsystem Zig E2E 8/8, `javac` + `j2zig` 5901 classes / 31959 methods / 300 natives with `0 missing-native`, `0 link-error`, `0 unsupported-varhandle`, and native Java-to-Zig E2E run `JAVA_CLIENT_CORE_E2E_OK backend=3 vis=2 inst=6 batches=4 dtMs=5`).
+   - `python3 tests/run_client_core_e2e.py -O Debug --shards 16 --shard-jobs 1`: passed in 594.6s (Zig unit tests `mem_pool` 2/2, `thread_pool` 1/1, `rhi` 3/3, `world_render` 4/4, `gpu_instancing` 6/6, 4-subsystem Zig E2E 8/8, `javac` + `monolith` 5901 classes / 31959 methods / 300 natives with `0 missing-native`, `0 link-error`, `0 unsupported-varhandle`, and native Java-to-Zig E2E run `JAVA_CLIENT_CORE_E2E_OK backend=3 vis=2 inst=6 batches=4 dtMs=5`).
    - Final `-O ReleaseFast` verification (`python3 tests/run_client_core_e2e.py -O ReleaseFast --shards 32 --shard-jobs 1`): passed all checks in 2398.9s (`JAVA_CLIENT_CORE_E2E_OK backend=3 vis=2 inst=6 batches=4 dtMs=2`, `0 missing-native`, `0 link-error`, `0 unsupported-varhandle`).
-   - Post-GC-removal multithreaded JVM differential regression (`J2Z_TEST_SHARDS=16 python3 tests/run_tests.py -O Debug Threads`): `PASS` (`13 lines; jvm 0.78s, native 100.75s, build 534.6s`).
+   - Post-GC-removal multithreaded JVM differential regression (`MONO_TEST_SHARDS=16 python3 tests/run_tests.py -O Debug Threads`): `PASS` (`13 lines; jvm 0.78s, native 100.75s, build 534.6s`).
    - Measured `-O ReleaseFast` subsystem microbenchmarks (`tools/microbench/run_client_core_bench.py`): `ArenaAllocator` `6.68 ns/op` (`149.7 M ops/s`), `SlabPool` 3-epoch `30.08 ns/op` (`0.0 ms` STW pause), `WorldRender` 256-section 3-stage cull `30.0 us/frame`, `InstanceBatcher` 2048-entity/particle cull+batch `264.4 us/frame`.
 
 ## 13. Verification on constrained hardware (2 vCPU / 1.9 GiB, 2026-11-16)
@@ -221,7 +221,7 @@ weak-reference timing differences); cross-shard inlining (needs fewer, larger sh
 This checkout was audited and partially verified on a machine far smaller than the one behind sections 5–12 (2 vCPU Intel Xeon @ 2.60 GHz, 1.94 GiB RAM, no swap, 25 GB disk). See [`HARDWARE.md`](HARDWARE.md) for the full task-by-task table. Results, honestly:
 
 * Verified here: `python3 -m py_compile` on all Python sources (clean), `pyflakes` on all Python sources (clean), `zig ast-check` on `runtime/*.zig` (clean), `bash -n` on all shell scripts (clean), `.claude/hooks/guard.py --self-test` (36/36) and its stdin/exit-2 protocol, `tests/run_tests.py --min-avail-gib` refusal path (exits 3, instant), and one full differential test: **Arith PASS** (JVM vs native identical output; 2 228 lines; jvm 0.16 s, native 0.58 s; zig Debug self-hosted build 495.0 s; load average ~10 during the build, zig peak RSS ~745 MB).
-* During the Arith build the machine was effectively saturated (interactive commands timed out; kswapd active, `MemAvailable` bottomed at ~700 MB). No OOM kill occurred — the self-hosted backend plus `-fstrip` kept it alive. This is exactly the failure mode `docs/HARDWARE.md` and the new memory floors (`J2Z_TEST_MIN_AVAIL_GIB`, `J2Z_MIN_AVAIL_GIB`, guard.py heavy-job floor) now refuse instead of risking.
+* During the Arith build the machine was effectively saturated (interactive commands timed out; kswapd active, `MemAvailable` bottomed at ~700 MB). No OOM kill occurred — the self-hosted backend plus `-fstrip` kept it alive. This is exactly the failure mode `docs/HARDWARE.md` and the new memory floors (`MONO_TEST_MIN_AVAIL_GIB`, `MONO_MIN_AVAIL_GIB`, guard.py heavy-job floor) now refuse instead of risking.
 * **Not runnable on this box, not run**: the rest of the differential suite, the Client Core E2E, microbenchmarks, the sharded Minecraft build, and the full-program Zig compile. All claims in sections 5–12 come from the larger machine and were not re-measured here. The "10/10 passed" result in section 1 likewise predates this audit.
 * Fixed in this audit: missing `.claude/hooks/guard.py` (implemented, self-tested), `tests/run_tests.py` had no memory guard (now refuses below a floor and stops the suite), docs referenced a nonexistent `docs/learnings/` and a stale jmod requirement (fixed), unused Python imports/variables and a placeholder f-string (removed; `pyflakes` is clean), `tests/__pycache__` and stale build trees (removed).
 
@@ -236,22 +236,22 @@ Fixed and verified in this pass:
 * **tools/mcbuild.py — network-fetched JDK was extracted without any integrity check.** Now:
   SHA-256 of the archive is verified *before* extraction (expected digest from the Adoptium asset's
   `.sha256.txt` companion; the v3 `/checksums` API returns 404 and is not used); mismatch → archive is
-  deleted and the run aborts. `J2Z_JDK_NO_CHECKSUM=1` is a documented bypass. Tar extraction uses
+  deleted and the run aborts. `MONO_JDK_NO_CHECKSUM=1` is a documented bypass. Tar extraction uses
   `filter="data"` on Python ≥ 3.12, otherwise realpath-containment + symlink/hardlink target checks;
   zip extraction enforces realpath containment (`_safe_extract_zip`). `extract_resources()` (client-JAR /
   native resources) had a zip-slip: entry names are validated against `dest` and copied by streaming.
   `fetch()` deletes partial downloads on failure; the version manifest is cached (no `.tmp` race);
   `ensure_jdk()` locates the installed JDK via `<install>/bin/javac` instead of recursion; the
   native-library scan now covers `.so` / `.dylib` / `.dll`; `read_jar_version()` fails with a clear
-  message instead of a raw traceback; all network helpers send `User-Agent: j2zig-mcbuild/<version>`
+  message instead of a raw traceback; all network helpers send `User-Agent: monolith-mcbuild/<version>`
   (the default python-urllib UA is rejected 403 by Adoptium's CDN).
   **Verified end-to-end on this box:** `ensure_jdk(25)` fresh download → "JDK SHA-256 verified" →
-  Temurin 25.0.5+8 (javac 25.0.5) under `~/.cache/j2zig/temurin-25/`.
-* **j2zig/classpath.py — `jdk_home()` could not find the mcbuild-installed JDK** (only `J2Z_JDK_HOME` /
+  Temurin 25.0.5+8 (javac 25.0.5) under `~/.cache/monolith/temurin-25/`.
+* **monolith/classpath.py — `jdk_home()` could not find the mcbuild-installed JDK** (only `MONO_JDK_HOME` /
   `JAVA_HOME` / `/opt/jdk25` / `/usr/lib/jvm` were probed), so a `mcbuild ensure-jdk` install was
-  invisible to `j2zig build`. Now also globs `~/.cache/j2zig/temurin-*/**`. module-info parse failures
+  invisible to `monolith build`. Now also globs `~/.cache/monolith/temurin-*/**`. module-info parse failures
   now warn on stderr instead of failing silently.
-* **j2zig/__main__.py — auto backend selection.** The sharded path always forced LLVM (Debug builds
+* **monolith/__main__.py — auto backend selection.** The sharded path always forced LLVM (Debug builds
   OOM); it now mirrors the unsharded policy (self-hosted for Debug/ReleaseSafe, or when the machine
   provably cannot fit LLVM for optimizing builds). The unsharded path no longer pins Debug to LLVM
   either; both paths route through the same `_mem_total_gib()` estimate. The `fcntl` classlib lock is
@@ -259,10 +259,10 @@ Fixed and verified in this pass:
 * **runtime/mem_pool.zig — arena `alloc` returned misaligned pointers for `align > 4096`** (now returns
   null per `Allocator` contract); removed the redundant `madvise(MADV_DONTNEED)` branch whose both paths
   freed the chunk identically. `zig ast-check` clean; `zig test -lc -O Debug` 2/2 pass.
-* **j2zig/program.py** — dead `synchronized` no-op removed. **tools/bench.py** — `SIGKILL` no longer
+* **monolith/program.py** — dead `synchronized` no-op removed. **tools/bench.py** — `SIGKILL` no longer
   assumed (falls back to `SIGTERM`). **tests/run_client_core_e2e.py** — no longer hardcodes one
-  machine's JDK path (derives env → `classpath.jdk_home()` → `~/.cache/j2zig/temurin-*`); adds a
-  per-step timeout (`J2Z_E2E_TIMEOUT`, default 10800 s).
+  machine's JDK path (derives env → `classpath.jdk_home()` → `~/.cache/monolith/temurin-*`); adds a
+  per-step timeout (`MONO_E2E_TIMEOUT`, default 10800 s).
 * **Repo portability** — hardcoded author-machine paths eliminated: `.claude/COMMON_MISTAKES.md` and
   (paths made machine independent: `/root/...` → `$HOME/...`, `MCOUT` falls back to the repo-local
   `out/` tree instead of a `/tmp/claude-0/...` path).
@@ -297,25 +297,25 @@ no full builds). Nothing below claims in-game correctness; see "Not done".
 
 ### Integration gaps found (and what was done about each)
 
-1. **The entire Zero-LWJGL RHI bridge was unreachable from any real build.** `j2z.rhi.NativeRhi` (Java JNI
+1. **The entire Zero-LWJGL RHI bridge was unreachable from any real build.** `mono.rhi.NativeRhi` (Java JNI
    facade of `runtime/rhi_bridge.zig`) was compiled only inside `tests/run_client_core_e2e.py`; neither
-   `j2zig build` nor `mcbuild.py --no-lwjgl` produced it, so `j2z.rhi.NativeRhi` could never be linked from a
+   `monolith build` nor `mcbuild.py --no-lwjgl` produced it, so `mono.rhi.NativeRhi` could never be linked from a
    client — the RHI/culling/instancing stack was dead code on the real path.
-   **Fix:** `j2zig/classpath.py: builtin_classes()` compiles `runtime/java/**/*.java` into a content-keyed
-   cache (`~/.cache/j2zig/builtin-<sha12>`, locked, stamped, `J2Z_NO_BUILTIN=1` disables) and `cmd_build`
+   **Fix:** `monolith/classpath.py: builtin_classes()` compiles `runtime/java/**/*.java` into a content-keyed
+   cache (`~/.cache/monolith/builtin-<sha12>`, locked, stamped, `MONO_NO_BUILTIN=1` disables) and `cmd_build`
    prepends it to the application class path (before the JDK overlay, so our natives always resolve).
    The E2E harness now javacs `ClientCoreE2E.java` against it (no more hand-javac of the bridge).
    **Verified:** fresh compile + cache-hit (~6 ms); `javap` shows all bridge natives; transpile-only of
    `ClientCoreE2E` yields 5901 classes / 31959 methods / 300 natives with **0 missing-native / 0 link-error**
    (identical counts to the pre-change E2E ledger), `builtin_rhi: true` in report.json.
 2. **Manifest patches that match nothing were silently dropped** — a typo'd patch entry is invisible
-   forever. **Fix:** `j2zig build` now reports them as `issues["unused-patch"]` with the likely cause.
+   forever. **Fix:** `monolith build` now reports them as `issues["unused-patch"]` with the likely cause.
    **Verified:** transpile-only of `PatchTarget` prints exactly the 9 non-matching mojmap patches; the
    3 used PatchTarget patches are not listed.
 3. **The generated launcher crashed the vanilla client by design**: `run.sh`/`run.bat` passed
    `--graphicsBackend <api>` — vanilla `net.minecraft.client.main.Main` rejects unknown arguments.
-   **Fix:** the backend is passed as `-Dj2z.graphics.backend=<api>` (ignored by vanilla; read by any
-   j2z-aware code). The launcher's argument list is now exactly the vanilla one.
+   **Fix:** the backend is passed as `-Dmono.graphics.backend=<api>` (ignored by vanilla; read by any
+   mono-aware code). The launcher's argument list is now exactly the vanilla one.
 4. **Arena-scope bridge failure modes were silent.** `NativeRhi.pushArenaScope()` dropped scopes beyond
    depth 16 and `popArenaScope()` underflowed to a no-op — both hide lifecycle bugs in a long-lived client.
    **Fix:** both now throw `IllegalArgumentException` with a clear message. `submitSectionSnapshot` is now
@@ -332,7 +332,7 @@ no full builds). Nothing below claims in-game correctness; see "Not done".
 6. **No client session lifecycle hooks existed** — the bridge could not be brought up/down with the game.
    **Fix:** `patches/client_frame.zig` (+2 manifest entries): `net/minecraft/client/main/Main.main` and
    `net/minecraft/client/Minecraft.run` are bracketed with orig-fallback (init RHI before, shutdown after,
-   stats printout with `J2Z_RHI_STATS=1`). **Opt-in:** unless `J2Z_RHI=1` is set, the hooks are one getenv
+   stats printout with `MONO_RHI_STATS=1`). **Opt-in:** unless `MONO_RHI=1` is set, the hooks are one getenv
    and call `orig` untouched; RHI init failure degrades to a printed warning, never an abort. On 26.x
    (unobfuscated production names, the mcbuild default) the `Main.main([Ljava/lang/String;)V` entry matches;
    on mapping-name mismatch the entry is inert and is now reported as `unused-patch`.
@@ -344,7 +344,7 @@ no full builds). Nothing below claims in-game correctness; see "Not done".
 
 ### What is still NOT wired (and why — honestly)
 
-* **In-game render-loop injection** (`LevelRenderer`/`GameRenderer` → `j2z.rhi.NativeRhi`, feeding
+* **In-game render-loop injection** (`LevelRenderer`/`GameRenderer` → `mono.rhi.NativeRhi`, feeding
   `SectionSnapshot`s and instances per frame): requires the actual client jar in front of a human or a
   Mojang-mapped client, and a GPU machine to smoke-test. Blind patching of those signatures from this box
   would ship unverifiable code — worse than useless. The bridge API, the session hooks and the stats are
@@ -375,8 +375,8 @@ no full builds). Nothing below claims in-game correctness; see "Not done".
 (`patches/manifest.json`, `.claude/settings.json`, `report.json`); `guard.py --self-test` PASS;
 `builtin_classes()` fresh build + cache hit; transpile-only smokes: `PatchTarget` (unused-patch list OK,
 built-in bridge linked) and `ClientCoreE2E` (`0 missing-native/link-error`, `builtin_rhi: true`);
-kill-switch smoke with `J2Z_NO_BUILTIN=1` (`builtin_rhi: false` in the report; analysis aborts with a
-single loud `link-error: class not found: j2z/rhi/NativeRhi` — the failure is explicit, never silent).
+kill-switch smoke with `MONO_NO_BUILTIN=1` (`builtin_rhi: false` in the report; analysis aborts with a
+single loud `link-error: class not found: mono/rhi/NativeRhi` — the failure is explicit, never silent).
 No native code was executed beyond the Zig unit tests — the transpiled outputs were analysed, not run.
 
 ### Arithmetic differential test on this box (JVM vs native, 1 GiB ceiling)
@@ -388,11 +388,11 @@ OOM-killed, and show JVM vs native side by side. What was actually done and meas
   `memory.max` cannot be set; `/usr/bin/prlimit` exists. `RLIMIT_AS` (address space) is the only
   hard ceiling available per-process, and it degrades into clean allocation failures instead of
   OOM-killer picks. `RLIMIT_RSS` is a no-op on modern Linux.
-* First attempt capped the *whole harness* at 1 GiB (`J2Z_TEST_BUILD_AS_GIB=1`): it failed in
+* First attempt capped the *whole harness* at 1 GiB (`MONO_TEST_BUILD_AS_GIB=1`): it failed in
   `tools/gen_jla.py` because `javap` cannot start with <=1 GiB of address space (HotSpot reserves
   >1 GiB virtually). Wrapping the JVM itself in the same ceiling is not viable on this JDK.
-* The ceiling was therefore applied to every `zig` invocation only (`J2Z_ZIG_AS_GIB=1`,
-  implemented as `preexec_fn` `RLIMIT_AS` in `j2zig/__main__.py`, all 6 zig call sites; harness
+* The ceiling was therefore applied to every `zig` invocation only (`MONO_ZIG_AS_GIB=1`,
+  implemented as `preexec_fn` `RLIMIT_AS` in `monolith/__main__.py`, all 6 zig call sites; harness
   `tests/run_tests.py` reverted to no cap).
 * With the cap, the transpiler (~40 s, 5907 classes / 31964 methods / 288 natives) and every
   sharded `zig build-obj` compiled fine; the **self-hosted link step** (`zig build-exe` of
@@ -400,7 +400,7 @@ OOM-killed, and show JVM vs native side by side. What was actually done and meas
   both Debug and `ReleaseSmall`, with 8 and 16 shards. GNU ld links the 474-640 MiB of objects in
   ~2 s but rejects zig's `extern threadlocal` references (NOTYPE UND) against the STT_TLS
   definitions in `shared.o`.
-* Fix implemented: `J2Z_ZIG_LD=cc` in `_compile_sharded` links with the system C toolchain instead
+* Fix implemented: `MONO_ZIG_LD=cc` in `_compile_sharded` links with the system C toolchain instead
   of zig's self-hosted linker, after `tools/fix_tls_syms.py` retypes those four undefined symbols
   (`cur`, `processing_refs`, `throw_depth`, `attached`) to `STT_TLS` in the generated objects
   (layout unchanged; one `st_info` byte each). Off by default; zig link is still the default path.
@@ -429,13 +429,13 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
     so process-global objects never allocate inside transient frame/arena scopes.
   - Added arithmetic-overflow guard, `0xAA` debug safety poison on rewound arena slices, oversized base chunk
     release on `resetRetainingCapacity`, and LIFO `vtFree` accounting fixes in `ArenaAllocator`.
-* **Register-return ABI (`rt.Res`) & dead shadow-array elimination (`runtime/rt.zig`, `j2zig/zigen.py`, `j2zig/shard.py`)**:
+* **Register-return ABI (`rt.Res`) & dead shadow-array elimination (`runtime/rt.zig`, `monolith/zigen.py`, `monolith/shard.py`)**:
   - Implemented register-packed `rt.Res(T)` returns (`u64`/`u128` via `toR`/`unR`) across `_r` wrappers,
     vtables, itables, reflection `reflectInvoke`, `Class.enumValues0`, `MemorySegment.address()` `VarHandle`
     lowering, and cross-shard facades.
   - Eliminated the dead write-only `var R: [K]rt.Ref` stack array and escaping `.refs = &R` pointer from
     compiled Java methods (`sv`/`lv` use register-promotable locals `s*a`/`l*a`; `F.refs = null` by default).
-  - Removed duplicate `invokestatic` check in `_is_leaf2` (`j2zig/zigen.py`).
+  - Removed duplicate `invokestatic` check in `_is_leaf2` (`monolith/zigen.py`).
 * **RHI, GL 3.3 Core, World Culling, GPU Instancing, Render-Loop Hooks & `--no-lwjgl` (`runtime/rhi*.zig`, `patches/`, `runtime/java_nolwjgl/`, `tools/mcbuild.py`)**:
   - `runtime/rhi_gl.zig`: fixed synthetic pipeline binding (`gl_default_prog` GLSL 330 shader + required GL 3.3
     Core VAO `gl_default_vao`), `uFirstInstance` uniform fallback when `has_base_instance == false` (Intel HD
@@ -444,13 +444,13 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
   - `runtime/world_render.zig`: fixed CaveCulling portal BFS so diamond paths accumulate every entry face
     (regressed test passed); `runtime/gpu_instancing.zig`: ordered opaque draws before translucent
     (`particle`/`text_display`) and excluded unregistered meshes from GPU staging uploads and survivor stats.
-  - `runtime/rhi_bridge.zig` & `runtime/java/j2z/rhi/NativeRhi.java`: added bridge-owned `frame_arena`, explicit
+  - `runtime/rhi_bridge.zig` & `runtime/java/mono/rhi/NativeRhi.java`: added bridge-owned `frame_arena`, explicit
     validation/OOM errors, `submitSectionSnapshotEx`, `visibleSectionCount`/`visibleSectionField`, and
     GL command shims; added per-tick/render lifecycle hooks in `patches/client_frame.zig` and `patches/level_renderer.zig`.
   - Added opt-in Zero-LWJGL shim (`runtime/java_nolwjgl/org/lwjgl/...`) wired cleanly via `--no-lwjgl` in
-    `j2zig/__main__.py` and `tools/mcbuild.py` (fixed `--no-lwjgl` launcher props).
-* **JNA Udev Proxy Folding & `String.coder` (`j2zig/program.py`, `classlib/src/java/lang/String.java`, `tests/java/JnaProxyFold.java`)**:
-  - Fixed `_fold_proxy` (`j2zig/program.py:637`) to stop at array `aastore` boundaries and filter to interfaces
+    `monolith/__main__.py` and `tools/mcbuild.py` (fixed `--no-lwjgl` launcher props).
+* **JNA Udev Proxy Folding & `String.coder` (`monolith/program.py`, `classlib/src/java/lang/String.java`, `tests/java/JnaProxyFold.java`)**:
+  - Fixed `_fold_proxy` (`monolith/program.py:637`) to stop at array `aastore` boundaries and filter to interfaces
     only (fixing `Proxy.newProxyInstance(..., ifaces, ...)` when trailed by `Class.getClassLoader()`).
   - Hardened `_fold_jna_proxy` for deeper windows and trailing option maps (`Udev extends Library`).
   - Added `private final byte coder = UTF16;` (0 extra bytes in existing alignment padding) in `String.java`.
@@ -481,37 +481,37 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
     `classlib/src/jdk/internal/util/ClassFileDumper.java`, `classlib/src/jdk/internal/util/ReferencedKeyMap.java`,
     `classlib/src/java/util/stream/Tripwire.java`, and
     `classlib/src/sun/reflect/generics/reflectiveObjects/ParameterizedTypeImpl.java`; updated `tools/gen_jla.py`
-    and `j2zig/classpath.py` (`services()` scoped to application sources `[:boot_start]`).
+    and `monolith/classpath.py` (`services()` scoped to application sources `[:boot_start]`).
 * **Runtime, reflection, VarHandle & JNI fixes**:
   - `runtime/thread_pool.zig`: batched queue insertion under a single mutex lock with post-unlock `cv.broadcast()`
     and single `wg.add(count)` (`15,950.9 us/batch` -> `146.9 us/batch`, **108.5x speedup**).
   - `runtime/varhandle.zig`: fixed unaligned `MemorySegment` `getSeg`/`setSeg` (`*align(1)`) to prevent alignment
     panics in `Debug`/`ReleaseSafe`.
-  - `classlib/src/jdk/internal/reflect/J2zFieldAccessor.java`: routed `isVolatile` fields through
+  - `classlib/src/jdk/internal/reflect/MonoFieldAccessor.java`: routed `isVolatile` fields through
     `Unsafe.get*Volatile` / `put*Volatile`.
   - `runtime/natives.zig`: added maximally-specific default interface method lookup in `findTarget`.
   - `runtime/jni.zig` & `runtime/jni_call.zig`: added static-flag check on interface methods in `findMethod` and
     implemented `DefineClass`, `FromReflectedField`, `ToReflectedMethod`, `ToReflectedField`, and `GetModule`
     (0 unimplemented JNIEnv slots).
-  - `j2zig/zigen.py`: removed dead `_shadow_refs` and `_compact_refs` helpers.
-* **Mobile / Termux LMKD protection (`j2zig/__main__.py`, `tests/run_tests.py`, `tests/run_client_core_e2e.py`)**:
+  - `monolith/zigen.py`: removed dead `_shadow_refs` and `_compact_refs` helpers.
+* **Mobile / Termux LMKD protection (`monolith/__main__.py`, `tests/run_tests.py`, `tests/run_client_core_e2e.py`)**:
   - Capped child `zig`/`javac`/`java` CPU affinity (`sched_setaffinity({0, 1})`, `nice(10)`), JVM heap (`-Xmx192m`/
     `-Xmx256m -XX:+UseSerialGC`), automatic sharding above 450 classes, and `cc` linking on `<4.5 GiB` available RAM.
 
-## 18. TouchCore For Minecraft Zig Edition, Android `build-lib` Pipeline & GLES3/GLFW Surface Bridge (2026-11-16)
+## 18. TouchCore For Monolith, Android `build-lib` Pipeline & GLES3/GLFW Surface Bridge (2026-11-16)
 
-* **Android `libminecraft_j2z.so` Production Pipeline (`j2zig/__main__.py`, `tools/mcbuild.py`, `runtime/rt.zig`, `j2zig/zigen.py`, `j2zig/shard.py`)**:
+* **Android `libminecraft_mono.so` Production Pipeline (`monolith/__main__.py`, `tools/mcbuild.py`, `runtime/rt.zig`, `monolith/zigen.py`, `monolith/shard.py`)**:
   - Added `build-lib` subcommand and `-dynamic` / `--dynamic` + `--target aarch64-linux-android.26` support to both
-    `j2zig` and `tools/mcbuild.py` (using Termux/NDK clang + `ld.lld -shared -z max-page-size=16384` +
+    `monolith` and `tools/mcbuild.py` (using Termux/NDK clang + `ld.lld -shared -z max-page-size=16384` +
     `libclang_rt.builtins-aarch64-android.a` for `__emutls_get_address`).
-  - Exported `j2z_android_entry(...)` from generated `main.zig` (sharded & unsharded) calling `rt.runMainAsync`,
+  - Exported `mono_android_entry(...)` from generated `main.zig` (sharded & unsharded) calling `rt.runMainAsync`,
     spawning the JVM main thread with full stack (`default_stack_size * 4`) and detaching immediately (`rc = 0` in <=1 ms)
     so the Android UI thread never blocks.
   - Fixed Android `aarch64` pointer-tagging / TBI (`bit 63 = 1`) panics by converting pointer-to-`i64` casts from
-    `@intCast` to `@bitCast` across `j2zig/zigen.py` (`mirrorSet`/`mirrorGet`), `rt.zig` (`eetop`), `natives.zig`,
+    `@intCast` to `@bitCast` across `monolith/zigen.py` (`mirrorSet`/`mirrorGet`), `rt.zig` (`eetop`), `natives.zig`,
     `varhandle.zig`, `io.zig`, and `nio.zig`; fixed cross-shard `getModule` `rt.unR` type handling in `runtime/jni_call.zig`
     and added `gl_shim.zig` to `shard.py` `RUNTIME_FILES`.
-* **GL Path Decision & Direct GL → `libGLESv3.so` Dispatch (`runtime/gl_shim.zig`, `runtime/rhi_gl.zig`, `runtime/rhi_bridge.zig`, `runtime/java/j2z/rhi/NativeRhi.java`, `runtime/java_nolwjgl/`)**:
+* **GL Path Decision & Direct GL → `libGLESv3.so` Dispatch (`runtime/gl_shim.zig`, `runtime/rhi_gl.zig`, `runtime/rhi_bridge.zig`, `runtime/java/mono/rhi/NativeRhi.java`, `runtime/java_nolwjgl/`)**:
   - Chose direct native dispatch to Android `libGLESv3.so` with GL 3.3 Core → GLES 3.0 compatibility shims
     (GLSL `#version 150`/`330 core`/`4xx` -> `#version 300 es`, `glClearDepth`->`glClearDepthf`,
     `glDepthRange`->`glDepthRangef`, safe `glPolygonMode` no-op) instead of re-implementing the entire stateful GL
@@ -520,61 +520,61 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
     and expanded `runtime/java_nolwjgl/org/lwjgl/` (`GLFW`, callback interfaces, `GL11C`, `GL15C`/`GL15`, `GL20C`/`GL20`, `GL30C`/`GL30`).
   - Wired `GLFW.glfwCreateWindow`, `glfwMakeContextCurrent`, `glfwSwapBuffers`, and `glfwPollEvents` to TouchCore's
     `ANativeWindow` + `EGL` + `g_tc_input` via `tc_android_has_window`, `tc_android_init_egl`, `tc_android_swap_buffers`,
-    `tc_android_get_size`, and `tc_android_poll_snapshot` (`libtouchcore_j2z.so`).
-* **MJLauncher-Style TouchCore APK (`android/touchcore/`, `releases/TouchCore-For-Minecraft-Zig-Edition.apk`)**:
+    `tc_android_get_size`, and `tc_android_poll_snapshot` (`libtouchcore_mono.so`).
+* **MJLauncher-Style TouchCore APK (`android/touchcore/`, `releases/Monolith.apk`)**:
   - Fixed startup/pre-game crash hazards: expanded `VkPhysicalDeviceProperties.limits_pad` to `[560]u8` (`runtime/rhi_vk.zig`)
     to match the 824-byte Vulkan ABI struct, moved 131 KB portal scratch off the pthread stack (`touchcore_core.zig`),
     added `android:extractNativeLibs="true"`, `gl_ready` + EGL depth/ES2 fallback + 4 MB render-thread stack (`touchcore_android.c`),
-    and deferred `j2z_android_entry` off the UI thread until `ANativeWindow` attaches.
+    and deferred `mono_android_entry` off the UI thread until `ANativeWindow` attaches.
   - Upgraded UI & controls (`HudRenderer.java`, `TouchOverlayView.java`, `ControlsEditorActivity.java`, `GameActivity.java`,
     `LauncherActivity.java`): frosted glass vector-icon buttons, connected `+` D-Pad & Analog Stick, swipeable attack/use
     camera drag, virtual cursor (`FARE`), soft keyboard (`KB`), center crosshair, isometric 9-slot hotbar, visual HUD
     editor with landscape preview + fine nudge pad, explicit **"DEMO MODU (Zig RHI Voxel)"** labeling, and explicit
-    error dialog when an external `libminecraft_j2z.so` fails (no silent fallback to Demo Mode).
+    error dialog when an external `libminecraft_mono.so` fails (no silent fallback to Demo Mode).
 * **Verified live on this ARM64 Android phone:**
-  - `python3 tools/build_touchcore_apk.py`: built [`releases/TouchCore-For-Minecraft-Zig-Edition.apk`](../releases/TouchCore-For-Minecraft-Zig-Edition.apk) (`0.98 MiB`), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS, `nm -D` confirms all `Java_com_j2zig_touchcore_NativeBridge_*` & `tc_android_*` symbols.
-  - Bionic PIE native tests via `/system/bin/linker64`: verified `libtouchcore_j2z.so` (`tc_zig_init`, 10 ticks, `tc_zig_shutdown`), single-shard & 4-shard `--no-lwjgl` `-dynamic` `libminecraft_j2z.so` (`j2z_android_entry` returned `0` in `1 ms`, `NO_SURFACE_EXPLICIT_THROW=true`, `NativeRhi.pollOsInput` reading `KEY_W=1` across `.so` boundary, `GL11C` GL→GLES3 dispatch, `EXIT=0`).
+  - `python3 tools/build_touchcore_apk.py`: built [`releases/Monolith.apk`](../releases/Monolith.apk) (`0.98 MiB`), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS, `nm -D` confirms all `Java_com_monolith_touchcore_NativeBridge_*` & `tc_android_*` symbols.
+  - Bionic PIE native tests via `/system/bin/linker64`: verified `libtouchcore_mono.so` (`tc_zig_init`, 10 ticks, `tc_zig_shutdown`), single-shard & 4-shard `--no-lwjgl` `-dynamic` `libminecraft_mono.so` (`mono_android_entry` returned `0` in `1 ms`, `NO_SURFACE_EXPLICIT_THROW=true`, `NativeRhi.pollOsInput` reading `KEY_W=1` across `.so` boundary, `GL11C` GL→GLES3 dispatch, `EXIT=0`).
   - Regression suites: `tests/run_tests.py Arith IoZip` PASS; `tests/run_client_core_e2e.py` ALL 4 E2E CHECKS PASS (`mem_pool 6/6`, `thread_pool 1/1`, `rhi 7/7`, `world_render 9/9`, `gpu_instancing 12/12`, `4-Subsystem E2E 14/14`, `ClientCoreE2E` native `JAVA_CLIENT_CORE_E2E_OK`).
 
 ## 19. TouchCore Mojang Downloader, Expanded `--no-lwjgl` Stack & Honest Android `client.jar` Status
 
-* **Official Mojang Version/Asset Downloader (`android/touchcore/src/com/j2zig/touchcore/MojangDownloader.java`, `LauncherActivity.java`)**:
+* **Official Mojang Version/Asset Downloader (`android/touchcore/src/com/monolith/touchcore/MojangDownloader.java`, `LauncherActivity.java`)**:
   - Fetches `https://piston-meta.mojang.com/mc/game/version_manifest_v2.json` directly from Mojang CDNs (no bundled Mojang game files or jars inside the APK).
-  - Downloads the selected release `<id>.json`, `client.jar` (size-checked) -> `<filesDir>/j2zig/versions/<id>/client.jar`, and `<assetIndex.id>.json` -> `<assetsDir>/indexes/<assetIndex.id>.json` on a background thread. *(Live HTTPS download from Mojang CDNs has not been tested inside the headless PRoot environment.)*
+  - Downloads the selected release `<id>.json`, `client.jar` (size-checked) -> `<filesDir>/monolith/versions/<id>/client.jar`, and `<assetIndex.id>.json` -> `<assetsDir>/indexes/<assetIndex.id>.json` on a background thread. *(Live HTTPS download from Mojang CDNs has not been tested inside the headless PRoot environment.)*
 * **Expanded `--no-lwjgl` Client Shim Coverage (`runtime/java_nolwjgl/org/lwjgl/`)**:
   - `system/`: Added `MemoryStack` (try-with-resources frame allocator), `Pointer`, `Configuration`, `Callback`.
   - `stb/`: Added `STBImage` (`stbi_info_from_memory`, `stbi_load_from_memory` real PNG chunk + `java.util.zip.Inflater` RGBA decoder + filter reconstruction, `stbi_set_flip_vertically_on_load`, `stbi_image_free`).
   - `opengl/`: Added `GLCapabilities` (`OpenGL11`..`OpenGL33`, ARB flags returned by `GL.createCapabilities()`), `GL31C`/`GL31`, `GL32C`/`GL32`, `GL33C`/`GL33`, plus `GL30C` mipmap/renderbuffer/framebuffer helpers.
   - `glfw/`: Added `Callbacks.glfwFreeCallbacks`, `GLFWVidMode`, `glfwGetPrimaryMonitor`, `glfwGetVideoMode`, `GLFWErrorCallbackI`, `GLFWCharCallbackI`, `GLFWScrollCallbackI`, `GLFWWindowFocusCallbackI`, `glfwSetClipboardString`/`glfwGetClipboardString`, `glfwSwapInterval`.
   - `openal/`: Added minimal `ALC`, `ALC10`, `AL`, `AL10`, `ALCCapabilities`, `ALCapabilities` stubs.
-* **Android Multiarch C Header Fix (`j2zig/__main__.py`)**:
+* **Android Multiarch C Header Fix (`monolith/__main__.py`)**:
   - Added `_android_include_flags()` passing `/data/data/com.termux/files/usr/include/aarch64-linux-android` (`asm/types.h`) to `zig build-obj` and `clang` so `@cImport(@cInclude("zlib.h"))` in `runtime/io.zig` compiles cleanly when building Android `--target aarch64-linux-android.26` `-dynamic` libraries using `java.util.zip.*` / `STBImage`.
 * **Verified after these updates**:
-  - `python3 tools/build_touchcore_apk.py`: built [`releases/TouchCore-For-Minecraft-Zig-Edition.apk`](../releases/TouchCore-For-Minecraft-Zig-Edition.apk) (`0.98 MiB`, 13 Java files, 107 D8 classes), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS.
-  - 4-shard Android `aarch64-linux-android.26` `-dynamic --no-lwjgl` build (`FullNoLwjglTest` -> `libminecraft_j2z.so`, `26233 KiB`) executed directly on Android Bionic `/system/bin/linker64`: `j2z_android_entry` returned `0` in `0.82 ms`, `STBIMAGE_PNG_OK 2x2 RGBA`, `GL_CAPS_OK OpenGL33=true`, `OPENAL_OK buf=1 src=2`, `GLFW_SURFACE_CHECK_OK vm=1280x720` (plus explicit `UnsupportedOperationException` without attached OS surface), `FULL_NOLWJL_BIONIC_OK`, `Bionic exit=0`.
+  - `python3 tools/build_touchcore_apk.py`: built [`releases/Monolith.apk`](../releases/Monolith.apk) (`0.98 MiB`, 13 Java files, 107 D8 classes), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS.
+  - 4-shard Android `aarch64-linux-android.26` `-dynamic --no-lwjgl` build (`FullNoLwjglTest` -> `libminecraft_mono.so`, `26233 KiB`) executed directly on Android Bionic `/system/bin/linker64`: `mono_android_entry` returned `0` in `0.82 ms`, `STBIMAGE_PNG_OK 2x2 RGBA`, `GL_CAPS_OK OpenGL33=true`, `OPENAL_OK buf=1 src=2`, `GLFW_SURFACE_CHECK_OK vm=1280x720` (plus explicit `UnsupportedOperationException` without attached OS surface), `FULL_NOLWJL_BIONIC_OK`, `Bionic exit=0`.
   - `zig test -lc runtime/rhi.zig`: `All 7 tests passed.`
   - `python3 tests/run_tests.py Arith IoZip`: `2/2 passed`.
 * **Remaining blockers before vanilla Mojang `client.jar` runs 100% playable on phone**:
-  - Generating an Android `libminecraft_j2z.so` from a full Mojang `client.jar` has **not** yet been run (`client.jar` is not present locally, and AOT compiling the ~61k-file Vanilla closure with LLVM requires ~7–15 GiB RAM per `§8`, while `j2zig/__main__.py` restricts `--backend native` to `x86_64/AMD64`, meaning large vanilla AOT `.so` builds must be cross-compiled from a high-RAM host or split further).
+  - Generating an Android `libminecraft_mono.so` from a full Mojang `client.jar` has **not** yet been run (`client.jar` is not present locally, and AOT compiling the ~61k-file Vanilla closure with LLVM requires ~7–15 GiB RAM per `§8`, while `monolith/__main__.py` restricts `--backend native` to `x86_64/AMD64`, meaning large vanilla AOT `.so` builds must be cross-compiled from a high-RAM host or split further).
   - Real `client.jar` gameplay end-to-end on a live Android SurfaceFlinger GPU/audio session (Blaze3D/Minecraft shader uniform compatibility under GLES3, keyboard/touch gameplay loop inside `GameActivity`, and remaining unimplemented JDK/third-party natives tracked in `§2–3`) has not yet been executed on-device.
 
 ## 20. Full MC `26.3` `--no-lwjgl` SDL3/GLES3/OpenAL Parity, Escape Analysis & SHA-1 Downloader
 
 * **Real Minecraft `26.3` (`26.3-client.jar`, 41,483,720 bytes + 42 libraries) Empirical Gap Closure**:
   - Added full LWJGL 3.4 SDL3 surface/event/input layer (`runtime/java_nolwjgl/org/lwjgl/sdl/` — `SDLVideo`, `SDLEvents`, `SDLKeyboard`, `SDLMouse`, `SDL_Event` + sub-events, `SDLInit`, `SDLTimer`, `SDLClipboard`, `SDLStdinc`, `SDLSurface`, `SDLPixels`, `SDLMessageBox`, `SDLHints`, `SDLLog`, `SDLKeycode`, `SDLScancode`, `SDLVulkan`) wired to `NativeRhi` (`ANativeWindow` + `g_tc_input`).
-  - Expanded OpenGL 3.3 Core -> GLES3 & OpenAL bridge (`runtime/gl_shim.zig`, `runtime/al_shim.zig`, `runtime/rhi_bridge.zig`, `runtime/java/j2z/rhi/NativeRhi.java`, `j2zig/shard.py`): added FBO blit, buffer copy/range mapping, samplers, queries, `glVertexAttribDivisor`, `glFenceSync`/`glDeleteSync`/`glClientWaitSync`, `glDrawBuffer`, `ARBDirectStateAccess` DSA->bind adapters, `ARBVertexAttribBinding` state emulation onto `GL33C`, dynamic `libopenal.so.1`/`libopenal.so` audio probing with clean fallback, real `STBImageResize` bilinear RGBA scaling, `STBImageWrite` Deflater PNG encoding + `STBIWriteCallback.getData`, `StructBuffer.get()`, `Pointer.Default`, and full `org/lwjgl/vulkan/`, `util/vma/`, `util/shaderc/`, `util/spvc/`, `util/freetype/` (`FT_Init_FreeType = -1` bitmap font fallback) link closure.
-  - Fixed `MethodHandle.invokeBasic` signature-polymorphic lowering (`j2zig/program.py`, `classlib/src/java/lang/invoke/MethodHandle.java`) and added `net/minecraft/client/renderer/LevelRenderer.resetLevelRenderData()V` to `patches/manifest.json`.
+  - Expanded OpenGL 3.3 Core -> GLES3 & OpenAL bridge (`runtime/gl_shim.zig`, `runtime/al_shim.zig`, `runtime/rhi_bridge.zig`, `runtime/java/mono/rhi/NativeRhi.java`, `monolith/shard.py`): added FBO blit, buffer copy/range mapping, samplers, queries, `glVertexAttribDivisor`, `glFenceSync`/`glDeleteSync`/`glClientWaitSync`, `glDrawBuffer`, `ARBDirectStateAccess` DSA->bind adapters, `ARBVertexAttribBinding` state emulation onto `GL33C`, dynamic `libopenal.so.1`/`libopenal.so` audio probing with clean fallback, real `STBImageResize` bilinear RGBA scaling, `STBImageWrite` Deflater PNG encoding + `STBIWriteCallback.getData`, `StructBuffer.get()`, `Pointer.Default`, and full `org/lwjgl/vulkan/`, `util/vma/`, `util/shaderc/`, `util/spvc/`, `util/freetype/` (`FT_Init_FreeType = -1` bitmap font fallback) link closure.
+  - Fixed `MethodHandle.invokeBasic` signature-polymorphic lowering (`monolith/program.py`, `classlib/src/java/lang/invoke/MethodHandle.java`) and added `net/minecraft/client/renderer/LevelRenderer.resetLevelRenderData()V` to `patches/manifest.json`.
   - RTA verification against `26.3-client.jar` (`61,280` loaded classes, `278,867` reachable methods) cut `org/lwjgl/*` link errors from **`345` -> `0`** (all patches including `resetLevelRenderData` matched `true`; `91` non-LWJGL link errors remain, mostly optional Log4j appenders/`NarratorMac` + `9` `MethodHandle`/`Lookup` internals, alongside `103` JDK natives and `257` third-party natives).
-* **Intra-Method Escape Analysis & Auto-`ArenaScope` (`j2zig/zigen.py`, `runtime/rt.zig`)**:
-  - Added `rt.arenaMark`, `rt.arenaRestore`, `rt.newObjectArena`, and `rt.newArrayArena` in `runtime/rt.zig` plus forward DAG dataflow escape analysis (`_analyze_local_allocs`, `_safe_ea_callee`) in `j2zig/zigen.py` to bump-allocate proven loop-free non-escaping `new`/`newarray`/`anewarray` objects on the thread's `scratch_arena` and rewind at method exit.
-* **TouchCore SHA-1 Library + Asset Object Downloader (`android/touchcore/src/com/j2zig/touchcore/MojangDownloader.java`)**:
+* **Intra-Method Escape Analysis & Auto-`ArenaScope` (`monolith/zigen.py`, `runtime/rt.zig`)**:
+  - Added `rt.arenaMark`, `rt.arenaRestore`, `rt.newObjectArena`, and `rt.newArrayArena` in `runtime/rt.zig` plus forward DAG dataflow escape analysis (`_analyze_local_allocs`, `_safe_ea_callee`) in `monolith/zigen.py` to bump-allocate proven loop-free non-escaping `new`/`newarray`/`anewarray` objects on the thread's `scratch_arena` and rewind at method exit.
+* **TouchCore SHA-1 Library + Asset Object Downloader (`android/touchcore/src/com/monolith/touchcore/MojangDownloader.java`)**:
   - Upgraded downloader with Linux OS rule filtering, 4-thread `ExecutorService`, and SHA-1 + size verification for `client.jar`, non-native library JARs, `assetIndex`, and individual `resources.download.minecraft.net` asset objects. *(Live HTTPS download still untested inside offline PRoot.)*
 * **Verified after edits**:
   - `python3 -m py_compile` / AST checks / `.claude/hooks/guard.py --self-test` / `zig ast-check`: PASS; all `276` Java files in `runtime/java/` + `runtime/java_nolwjgl/` compiled cleanly with JDK 25 `javac` (`rc=0`).
   - `tests/run_client_core_e2e.py`: `ALL 4 CLIENT CORE E2E CHECKS PASSED (Debug)` (`mem_pool 6/6`, `thread_pool 1/1`, `rhi 7/7`, `world_render 9/9`, `gpu_instancing 12/12`, `4-Subsystem E2E 14/14`, `JAVA_CLIENT_CORE_E2E_OK`, `0 missing-native`, `0 link-error`, `0 unsupported-varhandle`).
   - 4-shard Android ARM64 `-dynamic --no-lwjgl` Bionic `/system/bin/linker64` test (`BionicSdlCheck`, `17438 KiB` `.so`): emitted `rt.arenaMark`/`newObjectArena`/`newArrayArena`, printed `HOST_ENTRY_RC=0`, `EA_ARENA_OK=1002502500`, `SDL_NO_SURFACE_GUARD_OK=true`, `GL_SHIM_OK=true`, `OPENAL_SHIM_OK=true`, `STB_PNG_OK=true`, `FREETYPE_FALLBACK_OK=-1`, `BIONIC_SDL_E2E_PASS`, `BIONIC_EXIT=0`.
   - Differential tests (`tests/run_tests.py`): `Arith` (`1/1 PASS`), `MHandles` (`1/1 PASS`); `GcStress` matched `churn`/`big arrays`/`threads`/`map 200000 262501012965` while `WeakReference` returned `weak cleared=false` under GC-free `SlabPool`.
-  - TouchCore APK (`python3 tools/build_touchcore_apk.py`): built [`releases/TouchCore-For-Minecraft-Zig-Edition.apk`](../releases/TouchCore-For-Minecraft-Zig-Edition.apk) (`0.98 MiB`, 13 Java files, 109 D8 classes), `zipalign -c -p 4` PASS, `apksigner verify` v2/v3 PASS.
+  - TouchCore APK (`python3 tools/build_touchcore_apk.py`): built [`releases/Monolith.apk`](../releases/Monolith.apk) (`0.98 MiB`, 13 Java files, 109 D8 classes), `zipalign -c -p 4` PASS, `apksigner verify` v2/v3 PASS.
 * **Remaining external/hardware blockers**:
   - Full `26.3-client.jar` LLVM `.so` compilation (~`7–15 GiB` RAM) must run on GitHub Actions ([`build-so.yml`](../.github/workflows/build-so.yml)) or an `x86_64` host; live on-device `SurfaceFlinger` rendering + shader compatibility + HTTPS Mojang downloads await testing on the physical phone with the compiled `.so` loaded into TouchCore APK.
 
@@ -582,19 +582,19 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
 ## 2026-11-18: Android launcher and engine verification
 
 - Environment: Zig 0.15.2, Android NDK r27c, JDK 25.0.5, Android SDK platform 34 / build-tools 34.0.0, 4 cores, 15 GiB RAM.
-- Full `libminecraft_j2z.so` (Minecraft 26.3, ReleaseFast, `aarch64-linux-android.26`, 16 shards) built: 437 MB stripped, 16 KB page aligned, `j2z_android_entry` exported.
+- Full `libminecraft_mono.so` (Minecraft 26.3, ReleaseFast, `aarch64-linux-android.26`, 16 shards) built: 437 MB stripped, 16 KB page aligned, `mono_android_entry` exported.
   One shard needs up to 7.5 GiB, so the machine builds one shard at a time. An interrupted build resumes with the `--only-shards K,K` option of the Minecraft build tool.
-- Crash causes fixed: `exit()` racing HWUI/GPU-driver destructors (now `exit_group` on Android); engine stdio invisible (now forwarded to logcat tag `J2ZigEngine`);
+- Crash causes fixed: `exit()` racing HWUI/GPU-driver destructors (now `exit_group` on Android); engine stdio invisible (now forwarded to logcat tag `MonolithEngine`);
   glibc-only `__errno_location`, `copy_file_range` and `posix_spawn*` imports that made `dlopen` fail on bionic (errno via `std.c._errno`, raw syscall, weak imports);
   EGL context destroyed on every Surface change (the context is kept, only the window surface is rebound).
 - Launcher: the duplicate hotbar and crosshair drawn over the game HUD are gone; touch slots map onto the real hotbar.
 - Differential tests: 26 of 27 default tests pass. `GcStress` (WeakReference not cleared after `System.gc()`) is open. `ClientCoreE2E` has its own runner.
-- D8 8.2.2 (build-tools 34) crashes on JDK 25 class files: use R8 9.5.33 as `~/.cache/j2zig/android-sdk/r8.jar`.
+- D8 8.2.2 (build-tools 34) crashes on JDK 25 class files: use R8 9.5.33 as `~/.cache/monolith/android-sdk/r8.jar`.
 - Not verified here: running the `.so` on a device or emulator.
 
 ### 2026-11-19: engine start-up verified on x86_64 with a desktop mock of the Android host
 
-- `tools/mock_android_host.c` stands in for `libtouchcore_j2z.so` (EGL pbuffer, GLES 3 through Mesa): window, GL context and the
+- `tools/mock_android_host.c` stands in for `libtouchcore_mono.so` (EGL pbuffer, GLES 3 through Mesa): window, GL context and the
   whole `Minecraft.<init>` path run without a phone. Debug engine start-up reaches shader loading.
 - Fixed on the way: STBImage failure reason (null, not "ok"), `ModuleLayer.boot()`, JNI `GetEnv`/`AttachCurrentThread` for threads that
   already have a ThreadState (JNA deadlock), `class$` forName helper in the RTA, VarHandle ordinary methods kept, NumberFormat without
@@ -603,4 +603,4 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
   with SPIRV-Cross (`renderpearl` `GlslCompiler.compileToSpv`). `runtime/java_nolwjgl/org/lwjgl/util/shaderc` and `.../spvc` are stubs that
   report "shaderc disabled in --no-lwjgl build", so the first critical pipeline (`minecraft:pipeline/gui`) fails and the game ends with a crash report.
   Needed: shaderc (glslang, SPIRV-Tools; sources ship with the NDK under `sources/third_party/shaderc`) and SPIRV-Cross compiled for aarch64,
-  Java natives for the calls `renderpearl` makes, GLSL ES 3.x output, and linking into `libminecraft_j2z.so`.
+  Java natives for the calls `renderpearl` makes, GLSL ES 3.x output, and linking into `libminecraft_mono.so`.

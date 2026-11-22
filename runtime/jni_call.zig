@@ -204,8 +204,8 @@ fn setField(comptime k: u8, comptime is_static: bool) type {
 // ------------------------------------------------------------------ calls
 const use_c_va = (builtin.cpu.arch == .aarch64 or builtin.cpu.arch == .aarch64_be) and builtin.os.tag == .linux and builtin.zig_backend == .stage2_llvm;
 
-extern fn j2z_va_next(vp: *anyopaque, d: u8, out: *jvalue) callconv(.c) void;
-extern fn j2z_jni_set_va_cbs(dc: *const anyopaque, no: *const anyopaque) callconv(.c) void;
+extern fn mono_va_next(vp: *anyopaque, d: u8, out: *jvalue) callconv(.c) void;
+extern fn mono_jni_set_va_cbs(dc: *const anyopaque, no: *const anyopaque) callconv(.c) void;
 
 /// Reads one argument of descriptor type `d` from a va_list (C promotions: small ints are int,
 /// float is double). callconv(.c) because Zig only allows @cVaArg in C-ABI functions.
@@ -237,7 +237,7 @@ const Reader = union(enum) {
             .va => |ap| {
                 if (comptime use_c_va) {
                     var r: jvalue = undefined;
-                    j2z_va_next(ap, d, &r);
+                    mono_va_next(ap, d, &r);
                     return r;
                 } else {
                     return nextVa(ap, d);
@@ -357,16 +357,16 @@ var va_cbs_ready = std.atomic.Value(bool).init(false);
 pub fn initVaCallbacks() void {
     if (!use_c_va) return;
     if (va_cbs_ready.load(.acquire)) return;
-    j2z_jni_set_va_cbs(@ptrCast(&doCallC), @ptrCast(&newObjC));
+    mono_jni_set_va_cbs(@ptrCast(&doCallC), @ptrCast(&newObjC));
     va_cbs_ready.store(true, .release);
 }
 
 fn callFn(comptime k: u8, comptime mode: Mode, comptime variant: Variant) *const anyopaque {
     if (use_c_va and variant != .a) {
         const prefix = switch (mode) {
-            .virtual => "j2z_jni_virt_",
-            .nonvirtual => "j2z_jni_nv_",
-            .static => "j2z_jni_st_",
+            .virtual => "mono_jni_virt_",
+            .nonvirtual => "mono_jni_nv_",
+            .static => "mono_jni_st_",
         };
         const suf = if (variant == .plain) "_plain" else "_v";
         return @extern(*const anyopaque, .{ .name = prefix ++ &[_]u8{k} ++ suf });
@@ -640,8 +640,8 @@ pub fn lookup(comptime name: []const u8) ?*const anyopaque {
     if (eq(u8, name, "GetStaticMethodID")) return @ptrCast(&getMethodID(true));
     if (eq(u8, name, "GetFieldID")) return @ptrCast(&getFieldID(false));
     if (eq(u8, name, "GetStaticFieldID")) return @ptrCast(&getFieldID(true));
-    if (eq(u8, name, "NewObject")) return if (use_c_va) @extern(*const anyopaque, .{ .name = "j2z_jni_newobj_plain" }) else @ptrCast(&NewObjectFns.plain);
-    if (eq(u8, name, "NewObjectV")) return if (use_c_va) @extern(*const anyopaque, .{ .name = "j2z_jni_newobj_v" }) else @ptrCast(&NewObjectFns.v);
+    if (eq(u8, name, "NewObject")) return if (use_c_va) @extern(*const anyopaque, .{ .name = "mono_jni_newobj_plain" }) else @ptrCast(&NewObjectFns.plain);
+    if (eq(u8, name, "NewObjectV")) return if (use_c_va) @extern(*const anyopaque, .{ .name = "mono_jni_newobj_v" }) else @ptrCast(&NewObjectFns.v);
     if (eq(u8, name, "NewObjectA")) return @ptrCast(&NewObjectFns.a);
     if (eq(u8, name, "AllocObject")) return @ptrCast(&NewObjectFns.alloc_);
     if (eq(u8, name, "FromReflectedMethod")) return @ptrCast(&fromReflected);

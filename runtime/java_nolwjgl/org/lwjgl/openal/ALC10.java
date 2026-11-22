@@ -1,6 +1,6 @@
 package org.lwjgl.openal;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.IntBuffer;

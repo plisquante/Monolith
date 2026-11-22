@@ -1,6 +1,6 @@
 package java.lang;
 
-/** j2zig overlay of InheritableThreadLocal. */
+/** monolith overlay of InheritableThreadLocal. */
 public class InheritableThreadLocal<T> extends ThreadLocal<T> {
     public InheritableThreadLocal() {}
 

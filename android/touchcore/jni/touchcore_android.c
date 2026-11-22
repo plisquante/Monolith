@@ -20,8 +20,8 @@
 #include <unwind.h>
 #include <sys/prctl.h>
 
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "TouchCoreZig", __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "TouchCoreZig", __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "Monolith", __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "Monolith", __VA_ARGS__)
 
 /* ---- Self-contained EGL / GLES3 / Vulkan minimal ABI types & constants ---- */
 typedef void *EGLDisplay;
@@ -153,17 +153,17 @@ typedef struct {
     uint32_t surviving_instances;
     uint32_t worker_threads;
     int32_t rhi_active_backend;
-} TcZigTelemetry;
+} TcTelemetry;
 
 extern int32_t tc_zig_init(int32_t backend_pref, int32_t power_profile, int32_t worker_count);
 extern void tc_zig_tick_frame(
     float cam_x, float cam_y, float cam_z,
     float look_x, float look_y, float look_z,
     float fov_deg, uint32_t vw, uint32_t vh,
-    uint32_t entity_count, TcZigTelemetry *out_tel);
+    uint32_t entity_count, TcTelemetry *out_tel);
 extern void tc_zig_shutdown(void);
 
-/* GLFW key subset mapped cleanly for TouchCore + external J2ZIG lib */
+/* GLFW key subset mapped cleanly for TouchCore + external MONOLITH lib */
 #define KEY_SPACE 32
 #define KEY_W 87
 #define KEY_A 65
@@ -228,10 +228,10 @@ typedef struct {
     float look_dx, look_dy, cursor_x, cursor_y;
 } TcPollSnapshot;
 
-/* Exported input struct so external libminecraft_j2z.so can poll touch events directly */
+/* Exported input struct so external libminecraft_mono.so can poll touch events directly */
 __attribute__((visibility("default"))) TcInputState g_tc_input;
 
-typedef int (*PFN_j2z_main)(const char *, const char *, const char *, TcInputState *);
+typedef int (*PFN_mono_main)(const char *, const char *, const char *, TcInputState *);
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t g_render_thread;
@@ -245,15 +245,15 @@ static int g_win_h = 720;
 static int g_egl_w, g_egl_h; /* last size read from the EGL surface (0 until the first swap) */
 static int g_backend_pref = 0;
 static int g_power_profile = 1;
-static TcZigTelemetry g_tel;
+static TcTelemetry g_tel;
 static float g_fps = 0.0f;
 static char g_username[64] = "Player";
 static char g_ext_lib_path[512] = "";
 static void *g_ext_handle = NULL;
-static PFN_j2z_main g_ext_entry_fn = NULL;
+static PFN_mono_main g_ext_entry_fn = NULL;
 static bool g_ext_loaded = false;
 static bool g_ext_launched = false;
-static char g_last_log[2048] = "TouchCore Zig Engine ready.";
+static char g_last_log[2048] = "Monolith ready.";
 
 static void set_log(const char *msg) {
     pthread_mutex_lock(&g_lock);
@@ -262,7 +262,7 @@ static void set_log(const char *msg) {
     LOGI("%s", msg ? msg : "");
 }
 
-/* ---- Voxel Sandbox World (built-in interactive Zig RHI verification & touch testbed) ---- */
+/* ---- Voxel Sandbox World (built-in interactive Monolith RHI verification & touch testbed) ---- */
 #define WX 32
 #define WY 24
 #define WZ 32
@@ -300,7 +300,7 @@ static void init_sandbox_world(void) {
             }
         }
     }
-    /* Small Zig Edition stone/wood arch & glowing beacon */
+    /* Small Monolith stone/wood arch & glowing beacon */
     for (int y = 9; y <= 13; y++) {
         g_world[14][y][10] = 5;
         g_world[18][y][10] = 5;
@@ -820,7 +820,7 @@ static void *render_loop(void *arg) {
 
     int32_t bk = tc_zig_init(g_backend_pref, g_power_profile, 2);
     char msg[256];
-    snprintf(msg, sizeof(msg), "TouchCore RHI initialized (Zig backend id=%d, user=%s)", bk, g_username);
+    snprintf(msg, sizeof(msg), "TouchCore RHI initialized (native backend id=%d, user=%s)", bk, g_username);
     set_log(msg);
 
     uint64_t prev_ns = now_ns();
@@ -879,7 +879,7 @@ static void *render_loop(void *arg) {
             cam_z -= fz * 3.5f;
         }
 
-        TcZigTelemetry tel = {0};
+        TcTelemetry tel = {0};
         float fov = g_tc_input.fov_deg > 30.0f ? g_tc_input.fov_deg : 75.0f;
         tc_zig_tick_frame(cam_x, cam_y, cam_z, cam_x + fx * 16.0f, cam_y + fy * 16.0f, cam_z + fz * 16.0f,
                           fov, (uint32_t)w, (uint32_t)h, 48, &tel);
@@ -925,7 +925,7 @@ static void *render_loop(void *arg) {
                 }
             }
         }
-        /* Render simple third-person Zig avatar cube if F5 mode active */
+        /* Render simple third-person avatar cube if F5 mode active */
         if (g_tc_input.third_person) {
             gl.glUniform3f(gl.u_offset, g_px - 0.35f, g_py, g_pz - 0.35f);
             gl.glUniform4f(gl.u_color, 0.13f, 0.77f, 0.55f, 1.0f);
@@ -1076,7 +1076,7 @@ static void install_crash_handler(const char *game_dir) {
     if (g_engine_log_fd < 0) {
         g_engine_log_fd = open(logp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
         /* launcher debug setting: name the player at the top of the log (who sent which report) */
-        const char *dbg_user = getenv("J2Z_DEBUG_USER");
+        const char *dbg_user = getenv("MONO_DEBUG_USER");
         if (g_engine_log_fd >= 0 && dbg_user && dbg_user[0]) {
             char line[160];
             int n = snprintf(line, sizeof(line), "user %s (debug ayari acik)\n", dbg_user);
@@ -1113,7 +1113,7 @@ static void *stdio_forwarder(void *arg) {
         for (size_t i = 0; i < used; i++) {
             if (buf[i] == '\n') {
                 buf[i] = '\0';
-                __android_log_write(ANDROID_LOG_INFO, "J2ZigEngine", buf + start);
+                __android_log_write(ANDROID_LOG_INFO, "MonolithEngine", buf + start);
                 if (g_engine_log_fd >= 0) {
                     buf[i] = '\n';
                     (void)!write(g_engine_log_fd, buf + start, i - start + 1);
@@ -1123,7 +1123,7 @@ static void *stdio_forwarder(void *arg) {
         }
         if (start == 0 && used == sizeof(buf) - 1) {
             buf[used] = '\0';
-            __android_log_write(ANDROID_LOG_INFO, "J2ZigEngine", buf);
+            __android_log_write(ANDROID_LOG_INFO, "MonolithEngine", buf);
             used = 0;
         } else if (start > 0) {
             memmove(buf, buf + start, used - start);
@@ -1147,7 +1147,7 @@ static void stdio_redirect_once(void) {
 }
 
 /* ---- JNI Entry Points ---- */
-JNIEXPORT jstring JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeProbeHardware(JNIEnv *env, jclass cls) {
+JNIEXPORT jstring JNICALL Java_com_monolith_touchcore_NativeBridge_nativeProbeHardware(JNIEnv *env, jclass cls) {
     (void)cls;
     char vk_info[128] = "Vulkan: Unavailable";
     void *hvk = dlopen("libvulkan.so", RTLD_NOW);
@@ -1186,18 +1186,18 @@ static GlState g_ext_gl = {0};
 static void *ext_launch_worker(void *arg) {
     (void)arg;
     pthread_mutex_lock(&g_lock);
-    PFN_j2z_main fn = g_ext_entry_fn;
+    PFN_mono_main fn = g_ext_entry_fn;
     char user_copy[64];
     snprintf(user_copy, sizeof(user_copy), "%s", g_username);
     pthread_mutex_unlock(&g_lock);
     if (!fn) return NULL;
-    int rc = fn(user_copy, getenv("MC_GAME_DIR"), getenv("J2Z_RESOURCES"), &g_tc_input);
+    int rc = fn(user_copy, getenv("MC_GAME_DIR"), getenv("MONO_RESOURCES"), &g_tc_input);
     if (rc != 0) {
         char err[256];
-        snprintf(err, sizeof(err), "ERROR: j2z_android_entry returned %d", rc);
+        snprintf(err, sizeof(err), "ERROR: mono_android_entry returned %d", rc);
         set_log(err);
     } else {
-        set_log("External libminecraft_j2z.so engine thread started (non-blocking).");
+        set_log("External libminecraft_mono.so engine thread started (non-blocking).");
     }
     return NULL;
 }
@@ -1223,9 +1223,9 @@ static void gl_debug_cb(GLenum source, GLenum type, unsigned int id, GLenum seve
     (void)user; (void)length;
     int n = __sync_add_and_fetch(&g_gldebug_count, 1);
     if (n > 300) return; /* the first ones carry the cause; later ones are repeats */
-    fprintf(stderr, "j2zig GLDEBUG #%d source 0x%x type 0x%x id %u severity 0x%x: %s\n", n, source, type, id, severity,
+    fprintf(stderr, "monolith GLDEBUG #%d source 0x%x type 0x%x id %u severity 0x%x: %s\n", n, source, type, id, severity,
             msg ? msg : "");
-    if (n == 300) fprintf(stderr, "j2zig GLDEBUG: further messages suppressed\n");
+    if (n == 300) fprintf(stderr, "monolith GLDEBUG: further messages suppressed\n");
     fflush(stderr);
 }
 
@@ -1244,16 +1244,16 @@ static void gl_diag_init(GlState *g) {
         g->glGetIntegerv_(0x8A2F, &maxub);    /* GL_MAX_UNIFORM_BUFFER_BINDINGS */
         g->glGetIntegerv_(0x8CDF, &maxatt);   /* GL_MAX_COLOR_ATTACHMENTS */
     }
-    fprintf(stderr, "j2zig GL: %s | %s | %s | %d extensions | max texture %d, uniform bindings %d, color attachments %d\n",
+    fprintf(stderr, "monolith GL: %s | %s | %s | %d extensions | max texture %d, uniform bindings %d, color attachments %d\n",
             ver ? ver : "?", ren ? ren : "?", ven ? ven : "?", ne, maxtex, maxub, maxatt);
     fflush(stderr);
     if (g->glDebugMessageCallback_ && g->glEnable_) {
         g->glDebugMessageCallback_(gl_debug_cb, NULL);
         g->glEnable_(0x92E0);   /* GL_DEBUG_OUTPUT */
         g->glEnable_(0x8242);   /* GL_DEBUG_OUTPUT_SYNCHRONOUS */
-        fprintf(stderr, "j2zig GL: KHR_debug callback installed\n");
+        fprintf(stderr, "monolith GL: KHR_debug callback installed\n");
     } else {
-        fprintf(stderr, "j2zig GL: no glDebugMessageCallback in this driver\n");
+        fprintf(stderr, "monolith GL: no glDebugMessageCallback in this driver\n");
     }
     fflush(stderr);
 }
@@ -1362,7 +1362,7 @@ static void gl_diag_capture(GlState *g, int w, int h) {
         char path[600];
         snprintf(path, sizeof(path), "%s/frame_%04lu.png", dir, frame);
         bool ok = write_png_rgb(path, small, sw, sh);
-        fprintf(stderr, "j2zig GL: frame %lu captured %dx%d (%s)\n", frame, sw, sh, ok ? "saved" : "write failed");
+        fprintf(stderr, "monolith GL: frame %lu captured %dx%d (%s)\n", frame, sw, sh, ok ? "saved" : "write failed");
         fflush(stderr);
     }
     free(rgba);
@@ -1389,7 +1389,7 @@ static void gl_diag_frame(GlState *g) {
     int scissor_on = g->glIsEnabled_ ? g->glIsEnabled_(0x0C11) : -1;
     unsigned err[4] = {0, 0, 0, 0};
     for (int i = 0; i < 4 && g->glGetError_; i++) { err[i] = g->glGetError_(); if (!err[i]) break; }
-    fprintf(stderr, "j2zig GL frame %lu: viewport %d,%d %dx%d scissor(%s) %d,%d %dx%d framebuffer %d errors 0x%x 0x%x 0x%x 0x%x\n",
+    fprintf(stderr, "monolith GL frame %lu: viewport %d,%d %dx%d scissor(%s) %d,%d %dx%d framebuffer %d errors 0x%x 0x%x 0x%x 0x%x\n",
             frame, vp[0], vp[1], vp[2], vp[3], scissor_on ? "on" : "off", sc[0], sc[1], sc[2], sc[3], fb,
             err[0], err[1], err[2], err[3]);
     fflush(stderr);
@@ -1560,17 +1560,17 @@ __attribute__((visibility("default"))) void tc_android_set_grab(int32_t grabbed)
     g_engine_grab = grabbed ? 1 : 0;
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeTypeChar(JNIEnv *env, jclass cls, jint codepoint) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeTypeChar(JNIEnv *env, jclass cls, jint codepoint) {
     (void)env; (void)cls;
     tq_push(1, codepoint, 0);
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeEditKey(JNIEnv *env, jclass cls, jint sdlKeycode, jint action) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeEditKey(JNIEnv *env, jclass cls, jint sdlKeycode, jint action) {
     (void)env; (void)cls;
     tq_push(2, sdlKeycode, action);
 }
 
-JNIEXPORT jboolean JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeIsMouseGrabbed(JNIEnv *env, jclass cls) {
+JNIEXPORT jboolean JNICALL Java_com_monolith_touchcore_NativeBridge_nativeIsMouseGrabbed(JNIEnv *env, jclass cls) {
     (void)env; (void)cls;
     return g_engine_grab ? JNI_TRUE : JNI_FALSE;
 }
@@ -1612,7 +1612,7 @@ __attribute__((visibility("default"))) void tc_android_poll_snapshot(TcPollSnaps
     pthread_mutex_unlock(&g_lock);
 }
 
-JNIEXPORT jint JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeInitEngine(
+JNIEXPORT jint JNICALL Java_com_monolith_touchcore_NativeBridge_nativeInitEngine(
     JNIEnv *env, jclass cls,
     jstring username, jstring extLibPath, jstring gameDir, jstring resourcesDir, jstring assetsDir,
     jint backendPref, jint powerProfile, jint renderDist, jint targetFps, jfloat fovDeg) {
@@ -1634,16 +1634,16 @@ JNIEXPORT jint JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeInitEngine(
         (*env)->ReleaseStringUTFChars(env, gameDir, gd);
     }
     const char *rd = resourcesDir ? (*env)->GetStringUTFChars(env, resourcesDir, NULL) : NULL;
-    if (rd) { setenv("J2Z_RESOURCES", rd, 1); (*env)->ReleaseStringUTFChars(env, resourcesDir, rd); }
+    if (rd) { setenv("MONO_RESOURCES", rd, 1); (*env)->ReleaseStringUTFChars(env, resourcesDir, rd); }
     const char *ad = assetsDir ? (*env)->GetStringUTFChars(env, assetsDir, NULL) : NULL;
     if (ad) { setenv("MC_ASSETS_DIR", ad, 1); (*env)->ReleaseStringUTFChars(env, assetsDir, ad); }
 
-    setenv("J2Z_RHI", "1", 1);
-    setenv("J2Z_NO_LWJGL", "1", 1);
+    setenv("MONO_RHI", "1", 1);
+    setenv("MONO_NO_LWJGL", "1", 1);
     /* The game always draws through the host's EGL/GLES context (gl_shim), whatever the launcher setting says. The RHI
      * is only a companion: its own OpenGL backend does not exist on Android (asking for it made NativeRhi.init fail
      * before the window opened), so "GLES" and "auto" run it headless; "Vulkan" adds the Vulkan companion device. */
-    setenv("J2Z_RHI_BACKEND", backendPref == 1 ? "vulkan" : "headless", 1);
+    setenv("MONO_RHI_BACKEND", backendPref == 1 ? "vulkan" : "headless", 1);
 
     const char *lp = extLibPath ? (*env)->GetStringUTFChars(env, extLibPath, NULL) : NULL;
     bool ext_requested = (lp && lp[0] != '\0');
@@ -1676,10 +1676,10 @@ JNIEXPORT jint JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeInitEngine(
             snprintf(err_msg, sizeof(err_msg), "dlopen('%s') failed: %s", lp, dlerr ? dlerr : "unknown");
         } else {
             dlerror();
-            g_ext_entry_fn = (PFN_j2z_main)dlsym(g_ext_handle, "j2z_android_entry");
+            g_ext_entry_fn = (PFN_mono_main)dlsym(g_ext_handle, "mono_android_entry");
             if (!g_ext_entry_fn) {
                 const char *dlerr = dlerror();
-                snprintf(err_msg, sizeof(err_msg), "dlsym('j2z_android_entry') failed: %s", dlerr ? dlerr : "missing symbol");
+                snprintf(err_msg, sizeof(err_msg), "dlsym('mono_android_entry') failed: %s", dlerr ? dlerr : "missing symbol");
                 dlclose(g_ext_handle);
                 g_ext_handle = NULL;
             } else {
@@ -1719,7 +1719,7 @@ JNIEXPORT jint JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeInitEngine(
     return g_ext_loaded ? 1 : 0;
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeAttachSurface(JNIEnv *env, jclass cls, jobject surf) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeAttachSurface(JNIEnv *env, jclass cls, jobject surf) {
     (void)cls;
     ANativeWindow *w = surf ? ANativeWindow_fromSurface(env, surf) : NULL;
     bool should_launch_ext = false;
@@ -1749,7 +1749,7 @@ JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeAttachSurface
     }
 }
 
-JNIEXPORT jintArray JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeSurfaceSizes(JNIEnv *env, jclass cls) {
+JNIEXPORT jintArray JNICALL Java_com_monolith_touchcore_NativeBridge_nativeSurfaceSizes(JNIEnv *env, jclass cls) {
     (void)cls;
     jint v[5];
     pthread_mutex_lock(&g_lock);
@@ -1761,7 +1761,7 @@ JNIEXPORT jintArray JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeSurfaceS
     return a;
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeResizeSurface(JNIEnv *env, jclass cls, jint w, jint h) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeResizeSurface(JNIEnv *env, jclass cls, jint w, jint h) {
     (void)env; (void)cls;
     pthread_mutex_lock(&g_lock);
     g_win_w = w;
@@ -1769,7 +1769,7 @@ JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeResizeSurface
     pthread_mutex_unlock(&g_lock);
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeDetachSurface(JNIEnv *env, jclass cls) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeDetachSurface(JNIEnv *env, jclass cls) {
     (void)env; (void)cls;
     pthread_mutex_lock(&g_lock);
     if (g_pending_window) { ANativeWindow_release(g_pending_window); g_pending_window = NULL; }
@@ -1777,7 +1777,7 @@ JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeDetachSurface
     pthread_mutex_unlock(&g_lock);
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeShutdown(JNIEnv *env, jclass cls) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeShutdown(JNIEnv *env, jclass cls) {
     (void)env; (void)cls;
     pthread_t th;
     bool join = false;
@@ -1801,7 +1801,7 @@ JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeShutdown(JNIE
     pthread_mutex_unlock(&g_lock);
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeSetKey(JNIEnv *env, jclass cls, jint key, jboolean down) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeSetKey(JNIEnv *env, jclass cls, jint key, jboolean down) {
     (void)env; (void)cls;
     uint8_t v = down ? 1 : 0;
     switch (key) {
@@ -1827,19 +1827,19 @@ JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeSetKey(JNIEnv
     }
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeSetMoveAxis(JNIEnv *env, jclass cls, jfloat x, jfloat y) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeSetMoveAxis(JNIEnv *env, jclass cls, jfloat x, jfloat y) {
     (void)env; (void)cls;
     g_tc_input.move_x = x;
     g_tc_input.move_y = y;
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeAddLookDelta(JNIEnv *env, jclass cls, jfloat dx, jfloat dy) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeAddLookDelta(JNIEnv *env, jclass cls, jfloat dx, jfloat dy) {
     (void)env; (void)cls;
     g_tc_input.look_dx += dx;
     g_tc_input.look_dy += dy;
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeMouseButton(JNIEnv *env, jclass cls, jint btn, jboolean down) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeMouseButton(JNIEnv *env, jclass cls, jint btn, jboolean down) {
     (void)env; (void)cls;
     if (btn == 0) {
         g_tc_input.key_lmb = down ? 1 : 0;
@@ -1850,12 +1850,12 @@ JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeMouseButton(J
     }
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeSelectHotbar(JNIEnv *env, jclass cls, jint slot) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeSelectHotbar(JNIEnv *env, jclass cls, jint slot) {
     (void)env; (void)cls;
     if (slot >= 0 && slot < 9) g_tc_input.hotbar_slot = slot;
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeSetCursorMode(
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeSetCursorMode(
     JNIEnv *env, jclass cls, jboolean visible, jfloat normX, jfloat normY) {
     (void)env; (void)cls;
     g_tc_input.cursor_visible = visible ? 1 : 0;
@@ -1863,7 +1863,7 @@ JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeSetCursorMode
     g_tc_input.cursor_y = normY;
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeUpdateRuntimeConfig(
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeUpdateRuntimeConfig(
     JNIEnv *env, jclass cls, jfloat sens, jboolean invY, jfloat fov, jint rdist, jint fps) {
     (void)env; (void)cls;
     g_tc_input.sensitivity = sens;
@@ -1873,7 +1873,7 @@ JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeUpdateRuntime
     g_tc_input.target_fps = fps;
 }
 
-JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativePollTelemetry(JNIEnv *env, jclass cls, jlongArray outArr) {
+JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativePollTelemetry(JNIEnv *env, jclass cls, jlongArray outArr) {
     (void)cls;
     if (!outArr) return;
     jsize n = (*env)->GetArrayLength(env, outArr);
@@ -1900,7 +1900,7 @@ JNIEXPORT void JNICALL Java_com_j2zig_touchcore_NativeBridge_nativePollTelemetry
     (*env)->SetLongArrayRegion(env, outArr, 0, 16, buf);
 }
 
-JNIEXPORT jstring JNICALL Java_com_j2zig_touchcore_NativeBridge_nativeGetLastLog(JNIEnv *env, jclass cls) {
+JNIEXPORT jstring JNICALL Java_com_monolith_touchcore_NativeBridge_nativeGetLastLog(JNIEnv *env, jclass cls) {
     (void)cls;
     pthread_mutex_lock(&g_lock);
     jstring s = (*env)->NewStringUTF(env, g_last_log);

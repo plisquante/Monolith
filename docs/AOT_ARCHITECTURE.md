@@ -25,7 +25,7 @@ mümkün, çünkü başlangıç işini derleme aşamasına taşıyacağız (böl
 
 ## 2. Bugünkü mimari ve bulunan hatalar
 
-Hat: Minecraft jar -> j2zig (Python) -> Zig kaynağı (101 birim) -> `libminecraft_j2z.so`; başlatıcı
+Hat: Minecraft jar -> monolith (Python) -> Zig kaynağı (101 birim) -> `libminecraft_mono.so`; başlatıcı
 (TouchCore APK, Java + C) motoru yükler. Çalışma zamanı: `runtime/rt.zig` (nesneler, GC, iş parçacıkları),
 `mem_pool.zig` (slab havuzu).
 
@@ -47,7 +47,7 @@ Hat: Minecraft jar -> j2zig (Python) -> Zig kaynağı (101 birim) -> `libminecra
 |---|---|---|
 | S1 | Açılışta toplam ~7-8 GB ayırma yapılıyor. | Cem/Alper profil çıktısı |
 | S2 | En büyük kaynaklar: DataFixer (`Func`, `Optional`, `RewriteResult`, `View`; toplamın %15-20'si), JSON okuma (`[C` BufferedReader/Arrays.copyOf/String.<init>; %12), PNG çözme, DensityBuffer, VoxelShape birleştirme. | Aynı |
-| S3 | Shader derleme çalışma zamanında (shaderc + SPIRV-Cross, `libj2zshader.so`). | `tools/build_shader_lib.py` |
+| S3 | Shader derleme çalışma zamanında (shaderc + SPIRV-Cross, `libmonoshader.so`). | `tools/build_shader_lib.py` |
 | S4 | `.so` APK içinde sıkıştırılmış (xz) taşınıp kullanıcı elle içe aktarıyor; `extractNativeLibs=true`. | Manifest, launcher akışı |
 
 ### 2.3 Diğer hatalar
@@ -112,7 +112,7 @@ Koda bakınca düzeltilen not: bunların bir kısmı **zaten var**, planda "yap�
 
 | Dönüşüm | Durum (koddan) | Kalan iş |
 |---|---|---|
-| Ulaşılabilirlik / ağaç budama | **Var.** `j2zig/program.py`: `Program.run` kökten başlayıp RTA ile ulaşılabilir metot, örneklenen sınıf ve sanal çağrı kümesini çıkarıyor. Yansıma kökleri, ServiceLoader, JNI geri çağrıları ele alınıyor. | `.so` boyutunun neden 587 MB olduğunu ölçmek (JDK payı, MC payı, Zig kod şişmesi) |
+| Ulaşılabilirlik / ağaç budama | **Var.** `monolith/program.py`: `Program.run` kökten başlayıp RTA ile ulaşılabilir metot, örneklenen sınıf ve sanal çağrı kümesini çıkarıyor. Yansıma kökleri, ServiceLoader, JNI geri çağrıları ele alınıyor. | `.so` boyutunun neden 587 MB olduğunu ölçmek (JDK payı, MC payı, Zig kod şişmesi) |
 | Sanal çağrı çözümü (CHA) | **Var.** `zigen.py`: tek hedefli çağrı doğrudan, 2 hedefli çağrı korumalı satır içi, kalanı itable/vtable. | Yok (ölçümle bak) |
 | Yaprak (leaf) satır içine alma | **Var.** `_can_inline_leaf` | Yaprak olmayan küçük metotlara genişletmek |
 | Metot içi kaçış analizi | **Var ama dar.** `_analyze_local_allocs`: yalnız döngüsüz, istisna işleyicisiz, tek metot; çağrılan metoda geçen nesne, kendi kurucusu hariç, kaçmış sayılıyor. Kaçmayanlar arena'ya gidiyor (parçalama yok). | Metotlar arası özetler, döngüler, alan akışı, nesne parçalama |
@@ -128,7 +128,7 @@ Koda bakınca düzeltilen not: bunların bir kısmı **zaten var**, planda "yap�
 - Sabit nokta: iyimser başlangıç, yükselen küme; yakınsama bütçesi aşılırsa yakınsamayan tüm özetler `Escapes`.
 - Döngüdeki ayırmalar bu aşamada arena'ya gitmez (arena büyür); yalnız döngü dışı ve nesne parçalama ile kaldırılabilenler.
 - Çıktı: `karar.json` (ayırma noktası, katman, sebep) ve insan okunur rapor.
-- **Ölçüm (21 Kasım, `j2zig/escape.py`, gerçek Minecraft):** 427.350 metot 56 sn'de analiz edildi. 110.015 ayırma noktasının
+- **Ölçüm (21 Kasım, `monolith/escape.py`, gerçek Minecraft):** 427.350 metot 56 sn'de analiz edildi. 110.015 ayırma noktasının
   yalnız 8.639'u (%7,9) kaçmıyor, döngü dışı olanlar 8.029 (%7,3). Kaçma sebepleri: başka metoda argüman %43, `areturn`
   %35, `putfield` %6, çözülemeyen çağrı %3, `aastore` %2,5. `net/minecraft/world`: 20.377 noktanın 607'si (%3).
   Ölçülen çöp profiliyle eşleştirince (profildeki ilk 15 ayırıcının MiB toplamı): **%95,5'i tüm noktaları kaçan metotlarda,
@@ -141,7 +141,7 @@ Koda bakınca düzeltilen not: bunların bir kısmı **zaten var**, planda "yap�
 - **String:** `char[]` yerine `byte[]` (Latin-1) + bayrak. Beklenen: metin belleğinin yarısı (TAHMİN, ölçülecek).
 - **Alan paketleme:** sınıf başına alan sırası boyut azalan; boolean/byte birleştirme.
 - **Sıcak yollar için düz yapılar (SoA):** PalettedContainer/BitStorage, gürültü tamponları, mesh vertex verisi, chunk
-  bölümü; nesne başına başlık yok. `patches/` sistemiyle, `J2Z_PATCH_VERIFY=1` ile orijinal Java ile karşılaştırılır.
+  bölümü; nesne başına başlık yok. `patches/` sistemiyle, `MONO_PATCH_VERIFY=1` ile orijinal Java ile karşılaştırılır.
 
 ## 5. Bellek modeli
 
@@ -162,7 +162,7 @@ yüklemede %60+ B ve A'ya düşer; oynanışta D yalnız uzun ömürlü değişk
   paylaşılan koleksiyona yazılamaz. Derleyici sızma analizi yapar (metotlar arası, alan akışı). Analiz "emin değilim"
   derse nesne D katmanına gider (yedek, kanıt aranmaz).
 - Hata ayıklama modu: bölge sonunda belleği zehirle (0xDD) ve bölge dışından içeriye işaretçi taraması yap
-  (tavan: yalnız `J2Z_REGION_CHECK=1`).
+  (tavan: yalnız `MONO_REGION_CHECK=1`).
 - Notlar: iş parçacığı sahipliği (bir bölge tek iş parçacığına ait), iç içe bölge (iç, dış bölgeye sızabilir, tersi hayır).
 
 ### 5.3 Yığın (D katmanı) iyileştirmeleri
@@ -227,7 +227,7 @@ yok (B6), taşıyan toplama mümkün. Maliyet: üretilen kod yığın haritası 
 ## 8. Doğrulama
 - **Diferansiyel test:** Aynı girdi, HotSpot ve yerel çıktı karşılaştırması. Küçük Java programları + Minecraft sahneleri
   (dünya üretimi tohumdan, aynı tohumda aynı chunk çıktısı karşılaştır).
-- **Yama doğrulama:** `J2Z_PATCH_VERIFY=1` (var).
+- **Yama doğrulama:** `MONO_PATCH_VERIFY=1` (var).
 - **GC stres testi:** (var, GcStress) her sürümde.
 - **Bölge testleri:** zehir modu + sızma testleri.
 - **Cihaz raporu:** 2 cihaz (S24 FE, S26) her aşamada, kabul tablosu bölüm 1.
@@ -273,7 +273,7 @@ yalnız sesler ve bazı diller asset index'ten (cihazda indirilen) geliyor.
 Kurulum aşaması önemli: Mojang varlıklarını `.so`'ya gömmeyi gerektirmeden "çalışma zamanında hiçbir şey yapma" hedefine
 ulaşılır.
 
-### 11.2 Bellek kararları derleme zamanında (çevirici, `j2zig/zigen.py`)
+### 11.2 Bellek kararları derleme zamanında (çevirici, `monolith/zigen.py`)
 Bugün: `_analyze_local_allocs` yalnız **döngüsüz, istisna işleyicisiz, tek metot** içinde, soyut yorumlama ile
 "nesne metottan kaçıyor mu" bakıyor ve kaçmayanları arena'ya koyuyor (döndürülen nesne kaçmış sayılıyor). Genişletme:
 1. **Metotlar arası özetler:** Çağrı grafı alt-yukarı (SCC sırasıyla) her metot için her parametre/dönüş için bir özet

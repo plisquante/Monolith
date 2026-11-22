@@ -1,7 +1,7 @@
 package java.lang;
 
 /**
- * j2zig overlay: the Unicode character name table (uniName.dat resource) is not embedded in
+ * monolith overlay: the Unicode character name table (uniName.dat resource) is not embedded in
  * native images. Character.getName returns null and \N{...} lookups fail as "unknown name".
  */
 class CharacterName {

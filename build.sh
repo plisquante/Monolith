@@ -2,7 +2,7 @@
 # Build a native Minecraft executable from a client.jar.
 #   ./build.sh /path/to/client.jar [--graphics vulkan|opengl] [-O ReleaseFast] [--out DIR]
 # Requirements: python3 (>= 3.10), zig 0.15.1 (pip install ziglang==0.15.1), zlib.
-# A matching JDK (class library source) is downloaded automatically if J2Z_JDK_HOME is unset.
+# A matching JDK (class library source) is downloaded automatically if MONO_JDK_HOME is unset.
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 if [ -z "$1" ]; then

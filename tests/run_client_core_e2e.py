@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fast unified End-to-End Integration Test for J2ZIG Client Core:
+"""Fast unified End-to-End Integration Test for MONOLITH Client Core:
 1. GC-free ArenaAllocator + SlabPool + WorkerPool
 2. Zero-LWJGL RHI (Vulkan 1.1+ / OpenGL 3.3 Core / Headless)
 3. Vanilla-safe FOV + Portal + Hi-Z + Resolution World Render Pipeline
@@ -19,19 +19,19 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-STEP_TIMEOUT = int(os.environ.get("J2Z_E2E_TIMEOUT", "10800"))  # seconds per phase; 3 h default
+STEP_TIMEOUT = int(os.environ.get("MONO_E2E_TIMEOUT", "10800"))  # seconds per phase; 3 h default
 
 
 def _jdk_home() -> str:
-    """J2Z_JDK_HOME if set, else the first JDK the transpiler can find (env, common locations)."""
+    """MONO_JDK_HOME if set, else the first JDK the transpiler can find (env, common locations)."""
     try:
-        from j2zig.classpath import jdk_home
+        from monolith.classpath import jdk_home
         return jdk_home()
     except Exception:
-        cands = sorted(glob.glob(os.path.join(os.path.expanduser("~"), ".cache", "j2zig", "temurin-*", "jdk-*")))
+        cands = sorted(glob.glob(os.path.join(os.path.expanduser("~"), ".cache", "monolith", "temurin-*", "jdk-*")))
         if cands:
             return cands[-1]
-        raise SystemExit("no JDK found: set J2Z_JDK_HOME (e.g. to the Temurin 25 JDK used for the other tests)")
+        raise SystemExit("no JDK found: set MONO_JDK_HOME (e.g. to the Temurin 25 JDK used for the other tests)")
 
 
 def _child_preexec():
@@ -76,8 +76,8 @@ def main() -> int:
 
     env = dict(os.environ)
     env.pop("JAVA_TOOL_OPTIONS", None)
-    if "J2Z_JDK_HOME" not in env:
-        env["J2Z_JDK_HOME"] = _jdk_home()
+    if "MONO_JDK_HOME" not in env:
+        env["MONO_JDK_HOME"] = _jdk_home()
 
     t_all = time.time()
 
@@ -114,12 +114,12 @@ def main() -> int:
     nat_dir = os.path.join(out_dir, "native")
     os.makedirs(cls_dir, exist_ok=True)
 
-    javac = os.path.join(env["J2Z_JDK_HOME"], "bin", "javac")
-    # the built-in j2z.rhi bridge (runtime/java) is compiled by the transpiler's builtin mechanism;
+    javac = os.path.join(env["MONO_JDK_HOME"], "bin", "javac")
+    # the built-in mono.rhi bridge (runtime/java) is compiled by the transpiler's builtin mechanism;
     # the test sources only need it on their javac classpath
-    from j2zig.classpath import builtin_classes
+    from monolith.classpath import builtin_classes
     builtin = builtin_classes()
-    assert builtin, "built-in j2z.rhi bridge failed to compile (set J2Z_NO_BUILTIN=1 to debug without it)"
+    assert builtin, "built-in mono.rhi bridge failed to compile (set MONO_NO_BUILTIN=1 to debug without it)"
     run_step("javac ClientCoreE2E", [
         javac, "-J-Xmx192m", "-J-XX:+UseSerialGC",
         "-nowarn", "-cp", builtin, "-d", cls_dir,
@@ -127,8 +127,8 @@ def main() -> int:
     ], env)
 
     zig_cache = os.path.join(ROOT, "tests", "build", "zig-cache")
-    run_step(f"j2zig build ({a.optimize}, shards={a.shards})", [
-        sys.executable, "-m", "j2zig", "build",
+    run_step(f"monolith build ({a.optimize}, shards={a.shards})", [
+        sys.executable, "-m", "monolith", "build",
         "--cp", cls_dir,
         "--main", "ClientCoreE2E",
         "-o", nat_dir,

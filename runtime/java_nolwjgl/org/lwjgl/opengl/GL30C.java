@@ -1,6 +1,6 @@
 package org.lwjgl.opengl;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -74,8 +74,8 @@ public class GL30C extends GL20C {
             }
             int bound = pname == 0 ? -1 : NativeRhi.glGetInteger(pname);
             // explicit StringBuilder: a string concatenation would add a synthetic class with a new reflective
-            // signature, which changes code shared by every shard (see j2zig/shard.py)
-            StringBuilder sb = new StringBuilder("j2zig GL: glMapBufferRange failed: error 0x");
+            // signature, which changes code shared by every shard (see monolith/shard.py)
+            StringBuilder sb = new StringBuilder("monolith GL: glMapBufferRange failed: error 0x");
             sb.append(Integer.toHexString(err)).append(" target 0x").append(Integer.toHexString(target));
             sb.append(" bound buffer ").append(bound).append(" offset ").append(offset).append(" length ").append(length);
             sb.append(" access 0x").append(Integer.toHexString(access)).append(" (sent 0x").append(Integer.toHexString(flags)).append(')');

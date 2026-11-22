@@ -93,8 +93,8 @@ public final class Module implements AnnotatedElement {
 
     // the module descriptor
     private final ModuleDescriptor descriptor;
-    private final boolean j2zOpen;
-    private final Set<String> j2zPackages;
+    private final boolean monoOpen;
+    private final Set<String> monoPackages;
 
     // true, if this module allows restricted native access
     @Stable
@@ -105,8 +105,8 @@ public final class Module implements AnnotatedElement {
         this.name = name;
         this.loader = null;
         this.descriptor = null;
-        this.j2zOpen = open;
-        this.j2zPackages = packages;
+        this.monoOpen = open;
+        this.monoPackages = packages;
     }
 
     /**
@@ -123,12 +123,12 @@ public final class Module implements AnnotatedElement {
         this.name = descriptor.name();
         this.loader = loader;
         this.descriptor = descriptor;
-        this.j2zOpen = descriptor.isOpen() || descriptor.isAutomatic();
-        this.j2zPackages = descriptor.packages();
+        this.monoOpen = descriptor.isOpen() || descriptor.isAutomatic();
+        this.monoPackages = descriptor.packages();
 
         // define module to VM
 
-        boolean isOpen = this.j2zOpen;
+        boolean isOpen = this.monoOpen;
         Version version = descriptor.version().orElse(null);
         String vs = Objects.toString(version, null);
         String loc = Objects.toString(uri, null);
@@ -147,8 +147,8 @@ public final class Module implements AnnotatedElement {
         this.name = null;
         this.loader = loader;
         this.descriptor = null;
-        this.j2zOpen = true;
-        this.j2zPackages = null;
+        this.monoOpen = true;
+        this.monoPackages = null;
     }
 
 
@@ -162,8 +162,8 @@ public final class Module implements AnnotatedElement {
         this.name = descriptor.name();
         this.loader = loader;
         this.descriptor = descriptor;
-        this.j2zOpen = descriptor.isOpen() || descriptor.isAutomatic();
-        this.j2zPackages = descriptor.packages();
+        this.monoOpen = descriptor.isOpen() || descriptor.isAutomatic();
+        this.monoPackages = descriptor.packages();
     }
 
 
@@ -596,18 +596,18 @@ public final class Module implements AnnotatedElement {
         if (!isNamed())
             return true;
 
-        // j2zig: the JDK has no module graph; its boot module exports the public API (java.*,
+        // monolith: the JDK has no module graph; its boot module exports the public API (java.*,
         // javax.*) unqualified and opens nothing, like java.base on HotSpot
         if (loader == null && "java.base".equals(name))
             return !open && (pn.startsWith("java.") || pn.startsWith("javax."));
 
         // all packages are exported/open to self
-        if (other == this && j2zPackages != null && j2zPackages.contains(pn))
+        if (other == this && monoPackages != null && monoPackages.contains(pn))
             return true;
 
         // all packages in open and automatic modules are open
-        if (j2zOpen)
-            return j2zPackages != null && j2zPackages.contains(pn);
+        if (monoOpen)
+            return monoPackages != null && monoPackages.contains(pn);
 
         // exported/opened via module declaration/descriptor or CLI options
         if (isExplicitlyExportedOrOpened(pn, other, open))
@@ -911,7 +911,7 @@ public final class Module implements AnnotatedElement {
         Objects.requireNonNull(pn);
 
         // all packages are open in unnamed, open, and automatic modules
-        if (!isNamed() || j2zOpen)
+        if (!isNamed() || monoOpen)
             return;
 
         // check if the package is already exported/open to other
@@ -919,7 +919,7 @@ public final class Module implements AnnotatedElement {
             return;
 
         // can only export a package in the module
-        if (j2zPackages == null || !j2zPackages.contains(pn)) {
+        if (monoPackages == null || !monoPackages.contains(pn)) {
             throw new IllegalArgumentException("package " + pn
                                                + " not in contents");
         }
@@ -1044,7 +1044,7 @@ public final class Module implements AnnotatedElement {
      */
     public Set<String> getPackages() {
         if (isNamed()) {
-            return j2zPackages != null ? j2zPackages : Set.of();
+            return monoPackages != null ? monoPackages : Set.of();
         } else {
             // unnamed module
             if (loader == null) {

@@ -907,7 +907,7 @@ public final class ModuleLayer {
      * @return The boot layer
      */
     public static ModuleLayer boot() {
-        // j2zig has no module system bootstrap: the boot layer is an empty layer, created on first use
+        // monolith has no module system bootstrap: the boot layer is an empty layer, created on first use
         // (Module.getLayer() shares it). Returning null made ManagementFactory (used by Minecraft's
         // SystemReport, hence by every crash report) fail with a NullPointerException.
         ModuleLayer b = System.bootLayer;

@@ -1,14 +1,14 @@
 package java.lang.ref;
 
 /**
- * j2zig overlay of Reference. The referent field is traced weakly by the collector:
+ * monolith overlay of Reference. The referent field is traced weakly by the collector:
  * rt.zig clears it when the referent is otherwise unreachable (see weak reference
  * processing in markAndSweep), then enqueues the reference if it has a queue.
  */
 public abstract sealed class Reference<T> permits PhantomReference, SoftReference, WeakReference, FinalReference {
     private T referent;
     volatile ReferenceQueue<? super T> queue;
-    Reference<?> j2zNext;
+    Reference<?> monoNext;
 
     Reference(T referent) {
         this(referent, null);

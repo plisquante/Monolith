@@ -1,6 +1,6 @@
 package org.lwjgl.sdl;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 
 public final class SDLInit {
     public static final int SDL_INIT_AUDIO = 0x00000010;
@@ -18,9 +18,9 @@ public final class SDLInit {
 
     public static boolean SDL_Init(int flags) {
         if (!initialized) {
-            // -Dj2z.graphics.backend=..., else the J2Z_RHI_BACKEND environment variable (the Android host sets it)
-            String mode = System.getProperty("j2z.graphics.backend");
-            if (mode == null) mode = System.getenv("J2Z_RHI_BACKEND");
+            // -Dmono.graphics.backend=..., else the MONO_RHI_BACKEND environment variable (the Android host sets it)
+            String mode = System.getProperty("mono.graphics.backend");
+            if (mode == null) mode = System.getenv("MONO_RHI_BACKEND");
             if (mode == null) mode = "auto";
             int b = NativeRhi.BACKEND_AUTO;
             if ("vulkan".equalsIgnoreCase(mode)) b = NativeRhi.BACKEND_VULKAN;

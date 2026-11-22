@@ -1251,7 +1251,7 @@ pub fn n_java_lang_Runtime__isPreloaded(_this: Ref, file: Ref) -> Res<i32> {
         || base.contains("netty_transport_native_epoll")
         || base.contains("netty_transport_native_kqueue")
         || base.contains("jtracy")
-        || base.contains("j2zshader")
+        || base.contains("monoshader")
         || base.contains("lwjgl")
         || base.contains("shaderc")
         || base.contains("spirv-cross")

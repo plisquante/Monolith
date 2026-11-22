@@ -5,7 +5,7 @@ import java.util.zip.*;
 
 public class IoZip {
     public static void main(String[] args) throws Exception {
-        File dir = new File(System.getProperty("java.io.tmpdir"), "j2z-iozip-" + ProcessHandleLess.pid());
+        File dir = new File(System.getProperty("java.io.tmpdir"), "mono-iozip-" + ProcessHandleLess.pid());
         dir.mkdirs();
         File f = new File(dir, "data.txt");
         try (Writer w = new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8)) {

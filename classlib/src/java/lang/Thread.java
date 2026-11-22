@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * j2zig overlay of java.lang.Thread: platform threads backed by native OS threads
+ * monolith overlay of java.lang.Thread: platform threads backed by native OS threads
  * (rt.startThread). {@code eetop} holds the runtime ThreadState address.
  */
 public class Thread implements Runnable {
@@ -21,7 +21,7 @@ public class Thread implements Runnable {
     private final long stackSize;
     private volatile int threadStatus; // 0 new, 1 runnable, 2 terminated
     private volatile UncaughtExceptionHandler uncaughtExceptionHandler;
-    Map<Object, Object> j2zLocals;
+    Map<Object, Object> monoLocals;
     ThreadLocal.ThreadLocalMap threadLocals;
     ThreadLocal.ThreadLocalMap inheritableThreadLocals;
     private ClassLoader contextClassLoader;
@@ -149,7 +149,7 @@ public class Thread implements Runnable {
     }
 
     /** Runtime entry point of a new native thread. */
-    static void j2zRun(Thread t) {
+    static void monoRun(Thread t) {
         try {
             t.run();
         } catch (Throwable e) {
@@ -172,21 +172,21 @@ public class Thread implements Runnable {
         }
     }
 
-    static Thread j2zStartMain() {
+    static Thread monoStartMain() {
         Thread t = new Thread(null, null, "main", 0);
         t.threadStatus = 1;
         return t;
     }
 
     /** Runtime hook: Thread object for a native thread that calls into Java (JNI attach). */
-    static Thread j2zForeign() {
+    static Thread monoForeign() {
         Thread t = new Thread(null, null, "Thread-" + nextThreadNum(), 0);
         t.daemon = true;
         t.threadStatus = 1;
         return t;
     }
 
-    static void j2zUncaught(Thread t, Throwable e) {
+    static void monoUncaught(Thread t, Throwable e) {
         if (t == null) {
             System.err.print("Exception in thread \"main\" ");
             e.printStackTrace(System.err);
@@ -195,7 +195,7 @@ public class Thread implements Runnable {
         t.dispatchUncaughtException(e);
     }
 
-    static void j2zAwaitNonDaemon() {
+    static void monoAwaitNonDaemon() {
         synchronized (lock) {
             while (nonDaemonCount > 0) {
                 try {

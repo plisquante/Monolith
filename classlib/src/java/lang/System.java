@@ -6,7 +6,7 @@ import java.io.PrintStream;
 import java.io.IOException;
 import java.util.Properties;
 
-/** j2zig overlay of java.lang.System. */
+/** monolith overlay of java.lang.System. */
 public final class System {
     private System() {}
 
@@ -40,7 +40,7 @@ public final class System {
     static ModuleLayer bootLayer;
 
     static {
-        jdk.internal.access.SharedSecrets.setJavaLangAccess(new J2zJavaLangAccess());
+        jdk.internal.access.SharedSecrets.setJavaLangAccess(new MonoJavaLangAccess());
     }
 
     static final class FdOutputStream extends OutputStream {
@@ -95,8 +95,8 @@ public final class System {
             Properties p = new Properties();
             p.setProperty("java.version", "25");
             p.setProperty("java.specification.version", "25");
-            p.setProperty("java.vendor", "j2zig");
-            p.setProperty("java.vm.name", "j2zig native image");
+            p.setProperty("java.vendor", "monolith");
+            p.setProperty("java.vm.name", "monolith native image");
             p.setProperty("java.class.version", "69.0");
             p.setProperty("os.name", "Linux");
             p.setProperty("os.arch", arch0());
@@ -119,8 +119,8 @@ public final class System {
             p.setProperty("java.io.tmpdir", tmp == null || tmp.isEmpty() ? "/tmp" : tmp);
             // java.home holds conf/ (java.security, net.properties, ...) and lib/tzdb.dat. On a desktop it is the
             // executable's directory; on Android the executable is /system/bin/app_process, so the launcher extracts
-            // that tree into the app's files and names it in J2Z_JAVA_HOME.
-            String javaHome = getenv0("J2Z_JAVA_HOME");
+            // that tree into the app's files and names it in MONO_JAVA_HOME.
+            String javaHome = getenv0("MONO_JAVA_HOME");
             p.setProperty("java.home", javaHome == null || javaHome.isEmpty() ? exeDir0() : javaHome);
             p.setProperty("java.library.path", "");
             p.setProperty("sun.boot.library.path", "");
@@ -206,8 +206,8 @@ public final class System {
 
     public static void gc() {
         // Minecraft asks for a full collection every tick; one stops the game for about half a second. Only on request
-        // (-Dj2z.explicit.gc): the runtime collects by itself when the heap needs it.
-        if (System.getProperty("j2z.explicit.gc") != null) Runtime.getRuntime().gc();
+        // (-Dmono.explicit.gc): the runtime collects by itself when the heap needs it.
+        if (System.getProperty("mono.explicit.gc") != null) Runtime.getRuntime().gc();
     }
 
     public static void runFinalization() {}
@@ -324,8 +324,8 @@ public final class System {
     }
 
     /** Called by the runtime when main() returns: waits for non-daemon threads, runs shutdown hooks. */
-    static void j2zShutdown() {
-        Thread.j2zAwaitNonDaemon();
+    static void monoShutdown() {
+        Thread.monoAwaitNonDaemon();
         Runtime.getRuntime().runHooks();
         out.flush();
         err.flush();

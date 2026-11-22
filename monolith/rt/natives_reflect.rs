@@ -420,7 +420,7 @@ pub fn n_java_lang_reflect_Proxy__invokeDefault0(m: Ref, proxy: Ref, args: Ref) 
     (rt::hooks().reflect_invoke)(t.shape, t.fp.0, proxy, args)
 }
 
-pub fn n_java_lang_invoke_J2zMH__invokeMethod0(m: Ref, recv: Ref, args: Ref, dispatch: i32) -> Res<Ref> {
+pub fn n_java_lang_invoke_MonoMH__invokeMethod0(m: Ref, recv: Ref, args: Ref, dispatch: i32) -> Res<Ref> {
     rt::nn(m)?;
     let decl = rt::class_of_mirror(rt::nn_ref(get_ref(m, "clazz"))?);
     let slot = get_i32(m, "slot") as usize;
@@ -428,7 +428,7 @@ pub fn n_java_lang_invoke_J2zMH__invokeMethod0(m: Ref, recv: Ref, args: Ref, dis
     (rt::hooks().reflect_invoke)(t.shape, t.fp.0, recv, args)
 }
 
-pub fn n_java_lang_invoke_J2zMH__newInstance0(c: Ref, args: Ref) -> Res<Ref> {
+pub fn n_java_lang_invoke_MonoMH__newInstance0(c: Ref, args: Ref) -> Res<Ref> {
     n_jdk_internal_reflect_MethodHandleAccessorFactory__newInstance0(c, args)
 }
 

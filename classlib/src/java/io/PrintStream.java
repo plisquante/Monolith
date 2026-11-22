@@ -4,7 +4,7 @@ import java.nio.charset.Charset;
 import java.util.Locale;
 
 /**
- * j2zig overlay of PrintStream: UTF-8 (or the requested charset) encoding done directly
+ * monolith overlay of PrintStream: UTF-8 (or the requested charset) encoding done directly
  * through String.getBytes, no StreamEncoder / Charset service lookup.
  */
 public class PrintStream extends FilterOutputStream implements Appendable, Closeable {
@@ -125,8 +125,8 @@ public class PrintStream extends FilterOutputStream implements Appendable, Close
 
     private void writeString(String s) {
         int cs = csCode;
-        if (cs == -2) csCode = cs = String.j2zCharsetCode(charsetName);
-        byte[] b = cs < 0 ? s.getBytes() : String.j2zEncode(cs, s);
+        if (cs == -2) csCode = cs = String.monoCharsetCode(charsetName);
+        byte[] b = cs < 0 ? s.getBytes() : String.monoEncode(cs, s);
         try {
             synchronized (this) {
                 ensureOpen();

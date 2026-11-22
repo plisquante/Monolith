@@ -69,9 +69,9 @@ def mem_avail_gib() -> float:
 
 def mem_floor_gib() -> float:
     """Free memory required to start a heavy job. Scales to the machine so the same rule
-    is meaningful on a 2 GiB laptop and a 15 GiB desktop; override with J2Z_MIN_AVAIL_GIB."""
-    if os.environ.get("J2Z_MIN_AVAIL_GIB"):
-        return float(os.environ["J2Z_MIN_AVAIL_GIB"])
+    is meaningful on a 2 GiB laptop and a 15 GiB desktop; override with MONO_MIN_AVAIL_GIB."""
+    if os.environ.get("MONO_MIN_AVAIL_GIB"):
+        return float(os.environ["MONO_MIN_AVAIL_GIB"])
     return 4.0 if mem_total_gib() >= 8.0 else 1.0
 
 
@@ -151,7 +151,7 @@ def decide_bash(cmd: str) -> str | None:
         floor = mem_floor_gib()
         if avail < floor:
             return (f"refusing to start a heavy job: {avail:.1f} GiB available, "
-                    f"floor is {floor:.1f} GiB (set J2Z_MIN_AVAIL_GIB to override)")
+                    f"floor is {floor:.1f} GiB (set MONO_MIN_AVAIL_GIB to override)")
 
     return None
 
@@ -177,7 +177,7 @@ def main() -> int:
         print(f"repo:            {REPO}")
         print(f"mem total:       {mem_total_gib():.1f} GiB")
         print(f"mem available:   {mem_avail_gib():.1f} GiB")
-        print(f"heavy-job floor: {mem_floor_gib():.1f} GiB (J2Z_MIN_AVAIL_GIB overrides)")
+        print(f"heavy-job floor: {mem_floor_gib():.1f} GiB (MONO_MIN_AVAIL_GIB overrides)")
         return 0
     if "--self-test" in sys.argv:
         return self_test()

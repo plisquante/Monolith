@@ -4,14 +4,14 @@
     ./build.sh  /path/to/client.jar            (Linux / macOS)
     build.bat   C:\\path\\to\\client.jar          (Windows)
 
-Steps (all cached under ~/.cache/j2zig, every download verified by SHA-1):
+Steps (all cached under ~/.cache/monolith, every download verified by SHA-1):
   1. read version.json inside the JAR (version id, required Java version)
   2. get the version metadata (local .minecraft/versions/<id>/<id>.json or Mojang's manifest)
-  3. provide a matching JDK (J2Z_JDK_HOME, or download Eclipse Temurin <java_version>)
+  3. provide a matching JDK (MONO_JDK_HOME, or download Eclipse Temurin <java_version>)
   4. download the libraries for this OS/arch and extract their native libraries
   5. download the asset index + objects (unless --skip-assets)
   6. extract the JAR's resources (assets/data/...) for the native ClassLoader
-  7. transpile with j2zig and compile with Zig (ReleaseFast by default)
+  7. transpile with monolith and compile with Zig (ReleaseFast by default)
   8. write a launcher (run.sh / run.bat) that starts the game with the chosen graphics API
 
 Nothing produced here may be redistributed (Minecraft EULA); output stays local.
@@ -33,12 +33,12 @@ import urllib.request
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CACHE = os.path.join(os.path.expanduser("~"), ".cache", "j2zig")
+CACHE = os.path.join(os.path.expanduser("~"), ".cache", "monolith")
 MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 ASSET_BASE = "https://resources.download.minecraft.net"
 MAIN_CLASS = "net.minecraft.client.main.Main"
 # Cloudflare on the Adoptium/Mojang endpoints 403s the default "python-urllib" UA; identify ourselves.
-UA = {"User-Agent": "j2zig-mcbuild/0.15.1"}
+UA = {"User-Agent": "monolith-mcbuild/0.15.1"}
 
 
 def log(msg: str):
@@ -89,7 +89,7 @@ def _jdk_expected_sha256(asset_url: str) -> str:
             body = r.read().decode("utf-8", "replace")
     except (urllib.error.URLError, OSError) as e:
         raise SystemExit(f"[mcbuild] could not fetch the JDK checksum ({sha_url}): {e}\n"
-                         f"Set J2Z_JDK_NO_CHECKSUM=1 to bypass (integrity NOT verified), or point J2Z_JDK_HOME at a local JDK.")
+                         f"Set MONO_JDK_NO_CHECKSUM=1 to bypass (integrity NOT verified), or point MONO_JDK_HOME at a local JDK.")
     m = re.search(r"\b([0-9a-fA-F]{64})\b", body)
     if not m:
         raise SystemExit(f"[mcbuild] unreadable SHA-256 from {sha_url}: {body[:120]!r}")
@@ -230,7 +230,7 @@ def version_metadata(vid: str, mc_dir: str | None) -> dict:
 
 
 def ensure_jdk(java_version: int) -> str:
-    env = os.environ.get("J2Z_JDK_HOME")
+    env = os.environ.get("MONO_JDK_HOME")
     if env and os.path.isfile(os.path.join(env, "bin", "javac")):
         return env
     root = os.path.join(CACHE, f"temurin-{java_version}")
@@ -243,8 +243,8 @@ def ensure_jdk(java_version: int) -> str:
     url = f"https://api.adoptium.net/v3/binary/latest/{java_version}/ga/{osn}/{arch}/jdk/hotspot/normal/eclipse"
     log(f"downloading JDK {java_version} (Eclipse Temurin)")
     archive = fetch(url, os.path.join(root, "jdk.tar.gz" if osn != "windows" else "jdk.zip"))
-    if os.environ.get("J2Z_JDK_NO_CHECKSUM") == "1":
-        log("WARNING: J2Z_JDK_NO_CHECKSUM=1 - JDK archive integrity NOT verified")
+    if os.environ.get("MONO_JDK_NO_CHECKSUM") == "1":
+        log("WARNING: MONO_JDK_NO_CHECKSUM=1 - JDK archive integrity NOT verified")
     else:
         asset_url = _first_redirect(url)
         expected = _jdk_expected_sha256(asset_url)
@@ -256,7 +256,7 @@ def ensure_jdk(java_version: int) -> str:
                 pass
             raise SystemExit(f"[mcbuild] JDK SHA-256 mismatch for {asset_url}\n"
                              f"expected {expected}\nactual   {actual}\n"
-                             f"The archive was deleted. Set J2Z_JDK_HOME to a known-good JDK instead.")
+                             f"The archive was deleted. Set MONO_JDK_HOME to a known-good JDK instead.")
         log("JDK SHA-256 verified")
     if archive.endswith(".zip"):
         with zipfile.ZipFile(archive) as z:
@@ -269,7 +269,7 @@ def ensure_jdk(java_version: int) -> str:
         if os.path.isfile(os.path.join(root, d, "bin", "javac")):
             return os.path.join(root, d)
     raise SystemExit(f"[mcbuild] JDK extracted but bin/javac not found under {root}; "
-                     f"pass J2Z_JDK_HOME pointing at a local JDK {java_version}")
+                     f"pass MONO_JDK_HOME pointing at a local JDK {java_version}")
 
 
 def download_libraries(meta: dict, natives_dir: str, skip_natives: bool = False) -> list[str]:
@@ -388,9 +388,9 @@ def reflection_metadata(jars: list[str]) -> list[str]:
 
 
 def apply_branding(resources: str):
-    """Minecraft: Zig Edition title screen: the logo (brand/title.png, our own artwork) replaces the
+    """Monolith title screen: the logo (brand/title.png, our own artwork) replaces the
     vanilla "MINECRAFT" title texture, and the "JAVA EDITION" subtitle texture becomes transparent
-    (the logo already carries "ZIG EDITION")."""
+    (the logo already carries "Monolith")."""
     d = os.path.join(resources, "assets", "minecraft", "textures", "gui", "title")
     if not os.path.isdir(d):
         log("branding: no title textures in the resources, skipped")
@@ -401,12 +401,12 @@ def apply_branding(resources: str):
             continue
         for n in names:
             shutil.copyfile(src_path, os.path.join(d, n))
-    log("branding: Zig Edition title screen applied")
+    log("branding: Monolith title screen applied")
 
 
 def extract_resources(jars, dest: str):
     """Non-class entries of the client JAR and the libraries (JNA's bundled libjnidispatch.so,
-    log4j/gson metadata, ...), served by the native ClassLoader (J2Z_RESOURCES). The client JAR
+    log4j/gson metadata, ...), served by the native ClassLoader (MONO_RESOURCES). The client JAR
     is listed first and wins on name clashes; the multi-release META-INF/versions tree is skipped."""
     if isinstance(jars, str):
         jars = [jars]
@@ -445,23 +445,23 @@ def extract_resources(jars, dest: str):
 def write_launchers(out: str, exe: str, vid: str, meta: dict, graphics: str, no_lwjgl: bool = False):
     asset_index = meta["assetIndex"]["id"]
     if no_lwjgl:
-        sh_extra_env = f'export J2Z_RHI=1\nexport J2Z_NO_LWJGL=1\nexport J2Z_RHI_BACKEND="${{MC_GRAPHICS:-{graphics}}}"\n'
-        sh_props = f'-Djna.boot.library.path="$HERE/natives" -Djna.nosys=false -Dj2z.graphics.backend="${{MC_GRAPHICS:-{graphics}}}"'
-        bat_extra_env = f'set J2Z_RHI=1\r\nset J2Z_NO_LWJGL=1\r\nset J2Z_RHI_BACKEND=%MC_GRAPHICS%\r\n'
-        bat_props = f'-Djna.boot.library.path="%HERE%natives" -Djna.nosys=false -Dj2z.graphics.backend=%MC_GRAPHICS%'
+        sh_extra_env = f'export MONO_RHI=1\nexport MONO_NO_LWJGL=1\nexport MONO_RHI_BACKEND="${{MC_GRAPHICS:-{graphics}}}"\n'
+        sh_props = f'-Djna.boot.library.path="$HERE/natives" -Djna.nosys=false -Dmono.graphics.backend="${{MC_GRAPHICS:-{graphics}}}"'
+        bat_extra_env = f'set MONO_RHI=1\r\nset MONO_NO_LWJGL=1\r\nset MONO_RHI_BACKEND=%MC_GRAPHICS%\r\n'
+        bat_props = f'-Djna.boot.library.path="%HERE%natives" -Djna.nosys=false -Dmono.graphics.backend=%MC_GRAPHICS%'
     else:
         sh_extra_env = ""
         sh_props = (f'-Djava.library.path="$HERE/natives" -Dorg.lwjgl.librarypath="$HERE/natives" '
                     f'-Djna.boot.library.path="$HERE/natives" -Djna.nosys=false -Dorg.lwjgl.system.allocator=system '
-                    f'-Dj2z.graphics.backend="${{MC_GRAPHICS:-{graphics}}}"')
+                    f'-Dmono.graphics.backend="${{MC_GRAPHICS:-{graphics}}}"')
         bat_extra_env = ""
         bat_props = (f'-Djava.library.path="%HERE%natives" -Dorg.lwjgl.librarypath="%HERE%natives" '
                      f'-Djna.boot.library.path="%HERE%natives" -Djna.nosys=false -Dorg.lwjgl.system.allocator=system '
-                     f'-Dj2z.graphics.backend=%MC_GRAPHICS%')
+                     f'-Dmono.graphics.backend=%MC_GRAPHICS%')
     sh = f"""#!/bin/sh
 # Generated by tools/mcbuild.py — starts the natively compiled Minecraft {vid}.
 HERE="$(cd "$(dirname "$0")" && pwd)"
-export J2Z_RESOURCES="$HERE/resources"
+export MONO_RESOURCES="$HERE/resources"
 export LD_LIBRARY_PATH="$HERE/natives${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
 {sh_extra_env}# X11 servers without a 32-bit sRGB GLX visual need EGL for GLX/SDL window creation
 if [ -z "${{SDL_VIDEO_FORCE_EGL+x}}" ] && command -v glxinfo >/dev/null 2>&1; then
@@ -482,7 +482,7 @@ exec "$HERE/{os.path.basename(exe)}" {sh_props} --version {vid} --gameDir "$GAME
     bat = f"""@echo off
 rem Generated by tools/mcbuild.py — starts the natively compiled Minecraft {vid}.
 set HERE=%~dp0
-set J2Z_RESOURCES=%HERE%resources
+set MONO_RESOURCES=%HERE%resources
 set PATH=%HERE%natives;%PATH%
 if "%MC_GAME_DIR%"=="" set MC_GAME_DIR=%HERE%game
 if "%MC_USERNAME%"=="" set MC_USERNAME=Player
@@ -502,7 +502,7 @@ def main() -> int:
         raw_argv = raw_argv[1:]
     norm_argv = ["--dynamic" if x == "-dynamic" else x for x in raw_argv]
 
-    ap = argparse.ArgumentParser(description="Build a native Minecraft executable or Android libminecraft_j2z.so from a client.jar")
+    ap = argparse.ArgumentParser(description="Build a native Minecraft executable or Android libminecraft_mono.so from a client.jar")
     ap.add_argument("jar", help="path to the Minecraft client.jar (any version with version.json)")
     ap.add_argument("-o", "--out", help="output directory (default: build/minecraft-<version>)")
     ap.add_argument("-O", "--optimize", default="ReleaseFast",
@@ -510,9 +510,9 @@ def main() -> int:
     ap.add_argument("--graphics", default="auto", choices=["auto", "vulkan", "opengl"],
                     help="RHI backend: auto (Vulkan 1.1+ with OpenGL 3.3 Core fallback), vulkan, or opengl")
     ap.add_argument("--no-lwjgl", action="store_true",
-                    help="strip external LWJGL native binaries cleanly and route exclusively through J2ZIG RHI")
+                    help="strip external LWJGL native binaries cleanly and route exclusively through MONOLITH RHI")
     ap.add_argument("--dynamic", action="store_true", default=build_lib_mode,
-                    help="build shared library libminecraft_j2z.so (-dynamic) exporting j2z_android_entry")
+                    help="build shared library libminecraft_mono.so (-dynamic) exporting mono_android_entry")
     ap.add_argument("--target", default="",
                     help="target triple (e.g. aarch64-linux-android.26 or 'android'; auto-selected with --dynamic on Android)")
     ap.add_argument("--mc-dir", help="existing .minecraft directory (offline version metadata)")
@@ -538,7 +538,7 @@ def main() -> int:
         a.target = "aarch64-linux-android.26"
     if a.dynamic and not a.no_lwjgl:
         a.no_lwjgl = True
-        log("Android libminecraft_j2z.so (--dynamic): enabling --no-lwjgl automatically")
+        log("Android libminecraft_mono.so (--dynamic): enabling --no-lwjgl automatically")
     is_android_target = a.target.startswith("aarch64-linux-android") or a.target == "android"
     if is_android_target:
         global _TARGET_ARCH
@@ -564,7 +564,7 @@ def main() -> int:
     meta = version_metadata(vid, a.mc_dir)
     # Cross-compiling for Android uses host JDK; ensure host arch for JDK download, target arch for Mojang libs.
     jdk = ensure_jdk(java_version)
-    os.environ["J2Z_JDK_HOME"] = jdk
+    os.environ["MONO_JDK_HOME"] = jdk
     log(f"JDK: {jdk}")
 
     libs = download_libraries(meta, os.path.join(out, "natives"), skip_natives=(a.no_lwjgl or is_android_target))
@@ -574,7 +574,7 @@ def main() -> int:
             if "lwjgl" in f.lower():
                 os.remove(os.path.join(nat_dir, f))
         libs = [j for j in libs if "lwjgl" not in os.path.basename(j).lower()]
-        log("stripped external LWJGL binaries cleanly (pure J2ZIG RHI mode)")
+        log("stripped external LWJGL binaries cleanly (pure MONOLITH RHI mode)")
     log(f"libraries: {len(libs)} jars, natives in {os.path.join(out, 'natives')}")
     if not a.skip_assets:
         download_assets(meta, os.path.join(out, "assets"))
@@ -587,12 +587,12 @@ def main() -> int:
         for c in sorted(names):
             fh.write(c + "\n")
     subcmd = "build-lib" if a.dynamic else "build"
-    out_name = "minecraft_j2z" if a.dynamic else "minecraft"
-    cmd = [sys.executable, "-m", "j2zig", subcmd, "--cp", os.pathsep.join([jar] + libs),
+    out_name = "minecraft_mono" if a.dynamic else "minecraft"
+    cmd = [sys.executable, "-m", "monolith", subcmd, "--cp", os.pathsep.join([jar] + libs),
            "--reflect-class", "@" + reflect_file,
            "--native-libs", os.path.join(out, "natives"), "--native-libs", os.path.join(out, "resources"),
            "--main", MAIN_CLASS, "-o", out, "--name", out_name, "-O", a.optimize, "--show-issues", "5",
-           # LWJGL: use the JNI flavour (direct C calls generated by j2zig), not the FFM one
+           # LWJGL: use the JNI flavour (direct C calls generated by monolith), not the FFM one
            "--release", str(java_version), "--multi-release", "lwjgl=11"]
     if a.dynamic:
         cmd.append("--dynamic")
@@ -625,9 +625,9 @@ def main() -> int:
     env = {k: v for k, v in os.environ.items() if k != "JAVA_TOOL_OPTIONS"}
     r = subprocess.run(cmd, cwd=ROOT, env=env)
     if r.returncode != 0:
-        log(f"j2zig failed (exit {r.returncode}); see {os.path.join(out, 'report.json')}")
+        log(f"monolith failed (exit {r.returncode}); see {os.path.join(out, 'report.json')}")
         return r.returncode
-    target_bin = os.path.join(out, "libminecraft_j2z.so" if a.dynamic else "minecraft")
+    target_bin = os.path.join(out, "libminecraft_mono.so" if a.dynamic else "minecraft")
     write_launchers(out, target_bin, vid, meta, a.graphics, no_lwjgl=a.no_lwjgl)
     if a.no_compile:
         log(f"done (transpile only): Zig sources in {os.path.join(out, 'src')}")

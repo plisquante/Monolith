@@ -1,6 +1,6 @@
 package java.lang;
 
-/** j2zig overlay: root of the class hierarchy. Identity hash, monitors and cloning are runtime natives. */
+/** monolith overlay: root of the class hierarchy. Identity hash, monitors and cloning are runtime natives. */
 public class Object {
     public Object() {}
 

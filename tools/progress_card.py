@@ -35,7 +35,7 @@ def page_html(c: dict, hist: list) -> str:
                     for st in c["steps"])
     rows = "".join(f'<li><span class="t">{_esc(h["time"])}</span><span class="e">ETA {_esc(h["eta"])} · %{_esc(h["pct"])}</span>'
                    f'<span class="n">{_esc(h["note"])}</span></li>' for h in hist)
-    return f"""<title>J2ZIG Derleme Durumu</title>
+    return f"""<title>MONOLITH Derleme Durumu</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
 /* one column, phone first: ETA and progress on top, steps, then the report history */

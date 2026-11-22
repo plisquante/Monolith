@@ -3,7 +3,7 @@ package java.util.concurrent.atomic;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntUnaryOperator;
 
-/** j2zig overlay: lock-free updates are implemented with the runtime's native CAS on the value field. */
+/** monolith overlay: lock-free updates are implemented with the runtime's native CAS on the value field. */
 public class AtomicInteger extends Number implements java.io.Serializable {
     private volatile int value;
 

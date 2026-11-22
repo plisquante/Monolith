@@ -15,7 +15,7 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
- * j2zig overlay of jdk.internal.util.ReferencedKeyMap: identical API and behavior to OpenJDK,
+ * monolith overlay of jdk.internal.util.ReferencedKeyMap: identical API and behavior to OpenJDK,
  * except keySet/values/entrySet/toString iterate directly instead of through java.util.stream.Stream
  * (avoiding pulling Stream and ForkJoinPool into every MethodType / MethodHandle / Proxy user).
  */

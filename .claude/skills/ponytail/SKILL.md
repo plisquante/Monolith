@@ -27,6 +27,6 @@ Read the task and the code it touches. List every place the change must reach: c
 - Known-limit shortcut gets a one-line comment: `shortcut: <limit>, <when to upgrade>`.
 - Never cut: trust-boundary validation, data-loss error handling, security, anything the user asked for.
 
-## j2zig overrides
+## monolith overrides
 - No stubs, no fake success, no TODO. Unsupported behavior fails loudly and appears in `report.json`.
-- Fix the generator (`j2zig/`), never generated output.
+- Fix the generator (`monolith/`), never generated output.

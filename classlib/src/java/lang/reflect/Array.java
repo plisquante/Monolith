@@ -1,7 +1,7 @@
 package java.lang.reflect;
 
 /**
- * j2zig overlay of java.lang.reflect.Array: element access in Java (typed, with the JLS widening
+ * monolith overlay of java.lang.reflect.Array: element access in Java (typed, with the JLS widening
  * conversions the JDK applies); allocation stays native.
  */
 public final class Array {

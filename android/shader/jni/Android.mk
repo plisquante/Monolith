@@ -1,11 +1,11 @@
-# libj2zshader.so for Android: shaderc (NDK sources/third_party/shaderc) + SPIRV-Cross + the JNI glue.
+# libmonoshader.so for Android: shaderc (NDK sources/third_party/shaderc) + SPIRV-Cross + the JNI glue.
 # Built by tools/build_shader_lib.py, which passes SPIRV_CROSS_DIR (a SPIRV-Cross checkout).
 LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := j2zshader
+LOCAL_MODULE := monoshader
 SPVX := $(SPIRV_CROSS_DIR)
-LOCAL_SRC_FILES := ../j2zshader.c \
+LOCAL_SRC_FILES := ../monoshader.c \
     $(SPVX)/spirv_cross.cpp $(SPVX)/spirv_cfg.cpp $(SPVX)/spirv_cross_parsed_ir.cpp $(SPVX)/spirv_cross_util.cpp \
     $(SPVX)/spirv_glsl.cpp $(SPVX)/spirv_parser.cpp $(SPVX)/spirv_reflect.cpp $(SPVX)/spirv_cross_c.cpp
 LOCAL_C_INCLUDES := $(SPVX)

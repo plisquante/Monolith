@@ -1,5 +1,5 @@
 {
-  "_comment": "Hand-written Zig replacements for hot methods. Only OUR code lives here: a patch names a method (class, name, descriptor) and a Zig function with the same parameters as the generated method. The transpiler keeps the original body as <name>_orig and generates a wrapper; with J2Z_PATCH_VERIFY=1 the wrapper runs both and compares primitive results bit for bit (see patches/README.md).",
+  "_comment": "Hand-written Zig replacements for hot methods. Only OUR code lives here: a patch names a method (class, name, descriptor) and a Zig function with the same parameters as the generated method. The transpiler keeps the original body as <name>_orig and generates a wrapper; with MONO_PATCH_VERIFY=1 the wrapper runs both and compares primitive results bit for bit (see patches/README.md).",
   "patches": [
     {
       "class": "PatchTarget",
@@ -85,7 +85,7 @@
       "impl": "client_frame.zig",
       "fn": "clientMain",
       "orig": true,
-      "_comment": "opt-in via J2Z_RHI=1: RHI bring-up/teardown around the whole client session"
+      "_comment": "opt-in via MONO_RHI=1: RHI bring-up/teardown around the whole client session"
     },
     {
       "class": "net/minecraft/client/Minecraft",
@@ -94,7 +94,7 @@
       "impl": "client_frame.zig",
       "fn": "minecraftRun",
       "orig": true,
-      "_comment": "opt-in via J2Z_RHI=1: session brackets at the game-loop entry (Main hook is primary)"
+      "_comment": "opt-in via MONO_RHI=1: session brackets at the game-loop entry (Main hook is primary)"
     },
     {
       "class": "net/minecraft/client/Minecraft",
@@ -103,7 +103,7 @@
       "impl": "client_frame.zig",
       "fn": "minecraftRunTick",
       "orig": true,
-      "_comment": "opt-in via J2Z_RHI=1: per-frame RHI beginFrame/endFrame and SlabPool epoch advance"
+      "_comment": "opt-in via MONO_RHI=1: per-frame RHI beginFrame/endFrame and SlabPool epoch advance"
     },
     {
       "class": "net/minecraft/client/renderer/LevelRenderer",
@@ -121,7 +121,7 @@
       "impl": "level_renderer.zig",
       "fn": "onResize",
       "orig": true,
-      "_comment": "opt-in via J2Z_RHI=1: syncs RHI viewport dimensions"
+      "_comment": "opt-in via MONO_RHI=1: syncs RHI viewport dimensions"
     },
     {
       "class": "net/minecraft/client/multiplayer/ClientLevel",
@@ -130,7 +130,7 @@
       "impl": "level_renderer.zig",
       "fn": "onClientTick",
       "orig": true,
-      "_comment": "opt-in via J2Z_RHI=1: epoch reclamation tick"
+      "_comment": "opt-in via MONO_RHI=1: epoch reclamation tick"
     }
   ]
 }

@@ -3,7 +3,7 @@ package java.util.concurrent.atomic;
 import java.util.function.BinaryOperator;
 import java.util.function.UnaryOperator;
 
-/** j2zig overlay. */
+/** monolith overlay. */
 public class AtomicReference<V> implements java.io.Serializable {
     private volatile V value;
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproducible CLI builder for TouchCore For Minecraft Zig Edition APK (arm64-v8a)."""
+"""Reproducible CLI builder for TouchCore For Monolith APK (arm64-v8a)."""
 
 import argparse
 import os
@@ -15,13 +15,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TOUCHCORE_DIR = REPO_ROOT / "android" / "touchcore"
 RUNTIME_DIR = REPO_ROOT / "runtime"
 BRAND_DIR = REPO_ROOT / "brand"
-DEFAULT_OUT_APK = REPO_ROOT / "releases" / "TouchCore-For-Minecraft-Zig-Edition.apk"
+DEFAULT_OUT_APK = REPO_ROOT / "releases" / "Monolith.apk"
 
-CACHE_ROOT = Path.home() / ".cache" / "j2zig"
+CACHE_ROOT = Path.home() / ".cache" / "monolith"
 CACHE_SDK = CACHE_ROOT / "android-sdk"
-KEYSTORE_PATH = Path.home() / ".cache" / "j2zig" / "touchcore-release.jks"
+KEYSTORE_PATH = Path.home() / ".cache" / "monolith" / "touchcore-release.jks"
 KEY_ALIAS = "touchcore"
-KEY_PASS = "touchcore_j2zig_2026"
+KEY_PASS = "touchcore_monolith_2026"
 
 TERMUX_USR = Path("/data/data/com.termux/files/usr")
 
@@ -37,7 +37,7 @@ def find_tool(name: str, candidates: list[Path]) -> str:
 
 
 def find_jdk_bin(tool_name: str) -> str:
-    temurin_root = Path.home() / ".cache" / "j2zig" / "temurin-25"
+    temurin_root = Path.home() / ".cache" / "monolith" / "temurin-25"
     candidates = []
     if temurin_root.is_dir():
         for child in sorted(temurin_root.iterdir(), reverse=True):
@@ -87,61 +87,12 @@ def write_png(path: Path, width: int, height: int, rgba_rows: list[bytes]) -> No
     path.write_bytes(png)
 
 
-def generate_launcher_icon(path: Path, size: int) -> None:
-    """Render a crisp dark-emerald voxel diamond app icon."""
-    rows: list[bytes] = []
-    cx = (size - 1) * 0.5
-    cy = (size - 1) * 0.5
-    pad = size * 0.08
-    corner_r = size * 0.22
-    half_box = size * 0.5 - pad
-
-    for y in range(size):
-        row = bytearray()
-        dy = abs(y - cy)
-        for x in range(size):
-            dx = abs(x - cx)
-            # Rounded square mask
-            in_card = True
-            if dx > half_box or dy > half_box:
-                in_card = False
-            elif dx > half_box - corner_r and dy > half_box - corner_r:
-                qx = dx - (half_box - corner_r)
-                qy = dy - (half_box - corner_r)
-                if qx * qx + qy * qy > corner_r * corner_r:
-                    in_card = False
-
-            if not in_card:
-                row.extend((0, 0, 0, 0))
-                continue
-
-            # Dark obsidian base with subtle voxel grid
-            vx = int((x * 8) // size)
-            vy = int((y * 8) // size)
-            checker = ((vx + vy) & 1) * 6
-            r, g, b, a = 15 + checker, 23 + checker, 36 + checker, 255
-
-            # Outer neon emerald border
-            edge_dist = max(dx, dy)
-            if edge_dist > half_box - max(2.0, size * 0.055):
-                r, g, b = 61, 220, 132
-            else:
-                # Stylized "Z" / diamond emerald core
-                nx = (x - cx) / max(1.0, half_box)
-                ny = (y - cy) / max(1.0, half_box)
-                mand = abs(nx) + abs(ny)
-                if mand < 0.62:
-                    shade = int((1.0 - mand) * 45)
-                    if abs(nx + ny * 0.55) < 0.12 or abs(ny + 0.24) < 0.10 or abs(ny - 0.24) < 0.10:
-                        r, g, b = 220, 255, 235
-                    else:
-                        r, g, b = min(255, 34 + shade), min(255, 197 + shade // 2), min(255, 94 + shade)
-                elif mand < 0.72:
-                    r, g, b = 20, 83, 45
-
-            row.extend((r, g, b, a))
-        rows.append(bytes(row))
-    write_png(path, size, size, rows)
+def install_launcher_icon(path: Path, density: str) -> None:
+    src = BRAND_DIR / "android" / f"ic_launcher_{density}.png"
+    if not src.is_file():
+        raise SystemExit(f"missing brand icon {src} (see brand/src/render.js)")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, path)
 
 
 def prepare_resources(build_res: Path) -> None:
@@ -149,23 +100,16 @@ def prepare_resources(build_res: Path) -> None:
         shutil.rmtree(build_res)
     shutil.copytree(TOUCHCORE_DIR / "res", build_res)
 
-    densities = {
-        "mipmap-mdpi": 48,
-        "mipmap-hdpi": 72,
-        "mipmap-xhdpi": 96,
-        "mipmap-xxhdpi": 144,
-        "mipmap-xxxhdpi": 192,
-    }
-    for folder, px in densities.items():
-        generate_launcher_icon(build_res / folder / "ic_launcher.png", px)
+    for density in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"):
+        install_launcher_icon(build_res / f"mipmap-{density}" / "ic_launcher.png", density)
 
-    logo_dst = build_res / "drawable" / "zig_edition_logo.png"
+    logo_dst = build_res / "drawable" / "monolith_logo.png"
     logo_dst.parent.mkdir(parents=True, exist_ok=True)
     title_png = BRAND_DIR / "title.png"
     if title_png.is_file():
         shutil.copy2(title_png, logo_dst)
     else:
-        generate_launcher_icon(logo_dst, 128)
+        install_launcher_icon(logo_dst, "xhdpi")
 
 
 def find_ndk_prebuilt() -> Path | None:
@@ -317,7 +261,7 @@ def build_native_so(build_dir: Path, out_so: Path) -> None:
         "max-page-size=16384",
         "--gc-sections",
         "-soname",
-        "libtouchcore_j2z.so",
+        "libtouchcore_mono.so",
         str(zig_obj),
         str(c_obj),
         *(str(b) for b in builtins[:1]),
@@ -329,7 +273,7 @@ def build_native_so(build_dir: Path, out_so: Path) -> None:
         "-o",
         str(out_so),
     ]
-    run_step("Linking libtouchcore_j2z.so (16KB page aligned)", link_cmd)
+    run_step("Linking libtouchcore_mono.so (16KB page aligned)", link_cmd)
 
 
 def ensure_keystore(keytool: str) -> None:
@@ -357,7 +301,7 @@ def ensure_keystore(keytool: str) -> None:
             "-validity",
             "10000",
             "-dname",
-            "CN=TouchCore For Minecraft Zig Edition, OU=J2ZIG, O=J2ZIG, L=Istanbul, C=TR",
+            "CN=TouchCore For Monolith, OU=MONOLITH, O=MONOLITH, L=Istanbul, C=TR",
         ],
     )
 
@@ -426,7 +370,7 @@ def shizuku_jars(build_dir: Path) -> list[Path]:
 
 
 def make_engine_resources_zip(res_dir: Path, client_jar: Path, dest: Path) -> int:
-    """Zip the library resources of an engine build: every file of `res_dir` (the engine's J2Z_RESOURCES tree)
+    """Zip the library resources of an engine build: every file of `res_dir` (the engine's MONO_RESOURCES tree)
     that the Minecraft client jar does not provide. The launcher extracts the jar part itself at run time, so
     Mojang content never ships inside the APK. Native libraries of other platforms are left out."""
     with zipfile.ZipFile(client_jar) as z:
@@ -442,7 +386,7 @@ def make_engine_resources_zip(res_dir: Path, client_jar: Path, dest: Path) -> in
             if rel.startswith("."):
                 continue
             if rel in jar_names:
-                # branding (Zig Edition title textures) replaced a jar file in the engine build: ship it as an override
+                # branding (Monolith title textures) replaced a jar file in the engine build: ship it as an override
                 if path.stat().st_size != jar_sizes[rel] and rel.startswith("assets/minecraft/textures/gui/title/"):
                     zf.write(path, "__override__/" + rel)
                     count += 1
@@ -493,7 +437,7 @@ def build_apk(out_apk: Path, engine_resources: Path | None = None, client_jar: P
         d.mkdir(parents=True, exist_ok=True)
 
     prepare_resources(build_res)
-    so_path = lib_dir / "libtouchcore_j2z.so"
+    so_path = lib_dir / "libtouchcore_mono.so"
     build_native_so(build_dir, so_path)
 
     base_ap_ = build_dir / "base.ap_"
@@ -575,9 +519,9 @@ def build_apk(out_apk: Path, engine_resources: Path | None = None, client_jar: P
             zf.write(res_zip, "assets/engine_resources.zip", compress_type=zipfile.ZIP_STORED)
         if shader_lib is not None:
             # shaderc + SPIRV-Cross for the engine (android/shader, tools/build_shader_lib.py)
-            zf.write(shader_lib, "lib/arm64-v8a/libj2zshader.so", compress_type=zipfile.ZIP_STORED)
+            zf.write(shader_lib, "lib/arm64-v8a/libmonoshader.so", compress_type=zipfile.ZIP_STORED)
         # Store native .so uncompressed so Android 15 16KB page mapping + dlopen work directly
-        zf.write(so_path, "lib/arm64-v8a/libtouchcore_j2z.so", compress_type=zipfile.ZIP_STORED)
+        zf.write(so_path, "lib/arm64-v8a/libtouchcore_mono.so", compress_type=zipfile.ZIP_STORED)
 
     aligned_apk = build_dir / "aligned.apk"
     align_cmd = [zipalign, "-f"]
@@ -619,12 +563,12 @@ def build_apk(out_apk: Path, engine_resources: Path | None = None, client_jar: P
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Build TouchCore For Minecraft Zig Edition APK")
+    ap = argparse.ArgumentParser(description="Build TouchCore For Monolith APK")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT_APK, help="Output APK path")
     ap.add_argument("--engine-resources", type=Path, default=None,
                     help="resources dir of an engine build (<out>/resources); its library files ship as assets/engine_resources.zip")
     ap.add_argument("--shader-lib", type=Path, default=None,
-                    help="libj2zshader.so for arm64-v8a (android/shader), packaged next to the launcher library")
+                    help="libmonoshader.so for arm64-v8a (android/shader), packaged next to the launcher library")
     ap.add_argument("--client-jar", type=Path, default=None,
                     help="client.jar the engine was built from (needed with --engine-resources)")
     args = ap.parse_args()

@@ -5,7 +5,7 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
-/** j2zig overlay of Throwable. The backtrace is captured from the runtime shadow stack. */
+/** monolith overlay of Throwable. The backtrace is captured from the runtime shadow stack. */
 public class Throwable implements java.io.Serializable {
     private static final long serialVersionUID = -3042686055658047285L;
     private static final StackTraceElement[] EMPTY = new StackTraceElement[0];
@@ -49,7 +49,7 @@ public class Throwable implements java.io.Serializable {
     }
 
     /** Runtime hook: NoClassDefFoundError for a class whose initializer failed earlier (JDK 21 format). */
-    static Throwable j2zNcdfe(Class<?> c, Throwable original, Thread t) {
+    static Throwable monoNcdfe(Class<?> c, Throwable original, Thread t) {
         NoClassDefFoundError e = new NoClassDefFoundError("Could not initialize class " + c.getName());
         if (original != null) {
             ExceptionInInitializerError x = new ExceptionInInitializerError("Exception " + original

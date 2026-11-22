@@ -277,7 +277,7 @@ const FreeNode = extern struct {
 
 pub const SLAB_SIZE: usize = 128 * 1024;
 pub const SLAB_HDR_BYTES: usize = 128; // preserves 16-byte/64-byte slot alignment inside every slab
-const SLAB_MAGIC: u64 = 0x4A325A5F534C4142; // "J2Z_SLAB"
+const SLAB_MAGIC: u64 = 0x4A325A5F534C4142; // "MONO_SLAB"
 pub const MAX_RETAINED_EMPTY_SLABS: usize = 4; // 512 KiB max idle empty-slab reserve
 
 /// Inline 128-byte header placed at byte 0 of every `SLAB_SIZE`-aligned slab block.

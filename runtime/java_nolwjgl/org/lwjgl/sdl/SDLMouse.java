@@ -30,7 +30,7 @@ public final class SDLMouse {
 
     public static boolean SDL_SetWindowRelativeMouseMode(long window, boolean enabled) {
         SDLVideo.relativeMouse = enabled;
-        j2z.rhi.NativeRhi.setMouseGrabbed(enabled); // the touch layer follows: cursor mode while a screen is open
+        mono.rhi.NativeRhi.setMouseGrabbed(enabled); // the touch layer follows: cursor mode while a screen is open
         return true;
     }
 

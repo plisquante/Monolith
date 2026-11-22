@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.Properties;
 import jdk.internal.access.SharedSecrets;
 
-/** j2zig overlay of jdk.internal.misc.VM: a native image is always fully booted. */
+/** monolith overlay of jdk.internal.misc.VM: a native image is always fully booted. */
 public class VM {
     public static final int SYSTEM_LOADER_INITIALIZATION_COMPLETED = 3;
     public static final int SYSTEM_BOOTED = 4;

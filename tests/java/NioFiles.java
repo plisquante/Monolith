@@ -9,7 +9,7 @@ import java.util.stream.*;
 
 public class NioFiles {
     public static void main(String[] args) throws Exception {
-        Path dir = Files.createTempDirectory("j2zniotest");
+        Path dir = Files.createTempDirectory("mononiotest");
         try {
             FileStore fs = Files.getFileStore(dir);
             System.out.println("store " + fs.type() + " " + (fs.getTotalSpace() > 0) + " " + fs.name().isEmpty());

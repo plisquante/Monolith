@@ -127,7 +127,7 @@ pub fn alcGetString(dev: i64, param: i32) []const u8 {
         const d: ?*anyopaque = if (dev == 0) null else @ptrFromInt(@as(usize, @bitCast(dev)));
         if (f(d, param)) |s| return std.mem.span(s);
     }
-    return "J2ZIG OpenAL";
+    return "MONOLITH OpenAL";
 }
 
 pub fn alGenId() i32 {

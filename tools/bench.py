@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Same-conditions benchmark of the native (j2zig) Minecraft build against vanilla on HotSpot.
+"""Same-conditions benchmark of the native (monolith) Minecraft build against vanilla on HotSpot.
 
   python3 tools/bench.py --out DIR --mcout OUT_DIR --client-jar client.jar --libs LIBDIR \
         --target native|jvm [--display :97] [--seconds 180] [--world "New World"]
@@ -51,7 +51,7 @@ def region_stats(world):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--mcout", required=True, help="directory with natives/, assets/, game/ (j2zig build output)")
+    ap.add_argument("--mcout", required=True, help="directory with natives/, assets/, game/ (monolith build output)")
     ap.add_argument("--target", choices=["native", "jvm"], required=True)
     ap.add_argument("--client-jar")
     ap.add_argument("--libs", help="directory tree with the library jars (jvm target)")
@@ -63,7 +63,7 @@ def main():
     ap.add_argument("--graphics", choices=["auto", "vulkan", "opengl"], default="auto",
                     help="RHI graphics backend (auto: Vulkan 1.1+ with OpenGL 3.3 Core fallback)")
     ap.add_argument("--no-lwjgl", action="store_true",
-                    help="run native build without external LWJGL/JNA overrides (routes via J2ZIG RHI)")
+                    help="run native build without external LWJGL/JNA overrides (routes via MONOLITH RHI)")
     ap.add_argument("--env", action="append", default=[], help="extra KEY=VALUE for the game process")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -79,13 +79,13 @@ def main():
             gfx_flag, "--quickPlaySingleplayer", a.world]
     if a.target == "native" and a.no_lwjgl:
         props = []
-        env = dict(os.environ, DISPLAY=a.display, J2Z_RHI_BACKEND=a.graphics,
-                   J2Z_NO_LWJGL="1", J2Z_RESOURCES=os.path.join(a.mcout, "resources"))
+        env = dict(os.environ, DISPLAY=a.display, MONO_RHI_BACKEND=a.graphics,
+                   MONO_NO_LWJGL="1", MONO_RESOURCES=os.path.join(a.mcout, "resources"))
     else:
         props = [f"-Djava.library.path={nat}", f"-Dorg.lwjgl.librarypath={nat}", f"-Djna.boot.library.path={nat}",
                  "-Djna.nosys=false", "-Dorg.lwjgl.system.allocator=system"]
         env = dict(os.environ, DISPLAY=a.display, LD_LIBRARY_PATH=nat + ":" + os.environ.get("LD_LIBRARY_PATH", ""),
-                   J2Z_RHI_BACKEND=a.graphics, J2Z_RESOURCES=os.path.join(a.mcout, "resources"))
+                   MONO_RHI_BACKEND=a.graphics, MONO_RESOURCES=os.path.join(a.mcout, "resources"))
     env.pop("JAVA_TOOL_OPTIONS", None)
     for kv in a.env:
         k, v = kv.split("=", 1)

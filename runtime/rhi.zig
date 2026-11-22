@@ -249,21 +249,21 @@ pub const RhiDevice = struct {
         dev.caps.active_backend = chosen;
         switch (chosen) {
             .vulkan => {
-                dev.caps.setName("J2ZIG Vulkan 1.1+ RHI");
+                dev.caps.setName("MONOLITH Vulkan 1.1+ RHI");
                 dev.caps.supports_multi_draw_indirect = true;
                 dev.caps.supports_base_instance = true;
                 dev.caps.supports_compute_cull = true;
                 dev.caps.uses_tbo_instancing = false;
             },
             .opengl33 => {
-                dev.caps.setName("J2ZIG OpenGL 3.3 Core RHI (Intel HD 5500 Safe)");
+                dev.caps.setName("MONOLITH OpenGL 3.3 Core RHI (Intel HD 5500 Safe)");
                 dev.caps.supports_multi_draw_indirect = false; // lowered transparently via fallback_cmds
                 dev.caps.supports_base_instance = if (dev.gl_ctx) |*g| g.has_base_instance else false;
                 dev.caps.supports_compute_cull = false;
                 dev.caps.uses_tbo_instancing = true;
             },
             .headless, .auto => {
-                dev.caps.setName("J2ZIG Headless Command-Verified RHI");
+                dev.caps.setName("MONOLITH Headless Command-Verified RHI");
                 dev.caps.supports_multi_draw_indirect = true;
                 dev.caps.supports_base_instance = true;
                 dev.caps.supports_compute_cull = true;
@@ -280,7 +280,7 @@ pub const RhiDevice = struct {
         if (gl.Gl33Backend.probe()) |gc| {
             self.gl_ctx = gc;
             self.caps.active_backend = .opengl33;
-            self.caps.setName("J2ZIG OpenGL 3.3 Core RHI (Intel HD 5500 Safe)");
+            self.caps.setName("MONOLITH OpenGL 3.3 Core RHI (Intel HD 5500 Safe)");
             self.caps.supports_multi_draw_indirect = false;
             self.caps.supports_base_instance = gc.has_base_instance;
             self.caps.supports_compute_cull = false;

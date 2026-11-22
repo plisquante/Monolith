@@ -5,7 +5,7 @@ Usage: tools/incr_build.py <client.jar> -o <out dir> [-O ReleaseSafe] [--shards 
 
 The first run is a full build and records, for every generated Zig file, its content hash (<out>/.incr_files.json).
 Later runs list the generated files (classes) that changed, rebuild only the shards that contain them (the others
-keep their object, see `--incremental` in j2zig/__main__.py) and link. Python hash randomisation is switched off
+keep their object, see `--incremental` in monolith/__main__.py) and link. Python hash randomisation is switched off
 (PYTHONHASHSEED=0) so unchanged classes transpile to byte-identical Zig.
 """
 import argparse
@@ -43,7 +43,7 @@ def main() -> int:
     snap = out / ".incr_files.json"
     old = json.loads(snap.read_text()) if snap.is_file() else None
 
-    env = dict(os.environ, PYTHONHASHSEED="0", J2Z_ZIG_LD=os.environ.get("J2Z_ZIG_LD", "zig"))
+    env = dict(os.environ, PYTHONHASHSEED="0", MONO_ZIG_LD=os.environ.get("MONO_ZIG_LD", "zig"))
     env.pop("_JAVA_OPTIONS", None)
     env.pop("JAVA_TOOL_OPTIONS", None)
     cmd = [sys.executable, "-u", str(REPO / "tools" / "mcbuild.py"), a.jar, "-O", a.optimize, "--backend", a.backend,

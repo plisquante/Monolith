@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-Minecraft: Zig Edition. j2zig transpiles JVM bytecode (Minecraft, libs, JDK 25) to Zig, builds a JVM-free native executable. Python transpiler `j2zig/`, Zig runtime `runtime/`, Java overlay `classlib/src`, Android launcher `android/touchcore`.
+Monolith. monolith transpiles JVM bytecode (Minecraft, libs, JDK 25) to Zig, builds a JVM-free native executable. Python transpiler `monolith/`, Zig runtime `runtime/`, Java overlay `classlib/src`, Android launcher `android/touchcore`.
 
 ## Start
 - Map: `.claude/ARCHITECTURE_MAP.md` (read once). Status: `docs/STATUS.md` (grep, do not read whole).
-- Load skills on demand from `.claude/skills/`: `focused-work` (always), `caveman` (always), `ponytail` (code tasks), `cmd-output`, `j2zig-build`, `git-attribution`.
+- Load skills on demand from `.claude/skills/`: `focused-work` (always), `caveman` (always), `ponytail` (code tasks), `cmd-output`, `monolith-build`, `git-attribution`.
 
 ## Reply
 - Terse, answer first, no filler, no emoji, no em-dashes. Details: `caveman`.
@@ -23,5 +23,5 @@ Minecraft: Zig Edition. j2zig transpiles JVM bytecode (Minecraft, libs, JDK 25) 
 
 ## Hard limits
 - Branch: the one the session names. Never commit jar, `mc/`, `out/`, `build/`, `tests/build`.
-- Zig compile of Minecraft needs ~10 GB. Never run with the test suite. See `j2zig-build`.
+- Zig compile of Minecraft needs ~10 GB. Never run with the test suite. See `monolith-build`.
 - Commits and PRs: authors `cem-ali152` and `plisquante` only. No Co-Authored-By, no Claude-Session, no mention of Claude or AI. See `git-attribution`.

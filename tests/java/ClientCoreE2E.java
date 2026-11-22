@@ -1,4 +1,4 @@
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;

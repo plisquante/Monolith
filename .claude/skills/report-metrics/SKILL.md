@@ -1,6 +1,6 @@
 ---
 name: report-metrics
-description: Every time a TouchCore report zip (j2zig-rapor-*.zip) arrives, add it to the per-device performance history and republish the "Cihaz Performansı" page (line charts of RAM, CPU, GPU, FPS, TPS, GC pause per phone; a line per device across reports). Use on every uploaded report, in addition to reading it for errors.
+description: Every time a TouchCore report zip (monolith-rapor-*.zip) arrives, add it to the per-device performance history and republish the "Cihaz Performansı" page (line charts of RAM, CPU, GPU, FPS, TPS, GC pause per phone; a line per device across reports). Use on every uploaded report, in addition to reading it for errors.
 ---
 
 # report-metrics

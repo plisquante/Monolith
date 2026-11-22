@@ -5,7 +5,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
- * j2zig overlay of jdk.internal.util.Preconditions. Same checks and exception messages as the
+ * monolith overlay of jdk.internal.util.Preconditions. Same checks and exception messages as the
  * JDK, but messages are built by concatenation instead of String.format (which would pull the
  * whole java.util.Formatter / Locale machinery into every program).
  */

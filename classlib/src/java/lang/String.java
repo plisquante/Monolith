@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.StringJoiner;
 
 /**
- * j2zig overlay of java.lang.String: immutable UTF-16 code unit sequence stored in a char[].
+ * monolith overlay of java.lang.String: immutable UTF-16 code unit sequence stored in a char[].
  * The runtime (rt.zig / generated hooks) creates literals directly through the {@code value} field.
  */
 public final class String implements java.io.Serializable, Comparable<String>, CharSequence {
@@ -159,7 +159,7 @@ public final class String implements java.io.Serializable, Comparable<String>, C
     private static int charsetCode(Charset cs) {
         if (cs == null) throw new NullPointerException("charset");
         int c = charsetCodeByName(cs.name());
-        if (c < 0) throw new UnsupportedOperationException("j2zig: charset " + cs.name());
+        if (c < 0) throw new UnsupportedOperationException("monolith: charset " + cs.name());
         return c;
     }
 
@@ -350,13 +350,13 @@ public final class String implements java.io.Serializable, Comparable<String>, C
         return value;
     }
 
-    /** j2zig internal (used by java.io.PrintStream): charset code, or -1 if unsupported. */
-    public static int j2zCharsetCode(String charsetName) {
+    /** monolith internal (used by java.io.PrintStream): charset code, or -1 if unsupported. */
+    public static int monoCharsetCode(String charsetName) {
         return charsetCodeByName(charsetName);
     }
 
-    /** j2zig internal: encode with a charset code from {@link #j2zCharsetCode}. */
-    public static byte[] j2zEncode(int cs, String s) {
+    /** monolith internal: encode with a charset code from {@link #monoCharsetCode}. */
+    public static byte[] monoEncode(int cs, String s) {
         return encode(cs, s.value, 0, s.value.length);
     }
 
@@ -951,18 +951,18 @@ public final class String implements java.io.Serializable, Comparable<String>, C
     }
 
     public static String format(String format, Object... args) {
-        return j2zFormat(format, args);
+        return monoFormat(format, args);
     }
 
     public static String format(Locale l, String format, Object... args) {
-        return j2zFormat(format, args);
+        return monoFormat(format, args);
     }
 
     public String formatted(Object... args) {
-        return j2zFormat(this, args);
+        return monoFormat(this, args);
     }
 
-    private static String j2zFormat(String fmt, Object... args) {
+    private static String monoFormat(String fmt, Object... args) {
         if (fmt == null) throw new NullPointerException();
         StringBuilder out = new StringBuilder(fmt.length() + 32);
         int seqIdx = 0;
@@ -1048,13 +1048,13 @@ public final class String implements java.io.Serializable, Comparable<String>, C
                 lastIdx = useIdx;
             }
             Object arg = (args != null && useIdx < args.length) ? args[useIdx] : null;
-            String rendered = j2zRenderSpec(conv, arg, left, plus, space, zero, group, paren, alt, width, prec);
+            String rendered = monoRenderSpec(conv, arg, left, plus, space, zero, group, paren, alt, width, prec);
             out.append(rendered);
         }
         return out.toString();
     }
 
-    private static String j2zRenderSpec(char conv, Object arg, boolean left, boolean plus, boolean space,
+    private static String monoRenderSpec(char conv, Object arg, boolean left, boolean plus, boolean space,
                                         boolean zero, boolean group, boolean paren, boolean alt, int width, int prec) {
         switch (conv) {
             case 's':
@@ -1062,14 +1062,14 @@ public final class String implements java.io.Serializable, Comparable<String>, C
                 String s = (arg == null) ? "null" : arg.toString();
                 if (prec >= 0 && prec < s.length()) s = s.substring(0, prec);
                 if (conv == 'S') s = s.toUpperCase();
-                return j2zPad(s, width, left, ' ');
+                return monoPad(s, width, left, ' ');
             }
             case 'b':
             case 'B': {
                 String s = (arg == null) ? "false" : (arg instanceof Boolean b ? b.toString() : "true");
                 if (prec >= 0 && prec < s.length()) s = s.substring(0, prec);
                 if (conv == 'B') s = s.toUpperCase();
-                return j2zPad(s, width, left, ' ');
+                return monoPad(s, width, left, ' ');
             }
             case 'c':
             case 'C': {
@@ -1079,20 +1079,20 @@ public final class String implements java.io.Serializable, Comparable<String>, C
                 else c = String.valueOf(arg).charAt(0);
                 String s = String.valueOf(c);
                 if (conv == 'C') s = s.toUpperCase();
-                return j2zPad(s, width, left, ' ');
+                return monoPad(s, width, left, ' ');
             }
             case 'h':
             case 'H': {
                 String s = (arg == null) ? "null" : Integer.toHexString(arg.hashCode());
                 if (prec >= 0 && prec < s.length()) s = s.substring(0, prec);
                 if (conv == 'H') s = s.toUpperCase();
-                return j2zPad(s, width, left, ' ');
+                return monoPad(s, width, left, ' ');
             }
             case 'd': {
                 long v = (arg instanceof Number num) ? num.longValue() : 0L;
                 boolean neg = v < 0;
                 String digits = (v == Long.MIN_VALUE) ? "9223372036854775808" : Long.toString(neg ? -v : v);
-                if (group) digits = j2zGroup(digits);
+                if (group) digits = monoGroup(digits);
                 String prefix = "";
                 String suffix = "";
                 if (neg) {
@@ -1103,7 +1103,7 @@ public final class String implements java.io.Serializable, Comparable<String>, C
                 } else if (space) {
                     prefix = " ";
                 }
-                return j2zPadNumeric(prefix, digits, suffix, width, left, zero);
+                return monoPadNumeric(prefix, digits, suffix, width, left, zero);
             }
             case 'x':
             case 'X':
@@ -1117,7 +1117,7 @@ public final class String implements java.io.Serializable, Comparable<String>, C
                 String digits = (conv == 'o') ? Long.toOctalString(u) : Long.toHexString(u);
                 if (conv == 'X') digits = digits.toUpperCase();
                 String prefix = alt ? (conv == 'o' ? "0" : (conv == 'X' ? "0X" : "0x")) : "";
-                return j2zPadNumeric(prefix, digits, "", width, left, zero);
+                return monoPadNumeric(prefix, digits, "", width, left, zero);
             }
             case 'f':
             case 'e':
@@ -1125,16 +1125,16 @@ public final class String implements java.io.Serializable, Comparable<String>, C
             case 'g':
             case 'G': {
                 double d = (arg instanceof Number num) ? num.doubleValue() : 0.0;
-                if (Double.isNaN(d)) return j2zPad("NaN", width, left, ' ');
+                if (Double.isNaN(d)) return monoPad("NaN", width, left, ' ');
                 boolean neg = (Double.doubleToRawLongBits(d) & 0x8000000000000000L) != 0;
                 double abs = Math.abs(d);
                 if (Double.isInfinite(abs)) {
                     String p = neg ? (paren ? "(" : "-") : (plus ? "+" : (space ? " " : ""));
                     String s = (neg && paren) ? ")" : "";
-                    return j2zPad(p + (conv == 'E' || conv == 'G' ? "INFINITY" : "Infinity") + s, width, left, ' ');
+                    return monoPad(p + (conv == 'E' || conv == 'G' ? "INFINITY" : "Infinity") + s, width, left, ' ');
                 }
                 int p = (prec < 0) ? 6 : prec;
-                String body = j2zFormatFloat(conv, abs, p, group);
+                String body = monoFormatFloat(conv, abs, p, group);
                 String prefix = "";
                 String suffix = "";
                 if (neg) {
@@ -1145,23 +1145,23 @@ public final class String implements java.io.Serializable, Comparable<String>, C
                 } else if (space) {
                     prefix = " ";
                 }
-                return j2zPadNumeric(prefix, body, suffix, width, left, zero);
+                return monoPadNumeric(prefix, body, suffix, width, left, zero);
             }
             default:
                 return String.valueOf(arg);
         }
     }
 
-    private static String j2zFormatFloat(char conv, double abs, int prec, boolean group) {
+    private static String monoFormatFloat(char conv, double abs, int prec, boolean group) {
         if (abs == 0.0) {
             if (conv == 'f') {
-                return prec == 0 ? "0" : "0." + j2zZeros(prec);
+                return prec == 0 ? "0" : "0." + monoZeros(prec);
             }
             if (conv == 'e' || conv == 'E') {
-                return (prec == 0 ? "0" : "0." + j2zZeros(prec)) + (conv == 'E' ? "E+00" : "e+00");
+                return (prec == 0 ? "0" : "0." + monoZeros(prec)) + (conv == 'E' ? "E+00" : "e+00");
             }
             int sig = (prec == 0) ? 1 : prec;
-            return sig <= 1 ? "0" : "0." + j2zZeros(sig - 1);
+            return sig <= 1 ? "0" : "0." + monoZeros(sig - 1);
         }
         String ds = Double.toString(abs);
         int ePos = ds.indexOf('E');
@@ -1177,24 +1177,24 @@ public final class String implements java.io.Serializable, Comparable<String>, C
         int exp = intLen - firstNonZero + exp10; // value = 0.<sigDigits> * 10^exp
 
         if (conv == 'f') {
-            return j2zFormatFixed(sigDigits, exp, prec, group);
+            return monoFormatFixed(sigDigits, exp, prec, group);
         }
         if (conv == 'e' || conv == 'E') {
-            return j2zFormatSci(sigDigits, exp, prec, conv == 'E');
+            return monoFormatSci(sigDigits, exp, prec, conv == 'E');
         }
         int sig = (prec == 0) ? 1 : prec;
         int[] carry = new int[1];
-        String rounded = j2zRoundSig(sigDigits, sig, carry);
+        String rounded = monoRoundSig(sigDigits, sig, carry);
         int rExp = exp + carry[0];
         int sciExp = rExp - 1;
         if (sciExp >= -4 && sciExp < sig) {
             int frac = Math.max(0, sig - 1 - sciExp);
-            return j2zFormatFixed(rounded, rExp, frac, group);
+            return monoFormatFixed(rounded, rExp, frac, group);
         }
-        return j2zFormatSci(rounded, rExp, Math.max(0, sig - 1), conv == 'G');
+        return monoFormatSci(rounded, rExp, Math.max(0, sig - 1), conv == 'G');
     }
 
-    private static String j2zRoundSig(String sigDigits, int keep, int[] carryOut) {
+    private static String monoRoundSig(String sigDigits, int keep, int[] carryOut) {
         if (keep <= 0) {
             if (!sigDigits.isEmpty() && sigDigits.charAt(0) >= '5') {
                 carryOut[0] = 1;
@@ -1223,13 +1223,13 @@ public final class String implements java.io.Serializable, Comparable<String>, C
         return new String(buf, true);
     }
 
-    private static String j2zFormatFixed(String sigDigits, int exp, int prec, boolean group) {
+    private static String monoFormatFixed(String sigDigits, int exp, int prec, boolean group) {
         int keep = exp + prec;
         if (keep < 0) {
-            return prec == 0 ? "0" : "0." + j2zZeros(prec);
+            return prec == 0 ? "0" : "0." + monoZeros(prec);
         }
         int[] carry = new int[1];
-        String r = j2zRoundSig(sigDigits, keep, carry);
+        String r = monoRoundSig(sigDigits, keep, carry);
         if (carry[0] != 0) {
             // r is "1" at the new leading position when nothing was kept (keep == 0), else all zeros plus a lead 1
             exp += 1;
@@ -1255,13 +1255,13 @@ public final class String implements java.io.Serializable, Comparable<String>, C
             }
             fracPart = fb.toString();
         }
-        if (group) intPart = j2zGroup(intPart);
+        if (group) intPart = monoGroup(intPart);
         return prec == 0 ? intPart : (intPart + "." + fracPart);
     }
 
-    private static String j2zFormatSci(String sigDigits, int exp, int prec, boolean upper) {
+    private static String monoFormatSci(String sigDigits, int exp, int prec, boolean upper) {
         int[] carry = new int[1];
-        String r = j2zRoundSig(sigDigits, prec + 1, carry);
+        String r = monoRoundSig(sigDigits, prec + 1, carry);
         int sciExp = exp + carry[0] - 1;
         StringBuilder sb = new StringBuilder(prec + 8);
         sb.append(r.isEmpty() ? '0' : r.charAt(0));
@@ -1277,13 +1277,13 @@ public final class String implements java.io.Serializable, Comparable<String>, C
         return sb.toString();
     }
 
-    private static String j2zZeros(int count) {
+    private static String monoZeros(int count) {
         char[] z = new char[count];
         for (int i = 0; i < count; i++) z[i] = '0';
         return new String(z, true);
     }
 
-    private static String j2zGroup(String digits) {
+    private static String monoGroup(String digits) {
         int len = digits.length();
         if (len <= 3) return digits;
         StringBuilder sb = new StringBuilder(len + len / 3);
@@ -1296,7 +1296,7 @@ public final class String implements java.io.Serializable, Comparable<String>, C
         return sb.toString();
     }
 
-    private static String j2zPad(String s, int width, boolean left, char pad) {
+    private static String monoPad(String s, int width, boolean left, char pad) {
         if (width <= s.length()) return s;
         StringBuilder sb = new StringBuilder(width);
         int diff = width - s.length();
@@ -1310,7 +1310,7 @@ public final class String implements java.io.Serializable, Comparable<String>, C
         return sb.toString();
     }
 
-    private static String j2zPadNumeric(String prefix, String body, String suffix, int width, boolean left, boolean zero) {
+    private static String monoPadNumeric(String prefix, String body, String suffix, int width, boolean left, boolean zero) {
         int len = prefix.length() + body.length() + suffix.length();
         if (width <= len) return prefix + body + suffix;
         int diff = width - len;

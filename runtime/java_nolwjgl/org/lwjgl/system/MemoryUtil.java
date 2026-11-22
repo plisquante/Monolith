@@ -1,6 +1,6 @@
 package org.lwjgl.system;
 
-import j2z.rhi.NativeRhi;
+import mono.rhi.NativeRhi;
 import jdk.internal.misc.Unsafe;
 import org.lwjgl.PointerBuffer;
 

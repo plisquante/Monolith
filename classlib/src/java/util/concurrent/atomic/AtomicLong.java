@@ -3,7 +3,7 @@ package java.util.concurrent.atomic;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongUnaryOperator;
 
-/** j2zig overlay: lock-free updates are implemented with the runtime's native CAS on the value field. */
+/** monolith overlay: lock-free updates are implemented with the runtime's native CAS on the value field. */
 public class AtomicLong extends Number implements java.io.Serializable {
     private volatile long value;
 

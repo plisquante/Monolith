@@ -2,7 +2,7 @@ package java.lang;
 
 import java.util.Arrays;
 
-/** j2zig overlay: growable UTF-16 buffer shared by StringBuilder and StringBuffer. */
+/** monolith overlay: growable UTF-16 buffer shared by StringBuilder and StringBuffer. */
 abstract sealed class AbstractStringBuilder implements Appendable, CharSequence permits StringBuilder, StringBuffer {
     char[] value;
     int count;

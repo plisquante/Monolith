@@ -9,7 +9,7 @@ import java.util.Objects;
 import java.util.StringJoiner;
 
 /**
- * j2zig overlay of ParameterizedTypeImpl: identical behavior and toString/equals/hashCode to the
+ * monolith overlay of ParameterizedTypeImpl: identical behavior and toString/equals/hashCode to the
  * JDK, except validateConstructorArguments builds its exception message by concatenation instead of
  * String.format (avoiding pulling java.util.Formatter / Locale / Calendar into every HashMap user).
  */

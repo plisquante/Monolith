@@ -24,7 +24,7 @@ for statics). The function must have the signature of the generated method:
   the original (`P.C_pkg_Cls.m_x_hash_orig(...)` is not exported: delegate through the Java method instead).
 * A patch that allocates or calls Java code must register its references like generated code (a `rt.Frame`
   with the reference slots). Pure numeric kernels need none: no frame, no allocation, no calls.
-* Verification: `J2Z_PATCH_VERIFY=1 ./run.sh` runs original and patch for every call of a method that returns a
+* Verification: `MONO_PATCH_VERIFY=1 ./run.sh` runs original and patch for every call of a method that returns a
   primitive and aborts on the first difference (value compared as raw bits). Methods that return references or
   `void`, or that have side effects, are covered by the differential tests in tests/java instead (write one
   that exercises the method and compare against HotSpot with `python3 tests/run_tests.py`).
@@ -38,7 +38,7 @@ See `bitstorage.zig`.
 
 ## JDK intrinsics
 
-Independent of the manifest, `INTRINSICS` in `j2zig/zigen.py` compiles calls of pure JDK statics
+Independent of the manifest, `INTRINSICS` in `monolith/zigen.py` compiles calls of pure JDK statics
 (`Math.floor/ceil/sqrt/abs/min/max/floorDiv/floorMod`, `Integer/Long.bitCount/numberOfLeadingZeros/...`,
 raw bit casts of Float/Double) to inline helpers in `runtime/rt.zig` (`iFloor`, ...). Tested bit for bit
 against HotSpot by `tests/java/Intrinsics.java`. Known difference: an ArithmeticException thrown by

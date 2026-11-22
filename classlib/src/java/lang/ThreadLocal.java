@@ -4,7 +4,7 @@ import java.util.IdentityHashMap;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-/** j2zig overlay of ThreadLocal backed by a per-thread identity map. */
+/** monolith overlay of ThreadLocal backed by a per-thread identity map. */
 public class ThreadLocal<T> {
     private static final Object NULL = new Object();
 

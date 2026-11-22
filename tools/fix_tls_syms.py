@@ -4,7 +4,7 @@ STT_NOTYPE to STT_TLS in the generated ELF64 objects of a sharded build.
 
 The zig self-hosted backend emits `extern threadlocal` references as NOTYPE UND symbols, which the
 zg self-hosted linker tolerates but GNU ld rejects ("TLS definition ... mismatches non-TLS
-reference"). When J2Z_ZIG_LD=cc is used to link a sharded build with the system linker, those four
+reference"). When MONO_ZIG_LD=cc is used to link a sharded build with the system linker, those four
 symbols must be marked STT_TLS for ld to bind them to the definitions in shared.o. The symbol table
 layout is untouched — exactly four bytes change (one st_info per matching symbol)."""
 from __future__ import annotations

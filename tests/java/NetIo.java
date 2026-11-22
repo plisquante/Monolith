@@ -73,7 +73,7 @@ public class NetIo {
             System.out.println(new String(p.getData(), 0, p.getLength()) + " " + (p.getPort() == a.getLocalPort()));
         }
         // unix domain sockets
-        Path sock = Files.createTempDirectory("j2znet").resolve("s.sock");
+        Path sock = Files.createTempDirectory("mononet").resolve("s.sock");
         try (ServerSocketChannel us = ServerSocketChannel.open(StandardProtocolFamily.UNIX)) {
             us.bind(UnixDomainSocketAddress.of(sock));
             Thread t = new Thread(() -> {

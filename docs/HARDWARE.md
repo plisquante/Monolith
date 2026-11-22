@@ -20,7 +20,7 @@ on the machine that audited this repository in November 2026.
 | `python3 -m py_compile`, `pyflakes`, `zig ast-check` | any | OK (< 1 s per file) |
 | `pyflakes`/`ast-check` full pass | any | OK |
 | **one** differential test, Debug, self-hosted backend (`tests/run_tests.py Arith`) | ~2 GiB free, 1 job | **PASS in 495 s** (build) + 0.58 s native; machine under heavy load (loadavg ~10), interactivity suffers |
-| differential suite, all of `tests/java/` | ≥ 4 GiB free, hours of CPU | thrash risk: do not run; tests are refused below `J2Z_TEST_MIN_AVAIL_GIB` (default 0.5 GiB) |
+| differential suite, all of `tests/java/` | ≥ 4 GiB free, hours of CPU | thrash risk: do not run; tests are refused below `MONO_TEST_MIN_AVAIL_GIB` (default 0.5 GiB) |
 | full Minecraft build (`build.sh client.jar`) | Debug self-hosted: ~10 GB peak; LLVM unsharded: > 15 GB (OOM-killed on the author's 16 GB machine) | impossible; nothing in `./build.sh` will succeed here |
 | Client Core E2E (`tests/run_client_core_e2e.py`), transpile 5 901 classes + compile | ≥ 8 GiB, tens of minutes | impossible; not run here |
 | microbench (`tools/microbench/run_client_core_bench.py`) | ReleaseFast, ~2–4 GiB | not run here (ReleaseFast LLVM memory needs) |
@@ -28,10 +28,10 @@ on the machine that audited this repository in November 2026.
 ## Rules the scripts now enforce
 
 - `tests/run_tests.py` refuses to start a test build below `--min-avail-gib`
-  (default 0.5 GiB, env `J2Z_TEST_MIN_AVAIL_GIB`), re-checks before every test and stops the
+  (default 0.5 GiB, env `MONO_TEST_MIN_AVAIL_GIB`), re-checks before every test and stops the
   suite with exit code 3 rather than thrashing.
 - `.claude/hooks/guard.py` refuses starting a heavy job below 1 GiB available
-  (4 GiB on ≥ 8 GiB machines; `J2Z_MIN_AVAIL_GIB` overrides), refuses a second concurrent
+  (4 GiB on ≥ 8 GiB machines; `MONO_MIN_AVAIL_GIB` overrides), refuses a second concurrent
   heavy job and blocks committing artifacts.
 - One heavy job at a time. Never alongside the test suite on a big machine either
   (CLAUDE.md); on this box, never at all.

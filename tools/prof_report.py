@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve a J2Z_PROF sample file (raw u64 instruction pointers) against the executable's symbol table.
+"""Resolve a MONO_PROF sample file (raw u64 instruction pointers) against the executable's symbol table.
 
 usage: prof_report.py <samples.bin> <executable> [top-N]
 Prints self time per function (the function containing the interrupted instruction) and per class

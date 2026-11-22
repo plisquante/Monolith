@@ -1,5 +1,5 @@
 //! Direct Native GL -> libGLESv3.so Dispatch & Android Surface/Input Host Bridge.
-//! Used by `rhi_bridge.zig` (`j2z.rhi.NativeRhi`) so `--no-lwjgl` OpenGL calls route straight
+//! Used by `rhi_bridge.zig` (`mono.rhi.NativeRhi`) so `--no-lwjgl` OpenGL calls route straight
 //! to Android hardware GLESv3 (with GL 3.3 Core -> GLES 3.0 compatibility shims) and GLFW
 //! window/input calls bind to TouchCore's `ANativeWindow` + `g_tc_input`.
 
@@ -55,7 +55,7 @@ fn ensureHost() *const HostFns {
     defer host_lock.unlock();
     if (!host.loaded) {
         host.loaded = true;
-        host.lib = std.DynLib.open("libtouchcore_j2z.so") catch null;
+        host.lib = std.DynLib.open("libtouchcore_mono.so") catch null;
         if (host.lib) |*lib| {
             host.has_window = lib.lookup(@TypeOf(host.has_window.?), "tc_android_has_window");
             host.get_size = lib.lookup(@TypeOf(host.get_size.?), "tc_android_get_size");
