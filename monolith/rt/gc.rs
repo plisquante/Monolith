@@ -409,6 +409,12 @@ pub fn register_array_class(c: &'static Class) {
 
 // ------------------------------------------------------------------ allocation
 pub fn alloc_obj(class: &'static Class, size: usize) -> *mut Obj {
+    crate::prof::on_alloc(class, size, false);
+    alloc_obj_inner(class, size)
+}
+
+#[inline(always)]
+fn alloc_obj_inner(class: &'static Class, size: usize) -> *mut Obj {
     let sz = size.max(16);
     let aligned = (sz + 15) & !15;
     let reg = cur_reg();
@@ -486,7 +492,7 @@ fn alloc_small_slow(reg: *mut ThreadReg, sc: usize, class: &'static Class) -> *m
     if need_gc {
         collect();
         // After GC, our active[sc] might have been cleared, recurse cleanly once via alloc_obj:
-        return alloc_obj(class, SIZE_CLASSES[sc]);
+        return alloc_obj_inner(class, SIZE_CLASSES[sc]);
     }
     unsafe {
         let o = (*slab).alloc_slot().expect("fresh slab has slot");
@@ -567,15 +573,18 @@ impl Drop for ArenaGuard {
     }
 }
 
+/// Allocation site proven non-escaping by the escape analysis. The scope arena is switched off (see
+/// `_alloc_arena_unused`), so these still come from the collected heap; the profiler counts them separately.
 pub fn alloc_arena(class: &'static Class, size: usize) -> Ref {
-    return Ref(alloc_obj(class, size));
+    crate::prof::on_alloc(class, size, true);
+    return Ref(alloc_obj_inner(class, size));
 }
 #[allow(dead_code)]
 fn _alloc_arena_unused(class: &'static Class, size: usize) -> Ref {
     let sz = ((size.max(16)) + 15) & !15;
     let reg = cur_reg();
     if reg.is_null() {
-        return Ref(alloc_obj(class, size));
+        return Ref(alloc_obj_inner(class, size));
     }
     unsafe {
         let r = &mut *reg;
@@ -658,6 +667,7 @@ pub fn collect() {
         h = cv.wait_timeout(h, std::time::Duration::from_micros(50)).unwrap().0;
     }
 
+    let stw_start = std::time::Instant::now();
     h.gc_count += 1;
     // Return thread-local active slabs to global pools so everything is swept cleanly
     for i in 0..h.threads.len() {
@@ -828,6 +838,8 @@ pub fn collect() {
     }
 
     // 5. Sweep slabs
+    let since_gc = BYTES_SINCE_GC.load(Ordering::Relaxed);
+    let mut census = crate::prof::sweep_begin();
     for sc in 0..NUM_CLASSES {
         h.partial[sc].clear();
     }
@@ -859,9 +871,11 @@ pub fn collect() {
                 let o = (base + off) as *mut Obj;
                 if ((*o).gc & GC_MARK) != 0 {
                     (*o).gc &= !GC_MARK;
+                    if let Some(c) = census.as_mut() { c.live(o, sz); }
                     live_c += 1;
                     new_live += sz;
                 } else {
+                    if let Some(c) = census.as_mut() { c.dead(o, sz); }
                     s.clear_bit(bit);
                     let p = (base + off) as *mut i32;
                     *p = s.free_head;
@@ -898,8 +912,10 @@ pub fn collect() {
             let o = addr as *mut Obj;
             if ((*o).gc & GC_MARK) != 0 {
                 (*o).gc &= !GC_MARK;
+                if let Some(c) = census.as_mut() { c.live(o, sz); }
                 new_live += sz;
             } else {
+                if let Some(c) = census.as_mut() { c.dead(o, sz); }
                 dead_large.push((addr, sz));
             }
         }
@@ -910,6 +926,9 @@ pub fn collect() {
         unsafe { dealloc(addr as *mut u8, Layout::from_size_align(sz, 16).unwrap()) };
     }
 
+    if let Some(c) = census.take() {
+        c.finish(h.gc_count as u64, new_live, h.heap_bytes, since_gc, stw_start);
+    }
     h.live_bytes = new_live;
     h.gc_threshold = (new_live * 2).max(16 * 1024 * 1024);
     BYTES_SINCE_GC.store(0, Ordering::Relaxed);

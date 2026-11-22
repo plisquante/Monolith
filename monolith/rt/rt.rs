@@ -272,6 +272,7 @@ unsafe extern "C" {
 }
 pub fn init_hooks(h: Hooks) {
     unsafe { HOOKS = Some(h) }
+    crate::prof::init();
     #[cfg(target_os = "linux")]
     unsafe {
         let alt = Box::leak(vec![0u8; 65536].into_boxed_slice());
