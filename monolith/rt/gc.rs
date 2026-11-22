@@ -621,7 +621,7 @@ fn alloc_arena_bump(class: &'static Class, size: usize) -> Ref {
             let c = &mut r.arena[r.arena_idx];
             if c.used + sz <= c.cap {
                 let p = c.ptr.add(c.used) as *mut Obj;
-                std::ptr::write_bytes(p, 0, sz);
+                std::ptr::write_bytes(p as *mut u8, 0, sz);   // bytes, not Obj-sized units
                 c.used += sz;
                 (*p).class = class;
                 (*p).gc = GC_ARENA;
