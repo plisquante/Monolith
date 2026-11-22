@@ -1583,7 +1583,8 @@ def _sym_scan(text: str) -> set[str]:
 
 def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = False,
                     no_lwjgl: bool = False, reflect_classes: list[str] | None = None,
-                    shards: int = 1, use_escape: bool = False, use_patches: bool = True) -> tuple[dict[str, str], Gen]:
+                    shards: int = 1, use_escape: bool = False, use_patches: bool = True,
+                    analyze_only: bool = False) -> tuple[dict[str, str], Gen]:
     sys.path.insert(0, ROOT)
     import heapq
     from . import __main__ as M
@@ -1611,6 +1612,8 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
     pset = P.load(os.environ.get("MONO_PATCH_MANIFEST") or None) if use_patches else P.PatchSet({}, [])
     pset.validate(world)
     prog.run(main, extra_roots=pset.roots())
+    if analyze_only:
+        return world, prog, cp
     esc_res = None
     if use_escape:
         from .escape import analyze as escape_analyze

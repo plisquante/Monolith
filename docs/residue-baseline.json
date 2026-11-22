@@ -1,0 +1,3658 @@
+{
+ "methods": 278507,
+ "bytes": 8908136,
+ "origins": {
+  "game: Minecraft (client.jar)": {
+   "classes": 9824,
+   "methods": 88385,
+   "bytes": 3903584
+  },
+  "library: netty-transport": {
+   "classes": 181,
+   "methods": 1561,
+   "bytes": 43977
+  },
+  "JDK: ": {
+   "classes": 36422,
+   "methods": 89944,
+   "bytes": 0
+  },
+  "library: netty-transport-native-unix-common": {
+   "classes": 16,
+   "methods": 161,
+   "bytes": 4701
+  },
+  "library: icu4j": {
+   "classes": 825,
+   "methods": 5618,
+   "bytes": 490671
+  },
+  "library: fastutil": {
+   "classes": 1428,
+   "methods": 15300,
+   "bytes": 415649
+  },
+  "JDK: java.base": {
+   "classes": 4859,
+   "methods": 35456,
+   "bytes": 2227301
+  },
+  "library: jna": {
+   "classes": 91,
+   "methods": 723,
+   "bytes": 43513
+  },
+  "JDK: java.management": {
+   "classes": 137,
+   "methods": 895,
+   "bytes": 40307
+  },
+  "library: datafixerupper": {
+   "classes": 312,
+   "methods": 2609,
+   "bytes": 56171
+  },
+  "library: log4j-core": {
+   "classes": 793,
+   "methods": 5372,
+   "bytes": 213843
+  },
+  "library: netty-common": {
+   "classes": 313,
+   "methods": 2148,
+   "bytes": 70923
+  },
+  "library: log4j-api": {
+   "classes": 90,
+   "methods": 1055,
+   "bytes": 33357
+  },
+  "library: commons-compress": {
+   "classes": 78,
+   "methods": 651,
+   "bytes": 37437
+  },
+  "library: guava-33.6.0-jre": {
+   "classes": 665,
+   "methods": 4587,
+   "bytes": 121241
+  },
+  "JDK: java.logging": {
+   "classes": 21,
+   "methods": 174,
+   "bytes": 7942
+  },
+  "library: oshi-core": {
+   "classes": 275,
+   "methods": 1613,
+   "bytes": 101008
+  },
+  "JDK: java.xml": {
+   "classes": 621,
+   "methods": 5985,
+   "bytes": 430014
+  },
+  "library: authlib": {
+   "classes": 94,
+   "methods": 462,
+   "bytes": 10722
+  },
+  "library: netty-buffer": {
+   "classes": 119,
+   "methods": 2327,
+   "bytes": 58153
+  },
+  "library: netty-transport-classes-epoll": {
+   "classes": 48,
+   "methods": 649,
+   "bytes": 21321
+  },
+  "JDK: jdk.jfr": {
+   "classes": 194,
+   "methods": 1596,
+   "bytes": 77113
+  },
+  "library: brigadier": {
+   "classes": 39,
+   "methods": 408,
+   "bytes": 12164
+  },
+  "ours: Java overlay (classlib / LWJGL replacement / bridge)": {
+   "classes": 102,
+   "methods": 1339,
+   "bytes": 52315
+  },
+  "library: jopt-simple": {
+   "classes": 36,
+   "methods": 192,
+   "bytes": 5454
+  },
+  "library: joml": {
+   "classes": 28,
+   "methods": 1084,
+   "bytes": 66442
+  },
+  "library: slf4j-api": {
+   "classes": 30,
+   "methods": 285,
+   "bytes": 6493
+  },
+  "library: jna-platform": {
+   "classes": 148,
+   "methods": 366,
+   "bytes": 15774
+  },
+  "library: commons-io": {
+   "classes": 54,
+   "methods": 390,
+   "bytes": 9869
+  },
+  "JDK: 0dad9ec59a52": {
+   "classes": 266,
+   "methods": 1630,
+   "bytes": 24457
+  },
+  "JDK: java.net.http": {
+   "classes": 233,
+   "methods": 2195,
+   "bytes": 121304
+  },
+  "JDK: jdk.unsupported": {
+   "classes": 3,
+   "methods": 75,
+   "bytes": 1853
+  },
+  "library: lz4-java": {
+   "classes": 12,
+   "methods": 89,
+   "bytes": 4695
+  },
+  "JDK: b46ae093eb3b": {
+   "classes": 1,
+   "methods": 124,
+   "bytes": 880
+  },
+  "JDK: jdk.zipfs": {
+   "classes": 34,
+   "methods": 458,
+   "bytes": 27702
+  },
+  "JDK: java.desktop": {
+   "classes": 60,
+   "methods": 344,
+   "bytes": 19721
+  },
+  "library: commons-lang3": {
+   "classes": 48,
+   "methods": 391,
+   "bytes": 20415
+  },
+  "library: jtracy": {
+   "classes": 11,
+   "methods": 55,
+   "bytes": 1608
+  },
+  "library: gson": {
+   "classes": 186,
+   "methods": 1068,
+   "bytes": 45581
+  },
+  "JDK: java.naming": {
+   "classes": 11,
+   "methods": 62,
+   "bytes": 2477
+  },
+  "JDK: java.compiler": {
+   "classes": 6,
+   "methods": 10,
+   "bytes": 178
+  },
+  "library: jorbis": {
+   "classes": 38,
+   "methods": 150,
+   "bytes": 22956
+  },
+  "library: netty-transport-classes-kqueue": {
+   "classes": 14,
+   "methods": 93,
+   "bytes": 3542
+  },
+  "library: netty-codec-base": {
+   "classes": 14,
+   "methods": 73,
+   "bytes": 3531
+  },
+  "JDK: java.scripting": {
+   "classes": 2,
+   "methods": 29,
+   "bytes": 671
+  },
+  "library: text2speech": {
+   "classes": 9,
+   "methods": 32,
+   "bytes": 966
+  },
+  "library: log4j-slf4j2-impl": {
+   "classes": 7,
+   "methods": 79,
+   "bytes": 1881
+  },
+  "library: commons-codec": {
+   "classes": 2,
+   "methods": 15,
+   "bytes": 17242
+  },
+  "JDK: java.sql": {
+   "classes": 6,
+   "methods": 46,
+   "bytes": 2726
+  },
+  "library: netty-handler": {
+   "classes": 15,
+   "methods": 82,
+   "bytes": 2739
+  },
+  "library: patchy": {
+   "classes": 2,
+   "methods": 8,
+   "bytes": 520
+  },
+  "library: netty-resolver": {
+   "classes": 7,
+   "methods": 29,
+   "bytes": 889
+  },
+  "library: logging": {
+   "classes": 8,
+   "methods": 33,
+   "bytes": 2133
+  },
+  "library: failureaccess": {
+   "classes": 2,
+   "methods": 2,
+   "bytes": 10
+  }
+ },
+ "game_packages": {
+  "com/mojang/realmsclient/gui": {
+   "methods": 816,
+   "bytes": 37230
+  },
+  "com/mojang/renderpearl/backend": {
+   "methods": 956,
+   "bytes": 56476
+  },
+  "net/minecraft/world/level": {
+   "methods": 18550,
+   "bytes": 749815
+  },
+  "net/minecraft/world/entity": {
+   "methods": 12550,
+   "bytes": 481691
+  },
+  "net/minecraft/world/item": {
+   "methods": 4470,
+   "bytes": 183720
+  },
+  "net/minecraft/commands/arguments": {
+   "methods": 1253,
+   "bytes": 34771
+  },
+  "net/minecraft/client/gui": {
+   "methods": 6487,
+   "bytes": 280581
+  },
+  "net/minecraft/client/renderer": {
+   "methods": 6346,
+   "bytes": 253007
+  },
+  "net/minecraft/util/datafix": {
+   "methods": 2851,
+   "bytes": 341302
+  },
+  "net/minecraft/network/chat": {
+   "methods": 902,
+   "bytes": 21354
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$Entry": {
+   "methods": 19,
+   "bytes": 921
+  },
+  "net/minecraft/network/protocol": {
+   "methods": 2997,
+   "bytes": 48162
+  },
+  "net/minecraft/util/profiling": {
+   "methods": 573,
+   "bytes": 16309
+  },
+  "net/minecraft/server/commands": {
+   "methods": 1995,
+   "bytes": 83974
+  },
+  "net/minecraft/data/worldgen": {
+   "methods": 350,
+   "bytes": 91021
+  },
+  "net/minecraft/world/inventory": {
+   "methods": 723,
+   "bytes": 28154
+  },
+  "net/minecraft/tags/TagKey": {
+   "methods": 17,
+   "bytes": 232
+  },
+  "net/minecraft/client/Options": {
+   "methods": 263,
+   "bytes": 12146
+  },
+  "net/minecraft/core/HolderLookup$Provider$1": {
+   "methods": 3,
+   "bytes": 42
+  },
+  "net/minecraft/client/particle": {
+   "methods": 806,
+   "bytes": 33826
+  },
+  "net/minecraft/gametest/framework": {
+   "methods": 557,
+   "bytes": 15877
+  },
+  "com/mojang/realmsclient/RealmsMainScreen": {
+   "methods": 112,
+   "bytes": 4056
+  },
+  "net/minecraft/client/server": {
+   "methods": 83,
+   "bytes": 2726
+  },
+  "net/minecraft/server/network": {
+   "methods": 392,
+   "bytes": 23497
+  },
+  "net/minecraft/core/particles": {
+   "methods": 187,
+   "bytes": 4079
+  },
+  "net/minecraft/core/registries": {
+   "methods": 149,
+   "bytes": 5240
+  },
+  "net/minecraft/data/loot": {
+   "methods": 395,
+   "bytes": 54884
+  },
+  "net/minecraft/client/OptionInstance$SliderableEnum": {
+   "methods": 10,
+   "bytes": 274
+  },
+  "net/minecraft/server/dialog": {
+   "methods": 279,
+   "bytes": 5190
+  },
+  "com/mojang/realmsclient/client": {
+   "methods": 232,
+   "bytes": 10383
+  },
+  "net/minecraft/client/model": {
+   "methods": 996,
+   "bytes": 97188
+  },
+  "net/minecraft/client/telemetry": {
+   "methods": 186,
+   "bytes": 5171
+  },
+  "com/mojang/realmsclient/util": {
+   "methods": 132,
+   "bytes": 4075
+  },
+  "net/minecraft/server/level": {
+   "methods": 1230,
+   "bytes": 52960
+  },
+  "net/minecraft/data/BlockFamily$Variant$3": {
+   "methods": 2,
+   "bytes": 12
+  },
+  "net/minecraft/network/codec": {
+   "methods": 349,
+   "bytes": 10233
+  },
+  "net/minecraft/network/PacketEncoder": {
+   "methods": 4,
+   "bytes": 215
+  },
+  "net/minecraft/client/resources": {
+   "methods": 1166,
+   "bytes": 36972
+  },
+  "net/minecraft/advancements/predicates": {
+   "methods": 798,
+   "bytes": 17600
+  },
+  "net/minecraft/world/phys": {
+   "methods": 353,
+   "bytes": 15959
+  },
+  "com/mojang/realmsclient/dto": {
+   "methods": 314,
+   "bytes": 8311
+  },
+  "net/minecraft/util/valueproviders": {
+   "methods": 189,
+   "bytes": 3457
+  },
+  "net/minecraft/data/recipes": {
+   "methods": 322,
+   "bytes": 34705
+  },
+  "net/minecraft/nbt/FloatTag": {
+   "methods": 21,
+   "bytes": 190
+  },
+  "net/minecraft/CrashReportCategory": {
+   "methods": 14,
+   "bytes": 1061
+  },
+  "net/minecraft/util/filefix": {
+   "methods": 389,
+   "bytes": 13508
+  },
+  "net/minecraft/client/multiplayer": {
+   "methods": 1276,
+   "bytes": 50516
+  },
+  "net/minecraft/world/ticks": {
+   "methods": 126,
+   "bytes": 3488
+  },
+  "net/minecraft/world/scores": {
+   "methods": 282,
+   "bytes": 6724
+  },
+  "net/minecraft/world/clock": {
+   "methods": 85,
+   "bytes": 1788
+  },
+  "net/minecraft/core/component": {
+   "methods": 645,
+   "bytes": 15144
+  },
+  "net/minecraft/server/packs": {
+   "methods": 729,
+   "bytes": 19814
+  },
+  "net/minecraft/client/Minecraft": {
+   "methods": 236,
+   "bytes": 16280
+  },
+  "com/mojang/blaze3d/platform": {
+   "methods": 357,
+   "bytes": 18871
+  },
+  "net/minecraft/advancements/triggers": {
+   "methods": 726,
+   "bytes": 14497
+  },
+  "net/minecraft/core/UUIDUtil": {
+   "methods": 13,
+   "bytes": 381
+  },
+  "net/minecraft/client/color": {
+   "methods": 149,
+   "bytes": 3325
+  },
+  "net/minecraft/util/LightCoordsUtil": {
+   "methods": 14,
+   "bytes": 420
+  },
+  "net/minecraft/core/MappedRegistry": {
+   "methods": 59,
+   "bytes": 1844
+  },
+  "net/minecraft/server/jsonrpc": {
+   "methods": 341,
+   "bytes": 9167
+  },
+  "net/minecraft/nbt/TextComponentTagVisitor": {
+   "methods": 24,
+   "bytes": 1533
+  },
+  "net/minecraft/core/Vec3i": {
+   "methods": 38,
+   "bytes": 1015
+  },
+  "net/minecraft/util/SortedArraySet": {
+   "methods": 18,
+   "bytes": 494
+  },
+  "net/minecraft/client/sounds": {
+   "methods": 192,
+   "bytes": 8894
+  },
+  "net/minecraft/client/player": {
+   "methods": 174,
+   "bytes": 9396
+  },
+  "net/minecraft/network/HiddenByteBuf": {
+   "methods": 13,
+   "bytes": 135
+  },
+  "net/minecraft/util/Interval": {
+   "methods": 43,
+   "bytes": 2307
+  },
+  "net/minecraft/core/Registry$1": {
+   "methods": 8,
+   "bytes": 101
+  },
+  "net/minecraft/world/attribute": {
+   "methods": 350,
+   "bytes": 9763
+  },
+  "net/minecraft/nbt/visitors": {
+   "methods": 63,
+   "bytes": 1257
+  },
+  "net/minecraft/util/debugchart": {
+   "methods": 24,
+   "bytes": 522
+  },
+  "net/minecraft/util/Mth": {
+   "methods": 106,
+   "bytes": 2664
+  },
+  "net/minecraft/nbt/StringTag": {
+   "methods": 20,
+   "bytes": 471
+  },
+  "com/mojang/renderpearl/frontend": {
+   "methods": 167,
+   "bytes": 13306
+  },
+  "com/mojang/blaze3d/systems": {
+   "methods": 92,
+   "bytes": 2739
+  },
+  "net/minecraft/server/MinecraftServer": {
+   "methods": 230,
+   "bytes": 9840
+  },
+  "net/minecraft/commands/execution": {
+   "methods": 91,
+   "bytes": 2345
+  },
+  "net/minecraft/resources/ResourceKey": {
+   "methods": 18,
+   "bytes": 259
+  },
+  "net/minecraft/core/MappedRegistry$TagSet$1": {
+   "methods": 5,
+   "bytes": 44
+  },
+  "net/minecraft/client/animation": {
+   "methods": 66,
+   "bytes": 133482
+  },
+  "net/minecraft/network/UnconfiguredPipelineHandler$Inbound": {
+   "methods": 3,
+   "bytes": 109
+  },
+  "net/minecraft/stats/RecipeBook": {
+   "methods": 8,
+   "bytes": 87
+  },
+  "net/minecraft/advancements/AdvancementProgress": {
+   "methods": 29,
+   "bytes": 958
+  },
+  "net/minecraft/client/OptionInstance": {
+   "methods": 24,
+   "bytes": 407
+  },
+  "net/minecraft/nbt/LongTag$1": {
+   "methods": 7,
+   "bytes": 53
+  },
+  "net/minecraft/commands/Commands": {
+   "methods": 29,
+   "bytes": 2295
+  },
+  "net/minecraft/network/syncher": {
+   "methods": 60,
+   "bytes": 2046
+  },
+  "com/mojang/blaze3d/vertex": {
+   "methods": 232,
+   "bytes": 9594
+  },
+  "net/minecraft/core/RegistryAccess": {
+   "methods": 9,
+   "bytes": 132
+  },
+  "net/minecraft/nbt/CompoundTag": {
+   "methods": 76,
+   "bytes": 1905
+  },
+  "net/minecraft/util/CubicSpline$Multipoint": {
+   "methods": 20,
+   "bytes": 1475
+  },
+  "net/minecraft/util/worldupdate": {
+   "methods": 129,
+   "bytes": 3762
+  },
+  "net/minecraft/util/ArrayListDeque": {
+   "methods": 31,
+   "bytes": 886
+  },
+  "net/minecraft/util/ExtraCodecs": {
+   "methods": 159,
+   "bytes": 4317
+  },
+  "net/minecraft/world/flag": {
+   "methods": 41,
+   "bytes": 1202
+  },
+  "net/minecraft/util/Crypt": {
+   "methods": 20,
+   "bytes": 617
+  },
+  "net/minecraft/commands/synchronization": {
+   "methods": 98,
+   "bytes": 2919
+  },
+  "net/minecraft/util/HashOps": {
+   "methods": 91,
+   "bytes": 1574
+  },
+  "net/minecraft/resources/RegistryOps": {
+   "methods": 22,
+   "bytes": 404
+  },
+  "net/minecraft/client/OptionInstance$IntRangeBase$1": {
+   "methods": 7,
+   "bytes": 286
+  },
+  "net/minecraft/nbt/ShortTag": {
+   "methods": 21,
+   "bytes": 179
+  },
+  "net/minecraft/util/thread": {
+   "methods": 119,
+   "bytes": 2599
+  },
+  "net/minecraft/server/players": {
+   "methods": 209,
+   "bytes": 8538
+  },
+  "net/minecraft/data/advancements": {
+   "methods": 58,
+   "bytes": 13544
+  },
+  "net/minecraft/util/GsonHelper": {
+   "methods": 36,
+   "bytes": 1250
+  },
+  "net/minecraft/nbt/SnbtGrammar$5": {
+   "methods": 2,
+   "bytes": 11
+  },
+  "net/minecraft/world/waypoints": {
+   "methods": 92,
+   "bytes": 2375
+  },
+  "com/mojang/renderpearl/api": {
+   "methods": 351,
+   "bytes": 9030
+  },
+  "net/minecraft/server/ReloadableServerRegistries$LoadResult": {
+   "methods": 6,
+   "bytes": 47
+  },
+  "net/minecraft/nbt/SnbtOperations$1": {
+   "methods": 3,
+   "bytes": 130
+  },
+  "net/minecraft/util/DirectoryLock": {
+   "methods": 6,
+   "bytes": 318
+  },
+  "net/minecraft/client/StringSplitter": {
+   "methods": 20,
+   "bytes": 1117
+  },
+  "net/minecraft/util/ARGB": {
+   "methods": 63,
+   "bytes": 2367
+  },
+  "net/minecraft/util/ProblemReporter$Collector": {
+   "methods": 13,
+   "bytes": 585
+  },
+  "net/minecraft/util/ProblemReporter$RootFieldPathElement": {
+   "methods": 5,
+   "bytes": 37
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$AvailableSnapshotEntry": {
+   "methods": 8,
+   "bytes": 447
+  },
+  "net/minecraft/nbt/SnbtPrinterTagVisitor": {
+   "methods": 23,
+   "bytes": 1310
+  },
+  "net/minecraft/util/parsing": {
+   "methods": 230,
+   "bytes": 5836
+  },
+  "com/mojang/math/Quadrant": {
+   "methods": 10,
+   "bytes": 486
+  },
+  "net/minecraft/util/debug": {
+   "methods": 236,
+   "bytes": 6283
+  },
+  "net/minecraft/nbt/ListTag": {
+   "methods": 46,
+   "bytes": 1107
+  },
+  "net/minecraft/stats/RecipeBookSettings": {
+   "methods": 22,
+   "bytes": 501
+  },
+  "com/mojang/math/Divisor": {
+   "methods": 3,
+   "bytes": 130
+  },
+  "net/minecraft/resources/Identifier": {
+   "methods": 40,
+   "bytes": 1180
+  },
+  "net/minecraft/network/HashedStack$1": {
+   "methods": 3,
+   "bytes": 13
+  },
+  "net/minecraft/util/Continuation": {
+   "methods": 7,
+   "bytes": 107
+  },
+  "net/minecraft/resources/ResourceManagerRegistryLoadTask": {
+   "methods": 9,
+   "bytes": 270
+  },
+  "net/minecraft/nbt/SnbtGrammar$ArrayPrefix": {
+   "methods": 7,
+   "bytes": 252
+  },
+  "net/minecraft/util/context": {
+   "methods": 23,
+   "bytes": 513
+  },
+  "net/minecraft/client/KeyMapping": {
+   "methods": 38,
+   "bytes": 907
+  },
+  "com/mojang/math/Axis$5": {
+   "methods": 5,
+   "bytes": 35
+  },
+  "net/minecraft/client/CameraType": {
+   "methods": 7,
+   "bytes": 135
+  },
+  "net/minecraft/network/FriendlyByteBuf": {
+   "methods": 220,
+   "bytes": 2562
+  },
+  "net/minecraft/nbt/LongArrayTag": {
+   "methods": 22,
+   "bytes": 333
+  },
+  "net/minecraft/world/effect": {
+   "methods": 172,
+   "bytes": 5859
+  },
+  "net/minecraft/commands/CommandSigningContext$SignedArguments": {
+   "methods": 5,
+   "bytes": 46
+  },
+  "net/minecraft/world/SimpleMenuProvider": {
+   "methods": 3,
+   "bytes": 33
+  },
+  "net/minecraft/ReportedException": {
+   "methods": 4,
+   "bytes": 31
+  },
+  "net/minecraft/world/damagesource": {
+   "methods": 135,
+   "bytes": 5364
+  },
+  "net/minecraft/server/ServerLinks": {
+   "methods": 13,
+   "bytes": 201
+  },
+  "net/minecraft/core/HolderLookup$RegistryLookup$1": {
+   "methods": 6,
+   "bytes": 94
+  },
+  "net/minecraft/client/KeyboardHandler": {
+   "methods": 28,
+   "bytes": 4237
+  },
+  "com/mojang/blaze3d/framegraph": {
+   "methods": 40,
+   "bytes": 1635
+  },
+  "com/mojang/blaze3d/audio": {
+   "methods": 107,
+   "bytes": 3098
+  },
+  "net/minecraft/nbt/SnbtOperations$BuiltinKey": {
+   "methods": 5,
+   "bytes": 49
+  },
+  "net/minecraft/util/Ease": {
+   "methods": 30,
+   "bytes": 910
+  },
+  "net/minecraft/CrashReport": {
+   "methods": 18,
+   "bytes": 1073
+  },
+  "com/mojang/math/Axis$4": {
+   "methods": 5,
+   "bytes": 32
+  },
+  "net/minecraft/client/tutorial": {
+   "methods": 63,
+   "bytes": 2354
+  },
+  "net/minecraft/client/PrioritizeChunkUpdates": {
+   "methods": 7,
+   "bytes": 173
+  },
+  "net/minecraft/client/CommandHistory": {
+   "methods": 5,
+   "bytes": 284
+  },
+  "net/minecraft/util/HashOps$MapHashBuilder": {
+   "methods": 8,
+   "bytes": 145
+  },
+  "net/minecraft/nbt/ByteTag": {
+   "methods": 22,
+   "bytes": 182
+  },
+  "net/minecraft/server/permissions": {
+   "methods": 69,
+   "bytes": 1367
+  },
+  "net/minecraft/world/ItemStackWithSlot": {
+   "methods": 9,
+   "bytes": 125
+  },
+  "net/minecraft/client/GraphicsPreset": {
+   "methods": 8,
+   "bytes": 1064
+  },
+  "net/minecraft/util/DummyFileAttributes$2": {
+   "methods": 3,
+   "bytes": 9
+  },
+  "com/mojang/math/OctahedralGroup": {
+   "methods": 22,
+   "bytes": 2325
+  },
+  "net/minecraft/core/HolderLookup$Provider": {
+   "methods": 8,
+   "bytes": 139
+  },
+  "net/minecraft/util/ByIdMap": {
+   "methods": 8,
+   "bytes": 438
+  },
+  "net/minecraft/util/Util": {
+   "methods": 138,
+   "bytes": 4837
+  },
+  "net/minecraft/server/advancements": {
+   "methods": 8,
+   "bytes": 343
+  },
+  "net/minecraft/network/PacketSendListener": {
+   "methods": 5,
+   "bytes": 156
+  },
+  "net/minecraft/commands/CommandSourceStack": {
+   "methods": 55,
+   "bytes": 1879
+  },
+  "com/mojang/math/MatrixUtil": {
+   "methods": 13,
+   "bytes": 1016
+  },
+  "net/minecraft/client/PeriodicNotificationManager$Notification": {
+   "methods": 8,
+   "bytes": 79
+  },
+  "net/minecraft/util/NullOps": {
+   "methods": 77,
+   "bytes": 514
+  },
+  "net/minecraft/util/Util$9": {
+   "methods": 2,
+   "bytes": 30
+  },
+  "net/minecraft/client/OptionInstance$IntRangeBase": {
+   "methods": 9,
+   "bytes": 179
+  },
+  "net/minecraft/server/ServerTickRateManager": {
+   "methods": 15,
+   "bytes": 441
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$2": {
+   "methods": 1,
+   "bytes": 140
+  },
+  "net/minecraft/util/StaticCache2D": {
+   "methods": 9,
+   "bytes": 394
+  },
+  "net/minecraft/commands/Commands$2$1": {
+   "methods": 5,
+   "bytes": 66
+  },
+  "net/minecraft/advancements/Advancement": {
+   "methods": 31,
+   "bytes": 784
+  },
+  "com/mojang/math/Transformation": {
+   "methods": 19,
+   "bytes": 740
+  },
+  "net/minecraft/util/FileUtil": {
+   "methods": 15,
+   "bytes": 1011
+  },
+  "net/minecraft/server/SuppressedExceptionCollector$ShortEntry": {
+   "methods": 4,
+   "bytes": 37
+  },
+  "net/minecraft/util/random": {
+   "methods": 50,
+   "bytes": 1161
+  },
+  "net/minecraft/world/timeline": {
+   "methods": 81,
+   "bytes": 3331
+  },
+  "net/minecraft/nbt/LongTag": {
+   "methods": 21,
+   "bytes": 194
+  },
+  "net/minecraft/advancements/Advancement$Builder": {
+   "methods": 19,
+   "bytes": 352
+  },
+  "net/minecraft/SystemReport": {
+   "methods": 58,
+   "bytes": 2178
+  },
+  "net/minecraft/client/entity": {
+   "methods": 27,
+   "bytes": 656
+  },
+  "com/mojang/blaze3d/resource": {
+   "methods": 30,
+   "bytes": 706
+  },
+  "net/minecraft/util/EasingType": {
+   "methods": 7,
+   "bytes": 531
+  },
+  "net/minecraft/core/BlockPos$1Node": {
+   "methods": 4,
+   "bytes": 37
+  },
+  "net/minecraft/nbt/StringTagVisitor": {
+   "methods": 17,
+   "bytes": 608
+  },
+  "net/minecraft/core/Direction": {
+   "methods": 55,
+   "bytes": 2197
+  },
+  "net/minecraft/util/SignatureValidator": {
+   "methods": 10,
+   "bytes": 181
+  },
+  "net/minecraft/core/BlockPos": {
+   "methods": 71,
+   "bytes": 2436
+  },
+  "net/minecraft/world/BossEvent": {
+   "methods": 16,
+   "bytes": 116
+  },
+  "net/minecraft/commands/functions": {
+   "methods": 41,
+   "bytes": 2177
+  },
+  "net/minecraft/server/Services": {
+   "methods": 11,
+   "bytes": 171
+  },
+  "net/minecraft/client/KeyMapping$Category": {
+   "methods": 8,
+   "bytes": 185
+  },
+  "net/minecraft/data/BlockFamily$Builder": {
+   "methods": 33,
+   "bytes": 617
+  },
+  "net/minecraft/resources/DelegatingOps": {
+   "methods": 40,
+   "bytes": 470
+  },
+  "net/minecraft/advancements/AdvancementTree": {
+   "methods": 13,
+   "bytes": 438
+  },
+  "net/minecraft/gizmos/ArrowGizmo": {
+   "methods": 5,
+   "bytes": 305
+  },
+  "net/minecraft/util/ArrayListDeque$DescendingIterator": {
+   "methods": 4,
+   "bytes": 72
+  },
+  "net/minecraft/nbt/IntTag": {
+   "methods": 21,
+   "bytes": 183
+  },
+  "com/mojang/realmsclient/Unit": {
+   "methods": 9,
+   "bytes": 324
+  },
+  "net/minecraft/client/input": {
+   "methods": 62,
+   "bytes": 1346
+  },
+  "net/minecraft/server/bossevents": {
+   "methods": 45,
+   "bytes": 1541
+  },
+  "net/minecraft/nbt/DoubleTag": {
+   "methods": 21,
+   "bytes": 194
+  },
+  "net/minecraft/core/dispenser": {
+   "methods": 93,
+   "bytes": 5153
+  },
+  "net/minecraft/util/PlaceholderLookupProvider$1": {
+   "methods": 4,
+   "bytes": 64
+  },
+  "com/mojang/blaze3d/Blaze3D": {
+   "methods": 6,
+   "bytes": 77
+  },
+  "net/minecraft/world/DifficultyInstance": {
+   "methods": 6,
+   "bytes": 210
+  },
+  "net/minecraft/util/EncoderCache$2": {
+   "methods": 4,
+   "bytes": 92
+  },
+  "net/minecraft/commands/ExecutionCommandSource": {
+   "methods": 4,
+   "bytes": 53
+  },
+  "com/mojang/math/GivensParameters": {
+   "methods": 15,
+   "bytes": 355
+  },
+  "net/minecraft/server/chase": {
+   "methods": 28,
+   "bytes": 1533
+  },
+  "net/minecraft/server/notifications": {
+   "methods": 53,
+   "bytes": 526
+  },
+  "net/minecraft/client/OptionInstance$IntRange": {
+   "methods": 11,
+   "bytes": 127
+  },
+  "net/minecraft/util/ExtraCodecs$StrictUnboundedMapCodec": {
+   "methods": 14,
+   "bytes": 385
+  },
+  "net/minecraft/client/StringSplitter$WidthLimitedCharSink": {
+   "methods": 4,
+   "bytes": 77
+  },
+  "net/minecraft/client/Camera": {
+   "methods": 47,
+   "bytes": 2994
+  },
+  "net/minecraft/resources/RegistryDataLoader": {
+   "methods": 22,
+   "bytes": 2423
+  },
+  "net/minecraft/tags/FeatureTags": {
+   "methods": 2,
+   "bytes": 20
+  },
+  "net/minecraft/core/RegistrySynchronization": {
+   "methods": 12,
+   "bytes": 348
+  },
+  "net/minecraft/nbt/NbtUtils": {
+   "methods": 43,
+   "bytes": 2171
+  },
+  "net/minecraft/core/HolderGetter$Provider": {
+   "methods": 10,
+   "bytes": 182
+  },
+  "net/minecraft/client/MouseHandler": {
+   "methods": 22,
+   "bytes": 2558
+  },
+  "net/minecraft/client/Screenshot": {
+   "methods": 14,
+   "bytes": 808
+  },
+  "net/minecraft/references/BlockItemId": {
+   "methods": 9,
+   "bytes": 92
+  },
+  "net/minecraft/network/RegistryFriendlyByteBuf": {
+   "methods": 4,
+   "bytes": 33
+  },
+  "net/minecraft/world/Containers": {
+   "methods": 7,
+   "bytes": 304
+  },
+  "net/minecraft/server/ReloadableServerResources": {
+   "methods": 14,
+   "bytes": 314
+  },
+  "net/minecraft/resources/RegistryLoadTask$PendingRegistration": {
+   "methods": 9,
+   "bytes": 301
+  },
+  "net/minecraft/util/DummyFileAttributes$1": {
+   "methods": 3,
+   "bytes": 9
+  },
+  "net/minecraft/util/CommonLinks": {
+   "methods": 2,
+   "bytes": 266
+  },
+  "net/minecraft/nbt/SnbtGrammar$TypeSuffix": {
+   "methods": 4,
+   "bytes": 144
+  },
+  "net/minecraft/sounds/SoundEvent": {
+   "methods": 14,
+   "bytes": 267
+  },
+  "com/mojang/blaze3d/buffers": {
+   "methods": 27,
+   "bytes": 611
+  },
+  "net/minecraft/util/ArrayListDeque$ReversedView": {
+   "methods": 29,
+   "bytes": 309
+  },
+  "net/minecraft/nbt/ListTag$1": {
+   "methods": 9,
+   "bytes": 505
+  },
+  "net/minecraft/gizmos/SimpleGizmoCollector$GizmoInstance": {
+   "methods": 6,
+   "bytes": 73
+  },
+  "net/minecraft/core/BlockPos$MutableBlockPos": {
+   "methods": 35,
+   "bytes": 570
+  },
+  "net/minecraft/util/ListAndDeque": {
+   "methods": 7,
+   "bytes": 51
+  },
+  "net/minecraft/core/SectionPos": {
+   "methods": 54,
+   "bytes": 993
+  },
+  "net/minecraft/core/Holder$Reference": {
+   "methods": 23,
+   "bytes": 423
+  },
+  "net/minecraft/core/HolderSet$Direct": {
+   "methods": 10,
+   "bytes": 136
+  },
+  "net/minecraft/stats/Stat": {
+   "methods": 10,
+   "bytes": 174
+  },
+  "net/minecraft/recipebook/ServerPlaceRecipe": {
+   "methods": 11,
+   "bytes": 1062
+  },
+  "net/minecraft/commands/SharedSuggestionProvider": {
+   "methods": 29,
+   "bytes": 1308
+  },
+  "net/minecraft/server/Bootstrap": {
+   "methods": 15,
+   "bytes": 511
+  },
+  "net/minecraft/util/TriState": {
+   "methods": 9,
+   "bytes": 273
+  },
+  "net/minecraft/WorldVersion$Simple": {
+   "methods": 11,
+   "bytes": 160
+  },
+  "net/minecraft/client/PeriodicNotificationManager": {
+   "methods": 16,
+   "bytes": 631
+  },
+  "net/minecraft/core/MappedRegistry$3": {
+   "methods": 6,
+   "bytes": 112
+  },
+  "net/minecraft/references/BlockIds": {
+   "methods": 3,
+   "bytes": 1012
+  },
+  "net/minecraft/util/EasingType$CubicBezier": {
+   "methods": 11,
+   "bytes": 364
+  },
+  "net/minecraft/nbt/TextComponentTagVisitor$PlainStyling": {
+   "methods": 6,
+   "bytes": 104
+  },
+  "net/minecraft/tags/PotionTags": {
+   "methods": 2,
+   "bytes": 52
+  },
+  "net/minecraft/core/DefaultedMappedRegistry": {
+   "methods": 11,
+   "bytes": 184
+  },
+  "net/minecraft/gizmos/Gizmos": {
+   "methods": 17,
+   "bytes": 382
+  },
+  "net/minecraft/core/BlockPos$3": {
+   "methods": 3,
+   "bytes": 316
+  },
+  "net/minecraft/util/EncoderCache$Key": {
+   "methods": 5,
+   "bytes": 151
+  },
+  "net/minecraft/core/RegistrySetBuilder$BuildState": {
+   "methods": 13,
+   "bytes": 329
+  },
+  "net/minecraft/resources/RegistryDataLoader$3": {
+   "methods": 2,
+   "bytes": 27
+  },
+  "net/minecraft/ReportType": {
+   "methods": 8,
+   "bytes": 779
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$ServerEntry": {
+   "methods": 10,
+   "bytes": 888
+  },
+  "net/minecraft/client/OptionInstance$Enum": {
+   "methods": 7,
+   "bytes": 74
+  },
+  "net/minecraft/resources/DelegatingOps$DelegateRecordBuilder": {
+   "methods": 11,
+   "bytes": 153
+  },
+  "com/mojang/blaze3d/font": {
+   "methods": 54,
+   "bytes": 1237
+  },
+  "net/minecraft/core/Registry": {
+   "methods": 25,
+   "bytes": 444
+  },
+  "net/minecraft/server/ServerScoreboard": {
+   "methods": 31,
+   "bytes": 1296
+  },
+  "net/minecraft/nbt/SnbtOperations$2": {
+   "methods": 2,
+   "bytes": 109
+  },
+  "net/minecraft/gizmos/TextGizmo$Style": {
+   "methods": 12,
+   "bytes": 138
+  },
+  "net/minecraft/commands/BrigadierExceptions": {
+   "methods": 45,
+   "bytes": 785
+  },
+  "net/minecraft/core/RegistrySetBuilder$3": {
+   "methods": 3,
+   "bytes": 53
+  },
+  "net/minecraft/util/ExtraCodecs$7": {
+   "methods": 6,
+   "bytes": 154
+  },
+  "net/minecraft/nbt/NbtOps": {
+   "methods": 95,
+   "bytes": 2557
+  },
+  "net/minecraft/server/SuppressedExceptionCollector": {
+   "methods": 4,
+   "bytes": 415
+  },
+  "net/minecraft/util/PlaceholderLookupProvider$2": {
+   "methods": 3,
+   "bytes": 62
+  },
+  "net/minecraft/util/StringRepresentable": {
+   "methods": 10,
+   "bytes": 217
+  },
+  "net/minecraft/network/Connection$1": {
+   "methods": 2,
+   "bytes": 80
+  },
+  "net/minecraft/util/ClassInstanceMultiMap": {
+   "methods": 8,
+   "bytes": 343
+  },
+  "net/minecraft/server/waypoints": {
+   "methods": 22,
+   "bytes": 831
+  },
+  "net/minecraft/nbt/NbtOps$1": {
+   "methods": 8,
+   "bytes": 171
+  },
+  "net/minecraft/client/StringSplitter$LineBreakFinder": {
+   "methods": 7,
+   "bytes": 273
+  },
+  "net/minecraft/sounds/Music": {
+   "methods": 10,
+   "bytes": 170
+  },
+  "net/minecraft/util/SimpleBitStorage": {
+   "methods": 15,
+   "bytes": 2058
+  },
+  "net/minecraft/advancements/AdvancementRewards": {
+   "methods": 13,
+   "bytes": 524
+  },
+  "net/minecraft/server/Bootstrap$1": {
+   "methods": 2,
+   "bytes": 44
+  },
+  "net/minecraft/core/MappedRegistry$TagSet$2": {
+   "methods": 5,
+   "bytes": 55
+  },
+  "net/minecraft/util/eventlog": {
+   "methods": 44,
+   "bytes": 1207
+  },
+  "net/minecraft/sounds/SoundEvents": {
+   "methods": 24,
+   "bytes": 17808
+  },
+  "net/minecraft/util/ExtraCodecs$3": {
+   "methods": 5,
+   "bytes": 104
+  },
+  "net/minecraft/stats/ServerRecipeBook": {
+   "methods": 18,
+   "bytes": 755
+  },
+  "net/minecraft/util/FormattedCharSequence": {
+   "methods": 16,
+   "bytes": 299
+  },
+  "net/minecraft/client/main": {
+   "methods": 54,
+   "bytes": 2558
+  },
+  "net/minecraft/core/Holder$Kind": {
+   "methods": 4,
+   "bytes": 67
+  },
+  "net/minecraft/server/PlayerAdvancements": {
+   "methods": 31,
+   "bytes": 1856
+  },
+  "net/minecraft/util/IdentifierPattern": {
+   "methods": 11,
+   "bytes": 202
+  },
+  "net/minecraft/tags/TagFile": {
+   "methods": 8,
+   "bytes": 118
+  },
+  "net/minecraft/util/StringDecomposer": {
+   "methods": 13,
+   "bytes": 661
+  },
+  "net/minecraft/resources/FileToIdConverter": {
+   "methods": 15,
+   "bytes": 201
+  },
+  "net/minecraft/core/RegistryAccess$ImmutableRegistryAccess": {
+   "methods": 7,
+   "bytes": 134
+  },
+  "net/minecraft/nbt/ShortTag$1": {
+   "methods": 7,
+   "bytes": 52
+  },
+  "net/minecraft/util/PngInfo": {
+   "methods": 13,
+   "bytes": 668
+  },
+  "net/minecraft/network/PacketBundleUnpacker": {
+   "methods": 3,
+   "bytes": 70
+  },
+  "net/minecraft/util/DelegateDataOutput": {
+   "methods": 11,
+   "bytes": 122
+  },
+  "net/minecraft/network/HashedPatchMap": {
+   "methods": 10,
+   "bytes": 314
+  },
+  "net/minecraft/nbt/NumericTag": {
+   "methods": 8,
+   "bytes": 109
+  },
+  "net/minecraft/data/BlockFamily": {
+   "methods": 9,
+   "bytes": 120
+  },
+  "net/minecraft/world/Difficulty": {
+   "methods": 8,
+   "bytes": 206
+  },
+  "net/minecraft/util/DependencySorter": {
+   "methods": 13,
+   "bytes": 287
+  },
+  "net/minecraft/tags/ItemTags": {
+   "methods": 2,
+   "bytes": 1983
+  },
+  "net/minecraft/nbt/ByteArrayTag": {
+   "methods": 20,
+   "bytes": 293
+  },
+  "net/minecraft/nbt/ReportedNbtException": {
+   "methods": 1,
+   "bytes": 6
+  },
+  "net/minecraft/util/ExtraCodecs$1ContextRetrievalCodec": {
+   "methods": 5,
+   "bytes": 43
+  },
+  "com/mojang/blaze3d/pipeline": {
+   "methods": 33,
+   "bytes": 1231
+  },
+  "net/minecraft/client/ResourceLoadStateTracker": {
+   "methods": 6,
+   "bytes": 205
+  },
+  "net/minecraft/client/searchtree": {
+   "methods": 34,
+   "bytes": 2172
+  },
+  "net/minecraft/tags/TagLoader$LoadResult": {
+   "methods": 5,
+   "bytes": 42
+  },
+  "net/minecraft/client/GameNarrator": {
+   "methods": 16,
+   "bytes": 426
+  },
+  "net/minecraft/world/Container": {
+   "methods": 15,
+   "bytes": 244
+  },
+  "net/minecraft/world/Container$ContainerIterator": {
+   "methods": 4,
+   "bytes": 78
+  },
+  "net/minecraft/core/RegistrySetBuilder": {
+   "methods": 9,
+   "bytes": 276
+  },
+  "net/minecraft/server/ServerLinks$UntrustedEntry": {
+   "methods": 7,
+   "bytes": 75
+  },
+  "net/minecraft/util/DummyFileAttributes": {
+   "methods": 9,
+   "bytes": 53
+  },
+  "net/minecraft/util/CubicSpline": {
+   "methods": 8,
+   "bytes": 360
+  },
+  "net/minecraft/server/ServerLinks$Entry": {
+   "methods": 7,
+   "bytes": 65
+  },
+  "net/minecraft/client/quickplay": {
+   "methods": 41,
+   "bytes": 1411
+  },
+  "net/minecraft/world/Stopwatches": {
+   "methods": 14,
+   "bytes": 323
+  },
+  "net/minecraft/core/AxisCycle$3": {
+   "methods": 4,
+   "bytes": 35
+  },
+  "net/minecraft/nbt/IntArrayTag": {
+   "methods": 21,
+   "bytes": 325
+  },
+  "net/minecraft/server/dedicated": {
+   "methods": 2,
+   "bytes": 175
+  },
+  "net/minecraft/locale/Language": {
+   "methods": 9,
+   "bytes": 309
+  },
+  "net/minecraft/nbt/SnbtGrammar": {
+   "methods": 41,
+   "bytes": 5577
+  },
+  "net/minecraft/nbt/SnbtOperations$3": {
+   "methods": 2,
+   "bytes": 73
+  },
+  "net/minecraft/tags/TagLoader": {
+   "methods": 21,
+   "bytes": 933
+  },
+  "net/minecraft/nbt/SnbtGrammar$SignedPrefix": {
+   "methods": 4,
+   "bytes": 67
+  },
+  "net/minecraft/gizmos/CuboidGizmo": {
+   "methods": 5,
+   "bytes": 1015
+  },
+  "net/minecraft/server/ReloadableServerRegistries$Holder": {
+   "methods": 4,
+   "bytes": 62
+  },
+  "net/minecraft/core/HolderLookup$RegistryLookup": {
+   "methods": 3,
+   "bytes": 53
+  },
+  "net/minecraft/core/CompositeDirection$Direction8": {
+   "methods": 9,
+   "bytes": 257
+  },
+  "net/minecraft/core/Direction$Axis": {
+   "methods": 19,
+   "bytes": 502
+  },
+  "net/minecraft/TracingExecutor": {
+   "methods": 13,
+   "bytes": 357
+  },
+  "net/minecraft/core/AxisCycle$2": {
+   "methods": 4,
+   "bytes": 35
+  },
+  "net/minecraft/resources/RegistryDataLoader$NetworkedRegistryData": {
+   "methods": 6,
+   "bytes": 47
+  },
+  "net/minecraft/client/OptionInstance$ClampingLazyMaxIntRange": {
+   "methods": 13,
+   "bytes": 194
+  },
+  "net/minecraft/world/InteractionResult$Success": {
+   "methods": 11,
+   "bytes": 112
+  },
+  "net/minecraft/network/CompressionEncoder": {
+   "methods": 4,
+   "bytes": 185
+  },
+  "net/minecraft/resources/ResourceKey$InternKey": {
+   "methods": 4,
+   "bytes": 37
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$CrossButton": {
+   "methods": 2,
+   "bytes": 44
+  },
+  "net/minecraft/client/ClientRecipeBook": {
+   "methods": 15,
+   "bytes": 556
+  },
+  "net/minecraft/server/ReloadableServerRegistries": {
+   "methods": 8,
+   "bytes": 221
+  },
+  "net/minecraft/IdentifierException": {
+   "methods": 1,
+   "bytes": 9
+  },
+  "net/minecraft/ChatFormatting": {
+   "methods": 7,
+   "bytes": 623
+  },
+  "net/minecraft/util/ExtraCodecs$2": {
+   "methods": 4,
+   "bytes": 103
+  },
+  "net/minecraft/core/Cursor3D": {
+   "methods": 6,
+   "bytes": 239
+  },
+  "net/minecraft/tags/TagLoader$1": {
+   "methods": 3,
+   "bytes": 53
+  },
+  "net/minecraft/util/CubicSpline$Builder": {
+   "methods": 6,
+   "bytes": 259
+  },
+  "net/minecraft/recipebook/PlaceRecipeHelper": {
+   "methods": 2,
+   "bytes": 282
+  },
+  "net/minecraft/core/cauldron": {
+   "methods": 30,
+   "bytes": 1468
+  },
+  "net/minecraft/core/CompositeDirection": {
+   "methods": 12,
+   "bytes": 645
+  },
+  "net/minecraft/world/CompoundContainer": {
+   "methods": 14,
+   "bytes": 423
+  },
+  "net/minecraft/util/ProblemReporter$ElementReferencePathElement": {
+   "methods": 5,
+   "bytes": 58
+  },
+  "net/minecraft/util/CubicSpline$Constant": {
+   "methods": 8,
+   "bytes": 48
+  },
+  "net/minecraft/nbt/SnbtGrammar$IntegerSuffix": {
+   "methods": 6,
+   "bytes": 55
+  },
+  "com/mojang/math/SymmetricGroup3": {
+   "methods": 16,
+   "bytes": 662
+  },
+  "net/minecraft/nbt/SnbtGrammar$IntegerLiteral": {
+   "methods": 8,
+   "bytes": 586
+  },
+  "net/minecraft/advancements/AdvancementNode": {
+   "methods": 16,
+   "bytes": 189
+  },
+  "net/minecraft/world/food": {
+   "methods": 39,
+   "bytes": 1900
+  },
+  "net/minecraft/client/DeltaTracker$Timer": {
+   "methods": 10,
+   "bytes": 232
+  },
+  "net/minecraft/world/RandomSequence": {
+   "methods": 8,
+   "bytes": 121
+  },
+  "net/minecraft/util/ThreadingDetector": {
+   "methods": 6,
+   "bytes": 362
+  },
+  "net/minecraft/network/VarLong": {
+   "methods": 3,
+   "bytes": 118
+  },
+  "net/minecraft/util/ExtraCodecs$1": {
+   "methods": 5,
+   "bytes": 96
+  },
+  "net/minecraft/nbt/NbtOps$NbtRecordBuilder": {
+   "methods": 8,
+   "bytes": 185
+  },
+  "net/minecraft/util/GsonHelper$CountedAppendable": {
+   "methods": 5,
+   "bytes": 79
+  },
+  "net/minecraft/core/HolderSet$Named": {
+   "methods": 10,
+   "bytes": 139
+  },
+  "net/minecraft/data/BlockFamily$Variant$4": {
+   "methods": 2,
+   "bytes": 12
+  },
+  "net/minecraft/util/ProblemReporter$Collector$Entry": {
+   "methods": 5,
+   "bytes": 42
+  },
+  "net/minecraft/nbt/DoubleTag$1": {
+   "methods": 7,
+   "bytes": 53
+  },
+  "net/minecraft/resources/DependantName": {
+   "methods": 2,
+   "bytes": 9
+  },
+  "net/minecraft/stats/StatType": {
+   "methods": 9,
+   "bytes": 137
+  },
+  "net/minecraft/nbt/Tag": {
+   "methods": 14,
+   "bytes": 170
+  },
+  "net/minecraft/core/IdMap": {
+   "methods": 2,
+   "bytes": 64
+  },
+  "net/minecraft/advancements/DisplayInfo": {
+   "methods": 16,
+   "bytes": 572
+  },
+  "net/minecraft/world/InteractionHand": {
+   "methods": 8,
+   "bytes": 183
+  },
+  "net/minecraft/util/HttpUtil": {
+   "methods": 9,
+   "bytes": 1037
+  },
+  "net/minecraft/util/ExtraCodecs$TagOrElementLocation": {
+   "methods": 7,
+   "bytes": 75
+  },
+  "net/minecraft/core/HolderGetter": {
+   "methods": 6,
+   "bytes": 97
+  },
+  "net/minecraft/nbt/TagParser": {
+   "methods": 12,
+   "bytes": 288
+  },
+  "net/minecraft/network/Varint21LengthFieldPrepender": {
+   "methods": 3,
+   "bytes": 80
+  },
+  "net/minecraft/network/PacketListener": {
+   "methods": 7,
+   "bytes": 86
+  },
+  "net/minecraft/client/ClientBrandRetriever": {
+   "methods": 1,
+   "bytes": 3
+  },
+  "net/minecraft/core/GlobalPos": {
+   "methods": 10,
+   "bytes": 200
+  },
+  "net/minecraft/util/KeyframeTrack": {
+   "methods": 15,
+   "bytes": 388
+  },
+  "net/minecraft/core/HolderSet": {
+   "methods": 6,
+   "bytes": 78
+  },
+  "net/minecraft/commands/SharedSuggestionProvider$ElementSuggestionType": {
+   "methods": 6,
+   "bytes": 126
+  },
+  "net/minecraft/client/GameLoadCookie": {
+   "methods": 6,
+   "bytes": 47
+  },
+  "net/minecraft/world/SimpleContainer": {
+   "methods": 25,
+   "bytes": 773
+  },
+  "net/minecraft/client/InputType": {
+   "methods": 5,
+   "bytes": 125
+  },
+  "net/minecraft/core/RegistrySetBuilder$BootstrappedRegistryState": {
+   "methods": 12,
+   "bytes": 174
+  },
+  "net/minecraft/world/Stopwatch": {
+   "methods": 7,
+   "bytes": 69
+  },
+  "net/minecraft/util/ColorRGBA": {
+   "methods": 6,
+   "bytes": 66
+  },
+  "com/mojang/blaze3d/ProjectionType": {
+   "methods": 8,
+   "bytes": 135
+  },
+  "net/minecraft/core/Holder$Direct": {
+   "methods": 16,
+   "bytes": 101
+  },
+  "net/minecraft/util/Util$1": {
+   "methods": 2,
+   "bytes": 14
+  },
+  "net/minecraft/world/TickRateManager": {
+   "methods": 13,
+   "bytes": 191
+  },
+  "net/minecraft/util/CubicSpline$Multipoint$Point": {
+   "methods": 9,
+   "bytes": 133
+  },
+  "net/minecraft/client/User": {
+   "methods": 7,
+   "bytes": 74
+  },
+  "net/minecraft/core/FrontAndTop": {
+   "methods": 11,
+   "bytes": 506
+  },
+  "net/minecraft/commands/SharedSuggestionProvider$TextCoordinates": {
+   "methods": 2,
+   "bytes": 53
+  },
+  "net/minecraft/util/KeyframeTrackSampler": {
+   "methods": 6,
+   "bytes": 481
+  },
+  "net/minecraft/util/CompilableString$CommandParserHelper": {
+   "methods": 6,
+   "bytes": 134
+  },
+  "net/minecraft/network/Connection": {
+   "methods": 68,
+   "bytes": 2799
+  },
+  "net/minecraft/network/SkipPacketEncoderException": {
+   "methods": 2,
+   "bytes": 12
+  },
+  "net/minecraft/gizmos/SimpleGizmoCollector": {
+   "methods": 5,
+   "bytes": 128
+  },
+  "net/minecraft/realms/RepeatedNarrator": {
+   "methods": 3,
+   "bytes": 99
+  },
+  "net/minecraft/network/ConnectionProtocol": {
+   "methods": 5,
+   "bytes": 144
+  },
+  "net/minecraft/client/OptionInstance$CycleableValueSet": {
+   "methods": 4,
+   "bytes": 109
+  },
+  "net/minecraft/stats/RecipeBookSettings$TypeSettings": {
+   "methods": 11,
+   "bytes": 227
+  },
+  "net/minecraft/server/WorldLoader$InitConfig": {
+   "methods": 6,
+   "bytes": 52
+  },
+  "net/minecraft/util/ByIdMap$OutOfBoundsStrategy": {
+   "methods": 4,
+   "bytes": 86
+  },
+  "net/minecraft/SharedConstants": {
+   "methods": 9,
+   "bytes": 1045
+  },
+  "net/minecraft/network/CipherDecoder": {
+   "methods": 3,
+   "bytes": 45
+  },
+  "net/minecraft/client/PreferredGraphicsApi": {
+   "methods": 8,
+   "bytes": 192
+  },
+  "net/minecraft/client/ToggleKeyMapping": {
+   "methods": 7,
+   "bytes": 197
+  },
+  "net/minecraft/DefaultUncaughtExceptionHandler": {
+   "methods": 2,
+   "bytes": 23
+  },
+  "net/minecraft/client/OptionInstance$OptionInstanceSliderButton": {
+   "methods": 8,
+   "bytes": 513
+  },
+  "net/minecraft/data/registries": {
+   "methods": 8,
+   "bytes": 857
+  },
+  "net/minecraft/core/BlockPos$1": {
+   "methods": 5,
+   "bytes": 38
+  },
+  "net/minecraft/util/BinaryAnimator": {
+   "methods": 3,
+   "bytes": 101
+  },
+  "com/mojang/math/Axis": {
+   "methods": 4,
+   "bytes": 96
+  },
+  "net/minecraft/util/ParticleUtils": {
+   "methods": 10,
+   "bytes": 1227
+  },
+  "net/minecraft/network/UnconfiguredPipelineHandler$Outbound": {
+   "methods": 2,
+   "bytes": 93
+  },
+  "net/minecraft/core/LayeredRegistryAccess": {
+   "methods": 14,
+   "bytes": 441
+  },
+  "net/minecraft/util/RandomSource": {
+   "methods": 10,
+   "bytes": 148
+  },
+  "net/minecraft/commands/CacheableFunction": {
+   "methods": 6,
+   "bytes": 127
+  },
+  "net/minecraft/core/BlockPos$TraversalNodeStatus": {
+   "methods": 4,
+   "bytes": 86
+  },
+  "net/minecraft/util/ProblemReporter$CollectionReferencePathElement": {
+   "methods": 5,
+   "bytes": 58
+  },
+  "net/minecraft/server/MinecraftServer$TimeProfiler$1": {
+   "methods": 7,
+   "bytes": 58
+  },
+  "net/minecraft/util/BoundedFloatFunction$2": {
+   "methods": 4,
+   "bytes": 23
+  },
+  "net/minecraft/core/Rotations": {
+   "methods": 11,
+   "bytes": 251
+  },
+  "net/minecraft/client/RotatingSectionStorage": {
+   "methods": 16,
+   "bytes": 674
+  },
+  "net/minecraft/client/ScrollWheelHandler": {
+   "methods": 3,
+   "bytes": 196
+  },
+  "net/minecraft/core/MappedRegistry$1": {
+   "methods": 6,
+   "bytes": 60
+  },
+  "com/mojang/realmsclient/RealmsAvailability$Type": {
+   "methods": 4,
+   "bytes": 124
+  },
+  "net/minecraft/nbt/NbtIo": {
+   "methods": 21,
+   "bytes": 1027
+  },
+  "net/minecraft/tags/TagEntry": {
+   "methods": 13,
+   "bytes": 381
+  },
+  "com/mojang/realmsclient/exception": {
+   "methods": 6,
+   "bytes": 82
+  },
+  "net/minecraft/util/EasingType$CubicBezierControls": {
+   "methods": 10,
+   "bytes": 244
+  },
+  "net/minecraft/nbt/LongArrayTag$1": {
+   "methods": 7,
+   "bytes": 111
+  },
+  "net/minecraft/core/NonNullList": {
+   "methods": 11,
+   "bytes": 188
+  },
+  "com/mojang/blaze3d/TracyFrameCapture": {
+   "methods": 10,
+   "bytes": 659
+  },
+  "net/minecraft/advancements/TreeNodePosition": {
+   "methods": 13,
+   "bytes": 1229
+  },
+  "net/minecraft/network/CipherEncoder": {
+   "methods": 3,
+   "bytes": 38
+  },
+  "net/minecraft/util/NativeModuleLister": {
+   "methods": 12,
+   "bytes": 625
+  },
+  "com/mojang/blaze3d/TracyBootstrap": {
+   "methods": 3,
+   "bytes": 95
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$NotificationMessageEntry": {
+   "methods": 12,
+   "bytes": 571
+  },
+  "net/minecraft/server/WorldLoader$DataLoadContext": {
+   "methods": 7,
+   "bytes": 63
+  },
+  "net/minecraft/util/EasingType$CubicBezier$CubicCurve": {
+   "methods": 6,
+   "bytes": 87
+  },
+  "net/minecraft/client/waypoints": {
+   "methods": 10,
+   "bytes": 165
+  },
+  "net/minecraft/nbt/CompoundTag$2": {
+   "methods": 1,
+   "bytes": 94
+  },
+  "net/minecraft/nbt/TextComponentTagVisitor$RichStyling": {
+   "methods": 7,
+   "bytes": 271
+  },
+  "net/minecraft/client/OptionInstance$LazyEnum": {
+   "methods": 7,
+   "bytes": 77
+  },
+  "net/minecraft/network/CompressionDecoder": {
+   "methods": 5,
+   "bytes": 298
+  },
+  "net/minecraft/world/BossEvent$BossBarOverlay": {
+   "methods": 7,
+   "bytes": 170
+  },
+  "net/minecraft/network/HashedStack$ActualItem": {
+   "methods": 9,
+   "bytes": 140
+  },
+  "net/minecraft/commands/CommandSourceStack$NamesProvider": {
+   "methods": 2,
+   "bytes": 20
+  },
+  "net/minecraft/nbt/EndTag$1": {
+   "methods": 7,
+   "bytes": 42
+  },
+  "net/minecraft/util/CompilableString": {
+   "methods": 9,
+   "bytes": 122
+  },
+  "net/minecraft/util/SequencedPriorityIterator": {
+   "methods": 5,
+   "bytes": 260
+  },
+  "net/minecraft/util/ZeroBitStorage": {
+   "methods": 12,
+   "bytes": 131
+  },
+  "net/minecraft/core/ClientAsset$ResourceTexture": {
+   "methods": 9,
+   "bytes": 125
+  },
+  "net/minecraft/client/NarratorStatus": {
+   "methods": 10,
+   "bytes": 259
+  },
+  "net/minecraft/client/DebugQueryHandler": {
+   "methods": 5,
+   "bytes": 112
+  },
+  "net/minecraft/network/UnconfiguredPipelineHandler$InboundConfigurationTask": {
+   "methods": 2,
+   "bytes": 23
+  },
+  "net/minecraft/util/PlaceholderLookupProvider$UniversalLookup": {
+   "methods": 10,
+   "bytes": 105
+  },
+  "net/minecraft/client/MouseHandler$LastClick": {
+   "methods": 6,
+   "bytes": 47
+  },
+  "net/minecraft/nbt/TagType$1": {
+   "methods": 8,
+   "bytes": 64
+  },
+  "net/minecraft/server/PlayerAdvancements$Data": {
+   "methods": 8,
+   "bytes": 122
+  },
+  "net/minecraft/client/ResourceLoadStateTracker$ReloadReason": {
+   "methods": 4,
+   "bytes": 97
+  },
+  "net/minecraft/tags/BannerPatternTags": {
+   "methods": 2,
+   "bytes": 100
+  },
+  "net/minecraft/core/RegistrySetBuilder$2": {
+   "methods": 3,
+   "bytes": 48
+  },
+  "net/minecraft/util/FastBufferedInputStream": {
+   "methods": 9,
+   "bytes": 277
+  },
+  "net/minecraft/network/PacketProcessor": {
+   "methods": 6,
+   "bytes": 121
+  },
+  "net/minecraft/util/Unit": {
+   "methods": 4,
+   "bytes": 66
+  },
+  "net/minecraft/commands/CommandSigningContext$1": {
+   "methods": 2,
+   "bytes": 7
+  },
+  "net/minecraft/commands/Commands$1": {
+   "methods": 4,
+   "bytes": 70
+  },
+  "net/minecraft/util/CommonLinks$ExtensionReference": {
+   "methods": 4,
+   "bytes": 86
+  },
+  "net/minecraft/commands/Commands$CommandSelection": {
+   "methods": 4,
+   "bytes": 103
+  },
+  "net/minecraft/util/NativeModuleLister$NativeModuleInfo": {
+   "methods": 6,
+   "bytes": 73
+  },
+  "net/minecraft/tags/TagLoader$EntryWithSource": {
+   "methods": 5,
+   "bytes": 52
+  },
+  "net/minecraft/client/Options$2": {
+   "methods": 8,
+   "bytes": 293
+  },
+  "net/minecraft/util/ExtraCodecs$5": {
+   "methods": 3,
+   "bytes": 48
+  },
+  "net/minecraft/advancements/AdvancementType": {
+   "methods": 10,
+   "bytes": 233
+  },
+  "net/minecraft/client/StringSplitter$FlatComponents": {
+   "methods": 5,
+   "bytes": 336
+  },
+  "net/minecraft/server/LoggedPrintStream": {
+   "methods": 5,
+   "bytes": 53
+  },
+  "net/minecraft/nbt/SnbtGrammar$ArrayPrefix$1": {
+   "methods": 4,
+   "bytes": 118
+  },
+  "net/minecraft/advancements/AdvancementRewards$Builder": {
+   "methods": 6,
+   "bytes": 114
+  },
+  "net/minecraft/util/Prediction": {
+   "methods": 4,
+   "bytes": 67
+  },
+  "net/minecraft/resources/RegistryLoadTask": {
+   "methods": 10,
+   "bytes": 308
+  },
+  "net/minecraft/stats/RecipeBookSettings$1": {
+   "methods": 1,
+   "bytes": 70
+  },
+  "net/minecraft/server/ServerFunctionLibrary": {
+   "methods": 17,
+   "bytes": 554
+  },
+  "net/minecraft/client/OptionInstance$UnitDouble$1": {
+   "methods": 5,
+   "bytes": 146
+  },
+  "net/minecraft/nbt/SnbtGrammar$Signed": {
+   "methods": 5,
+   "bytes": 42
+  },
+  "net/minecraft/util/SpawnUtil$Strategy": {
+   "methods": 4,
+   "bytes": 294
+  },
+  "com/mojang/math/Axis$6": {
+   "methods": 5,
+   "bytes": 32
+  },
+  "net/minecraft/server/SuppressedExceptionCollector$LongEntry": {
+   "methods": 4,
+   "bytes": 49
+  },
+  "net/minecraft/tags/TagNetworkSerialization$NetworkPayload": {
+   "methods": 9,
+   "bytes": 126
+  },
+  "net/minecraft/nbt/EndTag": {
+   "methods": 10,
+   "bytes": 73
+  },
+  "net/minecraft/server/RunningOnDifferentThreadException": {
+   "methods": 3,
+   "bytes": 34
+  },
+  "net/minecraft/world/InteractionResult$Fail": {
+   "methods": 4,
+   "bytes": 27
+  },
+  "net/minecraft/util/StringUtil": {
+   "methods": 13,
+   "bytes": 397
+  },
+  "net/minecraft/nbt/ListTag$2": {
+   "methods": 1,
+   "bytes": 94
+  },
+  "net/minecraft/nbt/SnbtOperations": {
+   "methods": 1,
+   "bytes": 87
+  },
+  "net/minecraft/util/CrudeIncrementalIntIdentityHashBiMap": {
+   "methods": 18,
+   "bytes": 667
+  },
+  "net/minecraft/client/MusicToastDisplayState": {
+   "methods": 9,
+   "bytes": 178
+  },
+  "net/minecraft/locale/DeprecatedTranslationsInfo": {
+   "methods": 14,
+   "bytes": 381
+  },
+  "net/minecraft/network/MonitoredLocalFrameDecoder": {
+   "methods": 2,
+   "bytes": 47
+  },
+  "net/minecraft/world/Nameable": {
+   "methods": 4,
+   "bytes": 36
+  },
+  "net/minecraft/client/SectionUpdateTracker": {
+   "methods": 8,
+   "bytes": 272
+  },
+  "net/minecraft/client/TextureFilteringMethod": {
+   "methods": 7,
+   "bytes": 173
+  },
+  "net/minecraft/gizmos/RectGizmo": {
+   "methods": 6,
+   "bytes": 782
+  },
+  "net/minecraft/world/LockCode": {
+   "methods": 10,
+   "bytes": 149
+  },
+  "net/minecraft/util/StrictJsonParser": {
+   "methods": 2,
+   "bytes": 82
+  },
+  "net/minecraft/util/ProblemReporter$RootElementPathElement": {
+   "methods": 5,
+   "bytes": 58
+  },
+  "net/minecraft/gizmos/GizmoStyle": {
+   "methods": 12,
+   "bytes": 134
+  },
+  "net/minecraft/core/RegistryAccess$RegistryEntry": {
+   "methods": 9,
+   "bytes": 100
+  },
+  "net/minecraft/tags/DialogTags": {
+   "methods": 2,
+   "bytes": 28
+  },
+  "net/minecraft/util/Util$11": {
+   "methods": 4,
+   "bytes": 82
+  },
+  "net/minecraft/core/Direction$Plane": {
+   "methods": 12,
+   "bytes": 233
+  },
+  "net/minecraft/util/BoundedFloatFunction$1": {
+   "methods": 3,
+   "bytes": 25
+  },
+  "net/minecraft/tags/PaintingVariantTags": {
+   "methods": 2,
+   "bytes": 20
+  },
+  "net/minecraft/util/CsvOutput": {
+   "methods": 5,
+   "bytes": 129
+  },
+  "com/mojang/math/Axis$1": {
+   "methods": 5,
+   "bytes": 35
+  },
+  "net/minecraft/util/NullOps$NullListBuilder": {
+   "methods": 7,
+   "bytes": 48
+  },
+  "net/minecraft/nbt/StreamTagVisitor$ValueResult": {
+   "methods": 4,
+   "bytes": 86
+  },
+  "net/minecraft/DetectedVersion": {
+   "methods": 5,
+   "bytes": 303
+  },
+  "net/minecraft/util/ClassTreeIdRegistry": {
+   "methods": 5,
+   "bytes": 131
+  },
+  "net/minecraft/gizmos/CircleGizmo": {
+   "methods": 5,
+   "bytes": 235
+  },
+  "com/mojang/blaze3d/TracyBootstrap$1": {
+   "methods": 1,
+   "bytes": 55
+  },
+  "net/minecraft/world/BossEvent$BossBarColor": {
+   "methods": 8,
+   "bytes": 247
+  },
+  "net/minecraft/client/Options$3": {
+   "methods": 9,
+   "bytes": 183
+  },
+  "net/minecraft/nbt/NbtException": {
+   "methods": 1,
+   "bytes": 6
+  },
+  "net/minecraft/util/NullOps$NullMapBuilder": {
+   "methods": 7,
+   "bytes": 52
+  },
+  "net/minecraft/network/VarInt": {
+   "methods": 4,
+   "bytes": 135
+  },
+  "net/minecraft/util/Util$7": {
+   "methods": 3,
+   "bytes": 43
+  },
+  "net/minecraft/server/ServerLinks$KnownLinkType": {
+   "methods": 7,
+   "bytes": 327
+  },
+  "net/minecraft/client/SectionUpdateTracker$SectionDirtyState": {
+   "methods": 7,
+   "bytes": 104
+  },
+  "net/minecraft/util/Util$5": {
+   "methods": 3,
+   "bytes": 72
+  },
+  "net/minecraft/util/EncoderCache": {
+   "methods": 2,
+   "bytes": 45
+  },
+  "net/minecraft/client/HotbarManager": {
+   "methods": 6,
+   "bytes": 298
+  },
+  "net/minecraft/core/HolderLookup$RegistryLookup$Delegate": {
+   "methods": 7,
+   "bytes": 87
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$ParentEntry": {
+   "methods": 3,
+   "bytes": 211
+  },
+  "net/minecraft/util/SegmentedAnglePrecision": {
+   "methods": 8,
+   "bytes": 162
+  },
+  "net/minecraft/network/LocalFrameEncoder": {
+   "methods": 2,
+   "bytes": 18
+  },
+  "net/minecraft/gizmos/TextGizmo": {
+   "methods": 5,
+   "bytes": 105
+  },
+  "net/minecraft/resources/RegistryDataLoader$RegistryData": {
+   "methods": 8,
+   "bytes": 67
+  },
+  "net/minecraft/core/AxisCycle$1": {
+   "methods": 4,
+   "bytes": 20
+  },
+  "net/minecraft/util/PlaceholderLookupProvider": {
+   "methods": 5,
+   "bytes": 107
+  },
+  "net/minecraft/server/ServerFunctionManager": {
+   "methods": 15,
+   "bytes": 400
+  },
+  "net/minecraft/tags/InstrumentTags": {
+   "methods": 2,
+   "bytes": 36
+  },
+  "net/minecraft/util/KeyframeTrack$Builder": {
+   "methods": 4,
+   "bytes": 77
+  },
+  "net/minecraft/stats/ServerStatsCounter": {
+   "methods": 17,
+   "bytes": 717
+  },
+  "net/minecraft/server/RegistryLayer": {
+   "methods": 5,
+   "bytes": 150
+  },
+  "net/minecraft/resources/RegistryOps$HolderLookupAdapter": {
+   "methods": 4,
+   "bytes": 100
+  },
+  "net/minecraft/server/WorldStem": {
+   "methods": 9,
+   "bytes": 78
+  },
+  "net/minecraft/network/PacketDecoder": {
+   "methods": 3,
+   "bytes": 250
+  },
+  "net/minecraft/stats/StatFormatter": {
+   "methods": 4,
+   "bytes": 270
+  },
+  "net/minecraft/client/PresenceSharing": {
+   "methods": 7,
+   "bytes": 149
+  },
+  "net/minecraft/client/StringSplitter$LineComponent": {
+   "methods": 3,
+   "bytes": 45
+  },
+  "net/minecraft/commands/CommandSource$1": {
+   "methods": 5,
+   "bytes": 12
+  },
+  "net/minecraft/advancements/AdvancementRequirements": {
+   "methods": 16,
+   "bytes": 511
+  },
+  "net/minecraft/data/BlockFamilies": {
+   "methods": 10,
+   "bytes": 3531
+  },
+  "net/minecraft/world/RandomSequences": {
+   "methods": 17,
+   "bytes": 427
+  },
+  "net/minecraft/client/ClientClockManager": {
+   "methods": 7,
+   "bytes": 202
+  },
+  "com/mojang/math/Axis$3": {
+   "methods": 5,
+   "bytes": 35
+  },
+  "net/minecraft/nbt/SnbtGrammar$Base": {
+   "methods": 4,
+   "bytes": 86
+  },
+  "net/minecraft/util/SpawnUtil": {
+   "methods": 2,
+   "bytes": 299
+  },
+  "net/minecraft/gizmos/LineGizmo": {
+   "methods": 5,
+   "bytes": 75
+  },
+  "net/minecraft/client/profiling": {
+   "methods": 3,
+   "bytes": 289
+  },
+  "net/minecraft/util/AbortableIterationConsumer": {
+   "methods": 2,
+   "bytes": 18
+  },
+  "net/minecraft/util/Util$6": {
+   "methods": 3,
+   "bytes": 47
+  },
+  "net/minecraft/core/RegistryAccess$1": {
+   "methods": 4,
+   "bytes": 50
+  },
+  "net/minecraft/nbt/SnbtGrammar$ArrayPrefix$2": {
+   "methods": 3,
+   "bytes": 101
+  },
+  "net/minecraft/client/OptionInstance$UnitDouble": {
+   "methods": 13,
+   "bytes": 155
+  },
+  "net/minecraft/tags/TagLoader$SortingEntry": {
+   "methods": 8,
+   "bytes": 82
+  },
+  "net/minecraft/world/RandomizableContainer": {
+   "methods": 5,
+   "bytes": 301
+  },
+  "net/minecraft/util/ProblemReporter$Collector$ProblemTreeNode": {
+   "methods": 10,
+   "bytes": 365
+  },
+  "net/minecraft/util/Brightness": {
+   "methods": 10,
+   "bytes": 160
+  },
+  "net/minecraft/references/ItemIds": {
+   "methods": 8,
+   "bytes": 4144
+  },
+  "net/minecraft/nbt/SnbtGrammar$Sign": {
+   "methods": 5,
+   "bytes": 82
+  },
+  "net/minecraft/commands/CommandResultCallback": {
+   "methods": 5,
+   "bytes": 72
+  },
+  "net/minecraft/core/RegistrationInfo": {
+   "methods": 7,
+   "bytes": 64
+  },
+  "net/minecraft/realms/RealmsConnect": {
+   "methods": 5,
+   "bytes": 146
+  },
+  "net/minecraft/util/NullOps$1": {
+   "methods": 6,
+   "bytes": 28
+  },
+  "net/minecraft/core/BlockPos$4": {
+   "methods": 3,
+   "bytes": 145
+  },
+  "net/minecraft/stats/Stats": {
+   "methods": 3,
+   "bytes": 1065
+  },
+  "net/minecraft/core/QuartPos": {
+   "methods": 4,
+   "bytes": 16
+  },
+  "net/minecraft/network/DisconnectionDetails": {
+   "methods": 8,
+   "bytes": 69
+  },
+  "net/minecraft/commands/CommandSourceStack$NamesProvider$1": {
+   "methods": 3,
+   "bytes": 34
+  },
+  "net/minecraft/stats/ServerRecipeBook$Packed": {
+   "methods": 9,
+   "bytes": 140
+  },
+  "net/minecraft/core/SectionPos$1": {
+   "methods": 2,
+   "bytes": 126
+  },
+  "net/minecraft/core/PositionAndRotation$Mutable": {
+   "methods": 8,
+   "bytes": 93
+  },
+  "net/minecraft/core/MappedRegistry$2": {
+   "methods": 4,
+   "bytes": 51
+  },
+  "net/minecraft/CrashReportCategory$Entry": {
+   "methods": 7,
+   "bytes": 104
+  },
+  "net/minecraft/gizmos/RectGizmo$1": {
+   "methods": 1,
+   "bytes": 101
+  },
+  "net/minecraft/core/Holder$Reference$Type": {
+   "methods": 4,
+   "bytes": 67
+  },
+  "net/minecraft/advancements/AdvancementHolder": {
+   "methods": 8,
+   "bytes": 130
+  },
+  "net/minecraft/nbt/StringTag$1": {
+   "methods": 7,
+   "bytes": 69
+  },
+  "net/minecraft/util/EncoderCache$1": {
+   "methods": 3,
+   "bytes": 26
+  },
+  "net/minecraft/tags/EnchantmentTags": {
+   "methods": 2,
+   "bytes": 244
+  },
+  "net/minecraft/tags/TagNetworkSerialization": {
+   "methods": 7,
+   "bytes": 332
+  },
+  "net/minecraft/client/RotatingSectionStorage$Node": {
+   "methods": 4,
+   "bytes": 32
+  },
+  "net/minecraft/stats/StatsCounter": {
+   "methods": 5,
+   "bytes": 102
+  },
+  "net/minecraft/world/RandomSequences$DirtyMarkingRandomSource": {
+   "methods": 13,
+   "bytes": 235
+  },
+  "net/minecraft/nbt/FloatTag$1": {
+   "methods": 7,
+   "bytes": 52
+  },
+  "net/minecraft/util/BoundedFloatFunction": {
+   "methods": 2,
+   "bytes": 26
+  },
+  "net/minecraft/util/ModCheck": {
+   "methods": 8,
+   "bytes": 187
+  },
+  "net/minecraft/world/InteractionResult$TryEmptyHandInteraction": {
+   "methods": 4,
+   "bytes": 27
+  },
+  "net/minecraft/nbt/SnbtGrammar$3": {
+   "methods": 2,
+   "bytes": 249
+  },
+  "net/minecraft/core/Direction$AxisDirection": {
+   "methods": 7,
+   "bytes": 111
+  },
+  "net/minecraft/server/MinecraftServer$2": {
+   "methods": 2,
+   "bytes": 63
+  },
+  "net/minecraft/client/RotatingSectionStorage$1": {
+   "methods": 4,
+   "bytes": 92
+  },
+  "net/minecraft/util/StringRepresentable$StringRepresentableCodec": {
+   "methods": 5,
+   "bytes": 86
+  },
+  "net/minecraft/nbt/ByteArrayTag$1": {
+   "methods": 7,
+   "bytes": 90
+  },
+  "net/minecraft/core/IdMapper": {
+   "methods": 8,
+   "bytes": 189
+  },
+  "net/minecraft/util/MemoryReserve": {
+   "methods": 2,
+   "bytes": 32
+  },
+  "net/minecraft/nbt/NbtOps$IntListCollector": {
+   "methods": 3,
+   "bytes": 82
+  },
+  "com/mojang/realmsclient/RealmsAvailability$Result": {
+   "methods": 9,
+   "bytes": 179
+  },
+  "net/minecraft/network/PacketBundlePacker": {
+   "methods": 4,
+   "bytes": 152
+  },
+  "net/minecraft/client/InactivityFpsLimit": {
+   "methods": 6,
+   "bytes": 110
+  },
+  "net/minecraft/server/WorldLoader": {
+   "methods": 6,
+   "bytes": 337
+  },
+  "net/minecraft/core/RegistrySetBuilder$BootstrappedRegistryState$1": {
+   "methods": 4,
+   "bytes": 121
+  },
+  "net/minecraft/tags/BlockItemTagId": {
+   "methods": 9,
+   "bytes": 92
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$LayoutState": {
+   "methods": 4,
+   "bytes": 86
+  },
+  "net/minecraft/core/RegistrySynchronization$PackedRegistryEntry": {
+   "methods": 7,
+   "bytes": 85
+  },
+  "net/minecraft/client/KeyboardHandler$1": {
+   "methods": 1,
+   "bytes": 40
+  },
+  "net/minecraft/tags/TagLoader$ElementLookup": {
+   "methods": 4,
+   "bytes": 45
+  },
+  "net/minecraft/advancements/AdvancementRequirements$Strategy": {
+   "methods": 1,
+   "bytes": 17
+  },
+  "net/minecraft/client/GameNarrator$NarratorInitException": {
+   "methods": 1,
+   "bytes": 6
+  },
+  "net/minecraft/nbt/ByteTag$1": {
+   "methods": 7,
+   "bytes": 52
+  },
+  "net/minecraft/server/MinecraftServer$ReloadableResources": {
+   "methods": 5,
+   "bytes": 47
+  },
+  "net/minecraft/nbt/IntTag$1": {
+   "methods": 7,
+   "bytes": 52
+  },
+  "net/minecraft/core/Holder": {
+   "methods": 4,
+   "bytes": 50
+  },
+  "net/minecraft/nbt/NbtOps$GenericListCollector": {
+   "methods": 10,
+   "bytes": 174
+  },
+  "net/minecraft/network/LpVec3": {
+   "methods": 6,
+   "bytes": 389
+  },
+  "net/minecraft/util/FileZipper": {
+   "methods": 6,
+   "bytes": 433
+  },
+  "net/minecraft/core/Rotations$1": {
+   "methods": 5,
+   "bytes": 75
+  },
+  "net/minecraft/world/Container$1": {
+   "methods": 3,
+   "bytes": 50
+  },
+  "net/minecraft/nbt/CompoundTag$1": {
+   "methods": 9,
+   "bytes": 499
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$1": {
+   "methods": 3,
+   "bytes": 110
+  },
+  "net/minecraft/nbt/NbtIo$StringFallbackDataOutput": {
+   "methods": 2,
+   "bytes": 28
+  },
+  "net/minecraft/data/AtlasIds": {
+   "methods": 1,
+   "bytes": 97
+  },
+  "net/minecraft/core/HolderSet$ListBacked": {
+   "methods": 7,
+   "bytes": 68
+  },
+  "net/minecraft/client/PeriodicNotificationManager$NotificationTask": {
+   "methods": 4,
+   "bytes": 222
+  },
+  "com/mojang/realmsclient/RealmsAvailability": {
+   "methods": 5,
+   "bytes": 214
+  },
+  "net/minecraft/nbt/TagType$StaticSize": {
+   "methods": 2,
+   "bytes": 30
+  },
+  "net/minecraft/resources/NetworkRegistryLoadTask": {
+   "methods": 6,
+   "bytes": 329
+  },
+  "net/minecraft/util/Util$10": {
+   "methods": 3,
+   "bytes": 58
+  },
+  "net/minecraft/realms/RealmsScreen": {
+   "methods": 4,
+   "bytes": 40
+  },
+  "net/minecraft/nbt/SnbtGrammar$4": {
+   "methods": 2,
+   "bytes": 49
+  },
+  "net/minecraft/util/InclusiveRange": {
+   "methods": 18,
+   "bytes": 378
+  },
+  "com/mojang/realmsclient/RealmsMainScreen$RealmSelectionList": {
+   "methods": 7,
+   "bytes": 425
+  },
+  "net/minecraft/core/AxisCycle": {
+   "methods": 5,
+   "bytes": 116
+  },
+  "net/minecraft/network/Varint21FrameDecoder": {
+   "methods": 4,
+   "bytes": 184
+  },
+  "net/minecraft/core/ClientAsset$DownloadedTexture": {
+   "methods": 7,
+   "bytes": 52
+  },
+  "net/minecraft/util/BlockUtil": {
+   "methods": 9,
+   "bytes": 1163
+  },
+  "net/minecraft/core/HolderOwner": {
+   "methods": 1,
+   "bytes": 11
+  },
+  "net/minecraft/util/ExtraCodecs$4": {
+   "methods": 5,
+   "bytes": 102
+  },
+  "net/minecraft/sounds/SoundSource": {
+   "methods": 6,
+   "bytes": 291
+  },
+  "com/mojang/renderpearl/util": {
+   "methods": 8,
+   "bytes": 65
+  },
+  "net/minecraft/realms/RepeatedNarrator$Params": {
+   "methods": 4,
+   "bytes": 37
+  },
+  "net/minecraft/gizmos/PointGizmo": {
+   "methods": 5,
+   "bytes": 65
+  },
+  "net/minecraft/client/AttackIndicatorStatus": {
+   "methods": 7,
+   "bytes": 173
+  },
+  "net/minecraft/core/PositionAndRotation$Immutable": {
+   "methods": 7,
+   "bytes": 57
+  },
+  "net/minecraft/client/DeltaTracker$DefaultValue": {
+   "methods": 4,
+   "bytes": 25
+  },
+  "net/minecraft/data/CachedOutput": {
+   "methods": 2,
+   "bytes": 29
+  },
+  "net/minecraft/commands/ArgumentVisitor": {
+   "methods": 3,
+   "bytes": 154
+  },
+  "net/minecraft/core/BlockPos$5": {
+   "methods": 3,
+   "bytes": 153
+  },
+  "net/minecraft/server/WorldLoader$PackConfig": {
+   "methods": 5,
+   "bytes": 94
+  },
+  "net/minecraft/util/LightCoordsUtil$BrightnessGetter": {
+   "methods": 2,
+   "bytes": 37
+  },
+  "net/minecraft/util/SmoothDouble": {
+   "methods": 3,
+   "bytes": 107
+  },
+  "net/minecraft/commands/CommandBuildContext": {
+   "methods": 1,
+   "bytes": 10
+  },
+  "net/minecraft/network/Connection$3": {
+   "methods": 2,
+   "bytes": 33
+  },
+  "net/minecraft/Optionull": {
+   "methods": 2,
+   "bytes": 32
+  },
+  "com/mojang/blaze3d/TracyFrameCapture$Status": {
+   "methods": 4,
+   "bytes": 86
+  },
+  "net/minecraft/client/ClientClockManager$ClientClockInstance": {
+   "methods": 2,
+   "bytes": 15
+  },
+  "net/minecraft/commands/ParserUtils": {
+   "methods": 1,
+   "bytes": 45
+  },
+  "net/minecraft/nbt/TextComponentTagVisitor$Token": {
+   "methods": 4,
+   "bytes": 391
+  },
+  "net/minecraft/network/CipherBase": {
+   "methods": 4,
+   "bytes": 190
+  },
+  "net/minecraft/util/StringRepresentable$1": {
+   "methods": 2,
+   "bytes": 44
+  },
+  "net/minecraft/util/Keyframe": {
+   "methods": 8,
+   "bytes": 105
+  },
+  "net/minecraft/util/TickThrottler": {
+   "methods": 4,
+   "bytes": 71
+  },
+  "net/minecraft/core/PositionAndRotation": {
+   "methods": 3,
+   "bytes": 88
+  },
+  "net/minecraft/nbt/NbtAccounter": {
+   "methods": 8,
+   "bytes": 199
+  },
+  "net/minecraft/tags/EntityTypeTags": {
+   "methods": 2,
+   "bytes": 406
+  },
+  "net/minecraft/nbt/LongTag$Cache": {
+   "methods": 1,
+   "bytes": 43
+  },
+  "net/minecraft/util/ExtraCodecs$LateBoundIdMapper": {
+   "methods": 5,
+   "bytes": 100
+  },
+  "net/minecraft/util/FutureChain": {
+   "methods": 7,
+   "bytes": 132
+  },
+  "net/minecraft/util/ExtraCodecs$6": {
+   "methods": 7,
+   "bytes": 310
+  },
+  "net/minecraft/util/Signer": {
+   "methods": 3,
+   "bytes": 59
+  },
+  "net/minecraft/util/HashOps$ListHashBuilder": {
+   "methods": 8,
+   "bytes": 140
+  },
+  "net/minecraft/commands/FunctionInstantiationException": {
+   "methods": 2,
+   "bytes": 21
+  },
+  "net/minecraft/advancements/CriterionProgress": {
+   "methods": 10,
+   "bytes": 128
+  },
+  "net/minecraft/core/TypedInstance": {
+   "methods": 6,
+   "bytes": 88
+  },
+  "net/minecraft/client/OptionInstance$SliderableValueSet": {
+   "methods": 5,
+   "bytes": 54
+  },
+  "net/minecraft/nbt/CollectionTag": {
+   "methods": 3,
+   "bytes": 35
+  },
+  "net/minecraft/nbt/SnbtGrammar$SimpleHexLiteralParseRule": {
+   "methods": 2,
+   "bytes": 259
+  },
+  "net/minecraft/util/LinearCongruentialGenerator": {
+   "methods": 1,
+   "bytes": 18
+  },
+  "net/minecraft/util/FileSystemUtil": {
+   "methods": 2,
+   "bytes": 46
+  },
+  "net/minecraft/tags/DamageTypeTags": {
+   "methods": 2,
+   "bytes": 300
+  },
+  "net/minecraft/resources/RegistryValidator": {
+   "methods": 5,
+   "bytes": 73
+  },
+  "net/minecraft/client/Minecraft$1": {
+   "methods": 2,
+   "bytes": 57
+  },
+  "net/minecraft/server/ServerAdvancementManager": {
+   "methods": 7,
+   "bytes": 203
+  },
+  "net/minecraft/util/KeyframeTrackSampler$Segment": {
+   "methods": 5,
+   "bytes": 75
+  },
+  "net/minecraft/util/TimeSource": {
+   "methods": 2,
+   "bytes": 9
+  },
+  "net/minecraft/util/ModCheck$Confidence": {
+   "methods": 4,
+   "bytes": 106
+  },
+  "net/minecraft/network/Connection$2": {
+   "methods": 2,
+   "bytes": 20
+  },
+  "net/minecraft/util/CsvOutput$Builder": {
+   "methods": 3,
+   "bytes": 38
+  },
+  "net/minecraft/network/SkipPacketDecoderException": {
+   "methods": 2,
+   "bytes": 12
+  },
+  "net/minecraft/server/MinecraftServer$1": {
+   "methods": 4,
+   "bytes": 112
+  },
+  "net/minecraft/nbt/SnbtGrammar$1": {
+   "methods": 2,
+   "bytes": 49
+  },
+  "net/minecraft/tags/StructureTags": {
+   "methods": 2,
+   "bytes": 276
+  },
+  "net/minecraft/commands/CommandBuildContext$1": {
+   "methods": 5,
+   "bytes": 61
+  },
+  "net/minecraft/util/ExceptionCollector": {
+   "methods": 3,
+   "bytes": 42
+  },
+  "net/minecraft/tags/BiomeTags": {
+   "methods": 2,
+   "bytes": 741
+  },
+  "net/minecraft/world/InteractionResult$ItemContext": {
+   "methods": 5,
+   "bytes": 62
+  },
+  "net/minecraft/data/structures": {
+   "methods": 2,
+   "bytes": 64
+  },
+  "net/minecraft/client/ClientBootstrap": {
+   "methods": 1,
+   "bytes": 45
+  },
+  "net/minecraft/nbt/NbtOps$LongListCollector": {
+   "methods": 3,
+   "bytes": 82
+  },
+  "net/minecraft/data/BlockFamily$Variant": {
+   "methods": 7,
+   "bytes": 708
+  },
+  "net/minecraft/network/LocalFrameDecoder": {
+   "methods": 2,
+   "bytes": 17
+  },
+  "net/minecraft/nbt/IntArrayTag$1": {
+   "methods": 7,
+   "bytes": 110
+  },
+  "net/minecraft/locale/Language$1": {
+   "methods": 7,
+   "bytes": 83
+  },
+  "net/minecraft/client/ComponentCollector": {
+   "methods": 4,
+   "bytes": 90
+  },
+  "net/minecraft/network/ProtocolSwapHandler": {
+   "methods": 2,
+   "bytes": 128
+  },
+  "net/minecraft/util/ProblemReporter$MapEntryPathElement": {
+   "methods": 5,
+   "bytes": 51
+  },
+  "net/minecraft/commands/CommandResultCallback$1": {
+   "methods": 3,
+   "bytes": 9
+  },
+  "net/minecraft/server/TickTask": {
+   "methods": 3,
+   "bytes": 30
+  },
+  "net/minecraft/resources/RegistryDataLoader$2": {
+   "methods": 2,
+   "bytes": 36
+  },
+  "net/minecraft/util/ProblemReporter$IndexedFieldPathElement": {
+   "methods": 5,
+   "bytes": 51
+  },
+  "net/minecraft/nbt/NbtOps$ByteListCollector": {
+   "methods": 3,
+   "bytes": 82
+  },
+  "net/minecraft/util/ProblemReporter$FieldPathElement": {
+   "methods": 5,
+   "bytes": 42
+  },
+  "net/minecraft/util/LenientJsonParser": {
+   "methods": 1,
+   "bytes": 5
+  },
+  "net/minecraft/nbt/ShortTag$Cache": {
+   "methods": 1,
+   "bytes": 43
+  },
+  "net/minecraft/util/SortedArraySet$ArrayIterator": {
+   "methods": 4,
+   "bytes": 133
+  },
+  "com/mojang/math/OctahedralGroup$1": {
+   "methods": 1,
+   "bytes": 55
+  },
+  "net/minecraft/world/InteractionResult$Pass": {
+   "methods": 4,
+   "bytes": 27
+  },
+  "net/minecraft/nbt/StreamTagVisitor$EntryResult": {
+   "methods": 4,
+   "bytes": 105
+  },
+  "net/minecraft/util/CubicSpline$1": {
+   "methods": 3,
+   "bytes": 27
+  },
+  "net/minecraft/core/BlockPos$6": {
+   "methods": 3,
+   "bytes": 280
+  },
+  "net/minecraft/network/RateKickingConnection": {
+   "methods": 4,
+   "bytes": 97
+  },
+  "net/minecraft/client/Camera$NearPlane": {
+   "methods": 6,
+   "bytes": 125
+  },
+  "net/minecraft/WorldVersion$1": {
+   "methods": 1,
+   "bytes": 40
+  },
+  "net/minecraft/gizmos/Gizmos$TemporaryCollection": {
+   "methods": 2,
+   "bytes": 41
+  },
+  "net/minecraft/util/Util$OS": {
+   "methods": 5,
+   "bytes": 144
+  },
+  "net/minecraft/server/MinecraftServer$MultiplayerScope": {
+   "methods": 5,
+   "bytes": 102
+  },
+  "net/minecraft/network/Utf8String": {
+   "methods": 2,
+   "bytes": 248
+  },
+  "net/minecraft/nbt/CollectionTag$1": {
+   "methods": 4,
+   "bytes": 78
+  },
+  "net/minecraft/server/MinecraftServer$TimeProfiler": {
+   "methods": 2,
+   "bytes": 26
+  },
+  "net/minecraft/nbt/NbtIo$1": {
+   "methods": 1,
+   "bytes": 55
+  },
+  "net/minecraft/nbt/SnbtGrammar$ArrayPrefix$3": {
+   "methods": 3,
+   "bytes": 101
+  },
+  "net/minecraft/commands/Commands$2": {
+   "methods": 5,
+   "bytes": 57
+  },
+  "net/minecraft/client/ResourceLoadStateTracker$RecoveryInfo": {
+   "methods": 3,
+   "bytes": 61
+  },
+  "net/minecraft/nbt/IntTag$Cache": {
+   "methods": 1,
+   "bytes": 42
+  },
+  "net/minecraft/client/ResourceLoadStateTracker$ReloadState": {
+   "methods": 3,
+   "bytes": 89
+  },
+  "net/minecraft/references/BlockItemIds": {
+   "methods": 3,
+   "bytes": 7238
+  },
+  "net/minecraft/core/UUIDUtil$1": {
+   "methods": 5,
+   "bytes": 38
+  },
+  "net/minecraft/realms/RealmsConnect$1": {
+   "methods": 4,
+   "bytes": 471
+  },
+  "net/minecraft/util/CryptException": {
+   "methods": 1,
+   "bytes": 6
+  },
+  "net/minecraft/network/PacketProcessor$ListenerAndPacket": {
+   "methods": 5,
+   "bytes": 137
+  },
+  "net/minecraft/resources/DelegatingOps$DelegateListBuilder": {
+   "methods": 3,
+   "bytes": 44
+  },
+  "net/minecraft/tags/BlockTags": {
+   "methods": 2,
+   "bytes": 2568
+  },
+  "net/minecraft/world/InteractionResult$SwingSource": {
+   "methods": 4,
+   "bytes": 86
+  },
+  "net/minecraft/network/BandwidthDebugMonitor": {
+   "methods": 3,
+   "bytes": 48
+  },
+  "net/minecraft/server/PlayerAdvancements$TriggerInstanceKey": {
+   "methods": 6,
+   "bytes": 47
+  },
+  "net/minecraft/network/HashedStack": {
+   "methods": 4,
+   "bytes": 104
+  },
+  "net/minecraft/util/SpecialDates": {
+   "methods": 4,
+   "bytes": 92
+  },
+  "net/minecraft/world/ContainerHelper": {
+   "methods": 7,
+   "bytes": 386
+  },
+  "net/minecraft/util/TaskChainer$1": {
+   "methods": 3,
+   "bytes": 42
+  },
+  "net/minecraft/client/CloudStatus": {
+   "methods": 6,
+   "bytes": 133
+  },
+  "net/minecraft/server/WorldLoader$DataLoadOutput": {
+   "methods": 4,
+   "bytes": 37
+  },
+  "net/minecraft/nbt/ByteTag$Cache": {
+   "methods": 1,
+   "bytes": 44
+  },
+  "net/minecraft/client/FramerateLimiter": {
+   "methods": 2,
+   "bytes": 175
+  },
+  "net/minecraft/util/DirectoryLock$LockException": {
+   "methods": 2,
+   "bytes": 31
+  },
+  "net/minecraft/network/ClientboundPacketListener": {
+   "methods": 1,
+   "bytes": 4
+  },
+  "com/mojang/math/Axis$2": {
+   "methods": 5,
+   "bytes": 32
+  },
+  "net/minecraft/data/BlockFamily$Variant$2": {
+   "methods": 2,
+   "bytes": 10
+  },
+  "net/minecraft/resources/RegistryDataLoader$1": {
+   "methods": 2,
+   "bytes": 27
+  },
+  "net/minecraft/tags/BlockItemTags": {
+   "methods": 1,
+   "bytes": 709
+  },
+  "net/minecraft/util/BlockUtil$FoundRectangle": {
+   "methods": 1,
+   "bytes": 20
+  },
+  "net/minecraft/network/UnconfiguredPipelineHandler": {
+   "methods": 6,
+   "bytes": 100
+  },
+  "net/minecraft/nbt/SnbtGrammar$2": {
+   "methods": 2,
+   "bytes": 113
+  },
+  "net/minecraft/core/MappedRegistry$TagSet": {
+   "methods": 2,
+   "bytes": 17
+  },
+  "net/minecraft/util/Util$2": {
+   "methods": 3,
+   "bytes": 77
+  },
+  "net/minecraft/tags/FlatLevelGeneratorPresetTags": {
+   "methods": 2,
+   "bytes": 20
+  },
+  "net/minecraft/client/Options$4": {
+   "methods": 2,
+   "bytes": 36
+  },
+  "net/minecraft/commands/CommandSource": {
+   "methods": 2,
+   "bytes": 13
+  },
+  "net/minecraft/util/ProblemReporter$IndexedPathElement": {
+   "methods": 5,
+   "bytes": 42
+  },
+  "net/minecraft/util/StringRepresentable$EnumCodec": {
+   "methods": 4,
+   "bytes": 49
+  },
+  "net/minecraft/commands/CommandSourceStack$NamesProvider$2": {
+   "methods": 3,
+   "bytes": 25
+  },
+  "net/minecraft/util/Util$4": {
+   "methods": 3,
+   "bytes": 30
+  },
+  "net/minecraft/util/AbstractListBuilder": {
+   "methods": 4,
+   "bytes": 86
+  },
+  "net/minecraft/util/TaskChainer": {
+   "methods": 4,
+   "bytes": 40
+  },
+  "net/minecraft/util/ProblemReporter$ScopedCollector": {
+   "methods": 3,
+   "bytes": 53
+  },
+  "net/minecraft/server/DebugLoggedPrintStream": {
+   "methods": 3,
+   "bytes": 73
+  },
+  "net/minecraft/tags/WorldPresetTags": {
+   "methods": 2,
+   "bytes": 28
+  },
+  "net/minecraft/client/Options$5": {
+   "methods": 1,
+   "bytes": 148
+  },
+  "net/minecraft/client/Options$1": {
+   "methods": 1,
+   "bytes": 5
+  },
+  "net/minecraft/nbt/TagTypes": {
+   "methods": 2,
+   "bytes": 117
+  },
+  "net/minecraft/util/Crypt$SaltSupplier": {
+   "methods": 2,
+   "bytes": 18
+  },
+  "net/minecraft/core/BlockPos$2": {
+   "methods": 3,
+   "bytes": 163
+  },
+  "net/minecraft/client/StringSplitter$1": {
+   "methods": 2,
+   "bytes": 113
+  },
+  "net/minecraft/util/Util$8": {
+   "methods": 3,
+   "bytes": 35
+  },
+  "net/minecraft/tags/VillagerTradeTags": {
+   "methods": 2,
+   "bytes": 624
+  },
+  "net/minecraft/nbt/TagType": {
+   "methods": 1,
+   "bytes": 9
+  },
+  "net/minecraft/util/TimeUtil": {
+   "methods": 2,
+   "bytes": 64
+  },
+  "net/minecraft/tags/TimelineTags": {
+   "methods": 2,
+   "bytes": 44
+  },
+  "net/minecraft/nbt/NbtOps$ListCollector": {
+   "methods": 1,
+   "bytes": 43
+  },
+  "net/minecraft/util/NativeModuleLister$NativeModuleVersion": {
+   "methods": 4,
+   "bytes": 53
+  },
+  "net/minecraft/nbt/TagType$VariableSize": {
+   "methods": 1,
+   "bytes": 24
+  },
+  "net/minecraft/core/HolderLookup": {
+   "methods": 2,
+   "bytes": 34
+  },
+  "net/minecraft/core/BlockMath": {
+   "methods": 2,
+   "bytes": 244
+  },
+  "net/minecraft/nbt/NbtAccounterException": {
+   "methods": 1,
+   "bytes": 6
+  },
+  "net/minecraft/data/BlockFamily$Variant$1": {
+   "methods": 2,
+   "bytes": 12
+  },
+  "net/minecraft/util/SingleKeyCache": {
+   "methods": 2,
+   "bytes": 57
+  },
+  "net/minecraft/core/BlockPos$7": {
+   "methods": 3,
+   "bytes": 393
+  },
+  "net/minecraft/world/InteractionResult": {
+   "methods": 2,
+   "bytes": 81
+  },
+  "net/minecraft/commands/CommandSigningContext": {
+   "methods": 1,
+   "bytes": 11
+  },
+  "net/minecraft/core/RegistryAccess$1FrozenAccess": {
+   "methods": 1,
+   "bytes": 13
+  },
+  "net/minecraft/util/TimeSource$NanoTimeSource": {
+   "methods": 1,
+   "bytes": 14
+  },
+  "net/minecraft/util/SimpleBitStorage$InitializationException": {
+   "methods": 1,
+   "bytes": 6
+  },
+  "net/minecraft/client/DeltaTracker": {
+   "methods": 1,
+   "bytes": 23
+  },
+  "net/minecraft/network/UnconfiguredPipelineHandler$OutboundConfigurationTask": {
+   "methods": 2,
+   "bytes": 23
+  },
+  "net/minecraft/tags/FluidTags": {
+   "methods": 2,
+   "bytes": 92
+  },
+  "net/minecraft/util/ProblemReporter$Problem": {
+   "methods": 1,
+   "bytes": 2
+  },
+  "net/minecraft/core/HolderSet$1": {
+   "methods": 2,
+   "bytes": 27
+  },
+  "net/minecraft/sounds/Musics": {
+   "methods": 2,
+   "bytes": 126
+  },
+  "net/minecraft/network/ServerboundPacketListener": {
+   "methods": 1,
+   "bytes": 4
+  },
+  "net/minecraft/client/Minecraft$2": {
+   "methods": 1,
+   "bytes": 55
+  },
+  "net/minecraft/core/BlockPos$8": {
+   "methods": 1,
+   "bytes": 124
+  },
+  "net/minecraft/client/OptionInstance$SliderableOrCyclableValueSet": {
+   "methods": 1,
+   "bytes": 37
+  },
+  "net/minecraft/tags/GameEventTags": {
+   "methods": 2,
+   "bytes": 52
+  },
+  "net/minecraft/tags/PoiTypeTags": {
+   "methods": 2,
+   "bytes": 36
+  },
+  "net/minecraft/util/BlockUtil$IntBounds": {
+   "methods": 2,
+   "bytes": 29
+  },
+  "net/minecraft/util/Graph": {
+   "methods": 1,
+   "bytes": 120
+  },
+  "net/minecraft/nbt/NbtFormatException": {
+   "methods": 1,
+   "bytes": 6
+  }
+ }
+}
