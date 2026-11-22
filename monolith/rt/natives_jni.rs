@@ -807,6 +807,9 @@ pub fn n_com_sun_jna_Native__initIDs() -> Res<()> {
         let p = rt::alloc(ptr_class);
         rt::set_i64(p, "peer", addr as i64);
         unsafe { *(slot.0 as *mut Ref) = p };
+        if std::env::var_os("MONO_JNA_TRACE").is_some() {
+            eprintln!("jna: {name} = {addr:#x} at {:p}", slot.0);
+        }
     }
     Ok(())
 }
