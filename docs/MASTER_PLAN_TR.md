@@ -147,7 +147,7 @@ Hedef JVM'den ve Java'dan çıkmaktır; harici kütüphane yasağı yoktur. İyi
 
 * Seçim ölçütü sırası: (1) doğru ve olgun, (2) hedef platformların hepsinde derleniyor, (3) lisansı uyumlu, (4) ölçülmüş kazancı var, (5) bakım yükü düşük.
 * Her bağımlılık içeri alınır (vendored), sürümü ve karması sabittir; yapı ağ gerektirmez. Liste ve lisanslar `docs/THIRD_PARTY.md`.
-* Adaylar (kullanım ölçümle onaylanır): bellek: mimalloc (çalışma zamanı geneli, büyük diziler; nesne slab'ı kalır, bkz. GC_PLAN), pencere: winit ya da doğrudan platform API'si, ses: cpal ya da doğrudan arka uçlar, TLS: rustls, gölgelendirici: naga, Vorbis çözücü, zlib/deflate (zlib-rs ya da zlib).
+* Adaylar (kullanım ölçümle onaylanır): bellek: kendi tahsis edicimiz kalır (kaçak yakalama sınıf/tahsis noktası bilgisine dayanır); mimalloc yalnızca nesne dışı bellekte sistem `malloc` ölçümde sıcak çıkarsa denenir, aksi halde eklenmez, pencere: winit ya da doğrudan platform API'si, ses: cpal ya da doğrudan arka uçlar, TLS: rustls, gölgelendirici: naga, Vorbis çözücü, zlib/deflate (zlib-rs ya da zlib).
 * `rustc` sürümü sabit (stable, belgelenmiş), çapraz hedefler `rustup target`. Önce crates.io erişimi ve derleme düzeni (rustc doğrudan mı, cargo mu) bir kerelik doğrulanır.
 * Sistem paketi bağımlılığı (apt `libshaderc`, `libopenal`) sürümde sıfır olmalı: ya içeri alınır ya da kaldırılır.
 
