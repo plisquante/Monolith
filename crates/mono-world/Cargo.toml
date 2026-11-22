@@ -1,9 +1,0 @@
-[package]
-name = "mono-world"
-version = "0.0.0"
-description = "Monolith: chunk düzeni ve blok durum depolaması (sabit boyutlu, GC'siz)"
-edition.workspace = true
-publish.workspace = true
-
-[lints]
-workspace = true
