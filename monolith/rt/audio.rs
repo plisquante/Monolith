@@ -84,6 +84,17 @@ impl Format {
     }
 }
 
+/// Izleme (MONO_AUDIO_TRACE): tanınmayan bir parametre kodunu yazar.
+fn trace_on() -> bool {
+    std::env::var_os("MONO_AUDIO_TRACE").is_some()
+}
+
+fn trace_param(what: &str, value: i32) {
+    if trace_on() {
+        eprintln!("audio: unknown {what} 0x{value:x}");
+    }
+}
+
 pub struct Buffer {
     pub format: Format,
     pub freq: u32,
@@ -208,8 +219,13 @@ impl Context {
     }
 
 
-    /// Records an error (the first one since the last `error()` is kept).
+    /// Records an error (the first one since the last `error()` is kept). Ortam değişkeni MONO_AUDIO_TRACE
+    /// ayarlıysa hatanın çağrı yerini (dosya:satır) stderr'e yazar.
+    #[track_caller]
     pub fn fail(&mut self, code: i32) -> i32 {
+        if trace_on() {
+            eprintln!("audio: AL error 0x{:x} at {}", code, std::panic::Location::caller());
+        }
         if self.err == AL_NO_ERROR {
             self.err = code;
         }
@@ -238,7 +254,10 @@ impl Context {
     }
 
     pub fn buffer_data(&mut self, id: u32, format: i32, data: &[u8], freq: i32) -> i32 {
-        let Some(fmt) = Format::from_al(format) else { return self.fail(AL_INVALID_ENUM) };
+        let Some(fmt) = Format::from_al(format) else {
+            trace_param("buffer format", format);
+            return self.fail(AL_INVALID_ENUM);
+        };
         if freq <= 0 {
             return self.fail(AL_INVALID_VALUE);
         }
@@ -407,7 +426,10 @@ impl Context {
                     _ => (s.pos / freq) as i32,
                 }
             }
-            _ => return Err(AL_INVALID_ENUM),
+            _ => {
+                trace_param("get source param", param);
+                return Err(AL_INVALID_ENUM);
+            }
         })
     }
 
@@ -437,7 +459,10 @@ impl Context {
                 s.state = State::Initial;
                 s.pos = 0.0;
             }
-            _ => return self.fail(AL_INVALID_ENUM),
+            _ => {
+                trace_param("source param", param);
+                return self.fail(AL_INVALID_ENUM);
+            }
         }
         AL_NO_ERROR
     }
@@ -495,7 +520,10 @@ impl Context {
                 }
                 s.cone_outer_gain = value;
             }
-            _ => return self.fail(AL_INVALID_ENUM),
+            _ => {
+                trace_param("source param", param);
+                return self.fail(AL_INVALID_ENUM);
+            }
         }
         AL_NO_ERROR
     }
@@ -506,7 +534,10 @@ impl Context {
             AL_POSITION => s.position = v,
             AL_VELOCITY => s.velocity = v,
             AL_DIRECTION => s.direction = v,
-            _ => return self.fail(AL_INVALID_ENUM),
+            _ => {
+                trace_param("source param", param);
+                return self.fail(AL_INVALID_ENUM);
+            }
         }
         AL_NO_ERROR
     }
@@ -515,7 +546,10 @@ impl Context {
         match param {
             AL_POSITION => self.listener_pos = v,
             AL_VELOCITY => self.listener_vel = v,
-            _ => return self.fail(AL_INVALID_ENUM),
+            _ => {
+                trace_param("source param", param);
+                return self.fail(AL_INVALID_ENUM);
+            }
         }
         AL_NO_ERROR
     }
