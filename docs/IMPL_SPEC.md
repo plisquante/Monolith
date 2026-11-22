@@ -136,9 +136,10 @@ Etiket: **[H]** = sınırları net, küçük modelle yapılabilir; **[S]** = der
 | B1 native envanteri (976 native, hepsi rt'de) | tamam (statik; çalışma zamanı sayacı sonraki tam üretimde) | `docs/NATIVES.md`, `tools/native_report.py` |
 | Netty NIO varsayılanı (174 epoll/kqueue native'i yükten çıkarır) | tamam | `monolith/netty_tests.py`; `1a3120f` |
 | B2 ses çekirdeği (OpenAL alt kümesi, karıştırıcı, WAV çıkış) | tamam (çekirdek; aygıt yok) | `rustc --test monolith/rt/audio.rs`: 7/7 |
-| B3 ses bağlama + aygıt arka uçları (ALSA dlopen, WASAPI, CoreAudio, AAudio) | açık | sıradaki; ALSA aygıtı bu ortamda yok (`Unknown PCM default`) |
+| B3 ses bağlama + aygıt arka uçları | kısmen: OpenAL natives Rust karıştırıcısına bağlı (23 fonksiyon), ALSA dlopen + sessiz yedek çalışıyor, `MONO_AUDIO_TRACE` ile hata izi. Oyunda 60 sn'de ses hatası 0 (öncesi 379). WASAPI/CoreAudio/AAudio açık | `monolith/rt/audio_dev.rs`, `tests/rust/audio_main.rs` (CI), `278461f`, `aee7d36` |
+| CI lint | düzeltildi: pyflakes 20 bulgu → 0; ses testleri ve rt_deps çevrimdışı derleme CI'a eklendi | `4bfb0cf` |
+| B5 TLS spike | HotSpot'ta HTTPS 200 (HTTP/2), çevrilmiş çalışma zamanı sonucu bekleniyor | `monolith/tests/tls/TlsProbe.java` |
 | B4 pencere spike (winit/glutin, SDL3) | açık | Windows/macOS koşucusu gerekir |
-| B5 TLS spike | açık | ağ erişimi var; sıradaki |
 | B6 GLES gölgelendirici dönüşümü | açık | |
 | B7 paketleme | açık | |
 | B8 belgeler | kısmen (NATIVES.md, THIRD_PARTY.md) | |
