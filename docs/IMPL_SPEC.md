@@ -146,3 +146,15 @@ Etiket: **[H]** = sınırları net, küçük modelle yapılabilir; **[S]** = der
 | A1–A9 (GC, yama, sahiplik, soak) | açık | GC_PLAN / IMPL_SPEC §2 |
 | WS7 Java kaplamaları → Rust | açık | |
 | WS12 Android cihaz, WS3 gerçek GPU, WS10 CI makinesi | açık, donanım/kaynak gerektirir | |
+
+
+## 7. Bekleyen tanılama ve kararlar (oturum notları)
+
+- **`--reuse-objs` tehlikesi (kanıtlandı):** `rustgen._older_obj` kaynağı aynı olan herhangi bir eski shard nesnesini,
+  hangi çalışma zamanıyla derlendiğine bakmadan geri koyar. Bir native'in gövdesi değişip shard içine satır içi
+  alınmışsa eski davranış sessizce kalır (JNA `initIDs`: yeni kod hiç çağrılmadı). Karar: gövde değişen herhangi bir
+  değişiklikten sonra tam yeniden derleme (`--resume` ve `--reuse-objs` yok). `--reuse-objs` yalnızca yeni fonksiyon
+  eklemek gibi değişikliklerde ve bilinçli olarak kullanılır.
+- **Önceki ses doğrulamaları** `--reuse-objs` ile derlendi; tam yeniden derleme sonrası yeniden doğrulanacak.
+- **JNA `initIDs`:** `natives_jni.rs` içinde FFI tip alanlarını dolduran gövde yazıldı; narrator hatasının kapanması
+  tam derlemeden sonra doğrulanacak.
