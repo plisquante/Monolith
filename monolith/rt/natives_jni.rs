@@ -134,6 +134,10 @@ extern "C" {
 
 #[link(name = "ffi")]
 extern "C" {
+    static mut ffi_type_longdouble: u8;
+    static mut ffi_type_uint8: u8;
+    static mut ffi_type_uint32: u8;
+    static mut ffi_type_uint64: u8;
     static mut ffi_type_void: u8;
     static mut ffi_type_sint8: u8;
     static mut ffi_type_uint16: u8;
@@ -766,7 +770,46 @@ fn jna_addr(ptr: Ref, base: i64, off: i64) -> usize {
     b.wrapping_add(off as usize)
 }
 
-pub fn n_com_sun_jna_Native__initIDs() -> Res<()> { Ok(()) }
+/// jnidispatch's `initIDs`: stores the libffi type descriptors in `Structure.FFIType.FFITypes`, as `Pointer` objects.
+/// Without them `Structure.FFIType` cannot be initialised ("FFI types not initialized"), and JNA users such as the
+/// narrator fail at start-up.
+pub fn n_com_sun_jna_Native__initIDs() -> Res<()> {
+    let Some(ffi) = rt::find_class("com.sun.jna.Structure$FFIType$FFITypes") else {
+        return rt::throw("java/lang/Error", "JNA: FFITypes class missing".to_string());
+    };
+    let Some(ptr_class) = rt::find_class("com.sun.jna.Pointer") else {
+        return rt::throw("java/lang/Error", "JNA: Pointer class missing".to_string());
+    };
+    let table: [(&str, usize); 13] = unsafe {
+        [
+            ("ffi_type_void", std::ptr::addr_of!(ffi_type_void) as usize),
+            ("ffi_type_float", std::ptr::addr_of!(ffi_type_float) as usize),
+            ("ffi_type_double", std::ptr::addr_of!(ffi_type_double) as usize),
+            ("ffi_type_longdouble", std::ptr::addr_of!(ffi_type_longdouble) as usize),
+            ("ffi_type_uint8", std::ptr::addr_of!(ffi_type_uint8) as usize),
+            ("ffi_type_sint8", std::ptr::addr_of!(ffi_type_sint8) as usize),
+            ("ffi_type_uint16", std::ptr::addr_of!(ffi_type_uint16) as usize),
+            ("ffi_type_sint16", std::ptr::addr_of!(ffi_type_sint16) as usize),
+            ("ffi_type_uint32", std::ptr::addr_of!(ffi_type_uint32) as usize),
+            ("ffi_type_sint32", std::ptr::addr_of!(ffi_type_sint32) as usize),
+            ("ffi_type_uint64", std::ptr::addr_of!(ffi_type_uint64) as usize),
+            ("ffi_type_sint64", std::ptr::addr_of!(ffi_type_sint64) as usize),
+            ("ffi_type_pointer", std::ptr::addr_of!(ffi_type_pointer) as usize),
+        ]
+    };
+    for (name, addr) in table {
+        let Some(f) = ffi.fields.iter().find(|f| f.name == name && f.access & 0x0008 != 0) else {
+            return rt::throw("java/lang/Error", format!("JNA: static field {name} missing"));
+        };
+        let crate::rt::FLoc::Static(slot) = &f.loc else {
+            return rt::throw("java/lang/Error", format!("JNA: {name} is not static"));
+        };
+        let p = rt::alloc(ptr_class);
+        rt::set_i64(p, "peer", addr as i64);
+        unsafe { *(slot.0 as *mut Ref) = p };
+    }
+    Ok(())
+}
 pub fn n_com_sun_jna_Native__setProtected(_p: i32) -> Res<()> { Ok(()) }
 pub fn n_com_sun_jna_Native__getNativeVersion() -> Res<Ref> { Ok(rt::new_str("7.0.0".to_string())) }
 pub fn n_com_sun_jna_Native__getLastError() -> Res<i32> { Ok(JNA_LAST_ERR.load(Ordering::Relaxed)) }
