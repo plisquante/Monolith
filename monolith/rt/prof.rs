@@ -12,6 +12,8 @@
 //! * `MONO_ALLOC_PROFILE=<file>`   enable, write JSON to <file> (and the class list to <file>.classes once)
 //! * `MONO_ALLOC_SAMPLE=<bytes>`   one allocation site sample per this many allocated bytes per thread (default 65536)
 //! * `MONO_ALLOC_DUMP_SECS=<n>`    dump period
+//! * `MONO_ALLOC_SNAPSHOTS=1`      also keep every periodic dump as <file>.<elapsed seconds>, so two of them can be subtracted
+//!                                 (`alloc_report.py --base`): start-up versus steady state
 use crate::rt::{self, Class, Obj};
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -429,5 +431,8 @@ pub fn dump() {
     let tmp = format!("{}.tmp", st.path);
     if std::fs::write(&tmp, j).is_ok() {
         let _ = std::fs::rename(&tmp, &st.path);
+        if std::env::var_os("MONO_ALLOC_SNAPSHOTS").is_some() {
+            let _ = std::fs::copy(&st.path, format!("{}.{}", st.path, elapsed / 1000));
+        }
     }
 }

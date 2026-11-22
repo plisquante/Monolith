@@ -139,6 +139,8 @@ pub struct ThreadReg {
     arena_idx: usize,
     java_thread: AtomicUsize,
     alloc_acc: usize,
+    /// Iterator objects handed back at the end of a for-each loop (see `recycle`), per recyclable class slot.
+    recycled: [Vec<*mut Obj>; RECYCLE_SLOTS],
 }
 
 unsafe impl Send for ThreadReg {}
@@ -268,6 +270,7 @@ pub fn register_thread(stack_marker: usize) {
         arena_idx: 0,
         java_thread: AtomicUsize::new(0),
         alloc_acc: 0,
+        recycled: Default::default(),
     }));
     TLS_REG.with(|c| unsafe { *c.0.get() = reg });
     let (m, _) = heap_sync();
@@ -783,6 +786,11 @@ pub fn collect() {
                     ap += 8;
                 }
             }
+            for list in &(*tp).recycled {
+                for &o in list {
+                    try_push(o as usize, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut work);
+                }
+            }
             let jt = (*tp).java_thread.load(Ordering::Relaxed);
             if jt != 0 {
                 try_push(jt, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut work);
@@ -1010,4 +1018,65 @@ pub fn live_bytes() -> usize {
 }
 pub fn heap_bytes() -> usize {
     heap_sync().0.lock().unwrap().heap_bytes
+}
+
+// ------------------------------------------------------------------ recycling of scope-bound objects
+//
+// A `for (x : list)` loop creates an iterator, uses it only through hasNext/next/remove and drops it when the loop
+// ends. The translator recognizes that shape (monolith/rustgen.py, `find_iterator_scopes`) and calls `recycle` where
+// the iterator goes out of scope; every `new` of a recyclable iterator class asks `alloc_recyclable` first. That is
+// the Rust way for a value with a clear owner: the end of its scope releases it, nobody has to find it later.
+// Only classes that are allocated through `alloc_recyclable` are ever recycled, so a shared or cached instance of
+// another class is never touched. `MONO_RECYCLE=0` turns it off.
+
+pub const RECYCLE_SLOTS: usize = 32;
+const RECYCLE_KEEP: usize = 16;
+
+static RECYCLE_CLASSES: [AtomicUsize; RECYCLE_SLOTS] = [const { AtomicUsize::new(0) }; RECYCLE_SLOTS];
+
+fn recycle_enabled() -> bool {
+    static V: OnceLock<bool> = OnceLock::new();
+    *V.get_or_init(|| std::env::var("MONO_RECYCLE").map_or(true, |v| v != "0"))
+}
+
+/// `new` of a recyclable class: a recycled object of that class when the thread has one, else a fresh heap object.
+pub fn alloc_recyclable(class: &'static Class, slot: usize) -> Ref {
+    if recycle_enabled() {
+        RECYCLE_CLASSES[slot].store(class as *const Class as usize, Ordering::Relaxed);
+        let reg = cur_reg();
+        if !reg.is_null() {
+            if let Some(o) = unsafe { (*reg).recycled[slot].pop() } {
+                crate::prof::on_alloc(class, class.size, true);
+                unsafe { (*o).gc = GC_HEAP; }
+                return Ref(o);
+            }
+        }
+    }
+    Ref(alloc_obj(class, class.size.max(16)))
+}
+
+/// The scope of `r` ended and nothing else refers to it: zero it and keep it for the next `new` of its class.
+pub fn recycle(r: Ref) {
+    if r.is_null() || !recycle_enabled() {
+        return;
+    }
+    let reg = cur_reg();
+    if reg.is_null() {
+        return;
+    }
+    unsafe {
+        let class = (*r.0).class;
+        let cp = class as *const Class as usize;
+        for slot in 0..RECYCLE_SLOTS {
+            if RECYCLE_CLASSES[slot].load(Ordering::Relaxed) == cp {
+                let list = &mut (*reg).recycled[slot];
+                if list.len() < RECYCLE_KEEP && (*r.0).gc & GC_HEAP != 0 {
+                    // keep the header, drop what the object held so the collector does not follow stale references
+                    std::ptr::write_bytes((r.0 as *mut u8).add(16), 0, class.size.max(16) - 16);
+                    list.push(r.0);
+                }
+                return;
+            }
+        }
+    }
 }

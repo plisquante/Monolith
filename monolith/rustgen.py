@@ -102,6 +102,86 @@ def cret_wrap(ret: str) -> str:
     return "cvoid" if ret == "V" else "cres"
 
 
+# Iterator classes whose instances are always created fresh (`return new C(..)` from iterator()/listIterator()) and
+# that hand nothing of themselves to the elements: a for-each loop owns its iterator, so the end of the loop can
+# give it back (see gc.rs, "recycling of scope-bound objects"). Each class is still verified against its own creation
+# sites when the program is generated (`Gen.recycle_slot`).
+RECYCLABLE_ITERATORS = (
+    "java/util/ArrayList$Itr", "java/util/ArrayList$ListItr", "java/util/AbstractList$Itr", "java/util/AbstractList$ListItr",
+    "java/util/ImmutableCollections$ListItr", "java/util/RegularEnumSet$EnumSetIterator", "java/util/HashMap$KeyIterator",
+    "java/util/HashMap$ValueIterator", "java/util/HashMap$EntryIterator", "java/util/LinkedHashMap$LinkedKeyIterator",
+    "java/util/LinkedHashMap$LinkedValueIterator", "java/util/LinkedHashMap$LinkedEntryIterator", "java/util/EnumMap$EntryIterator",
+    "java/util/EnumMap$KeyIterator", "java/util/EnumMap$ValueIterator", "java/util/ArrayDeque$DeqIterator", "java/util/LinkedList$ListItr",
+    "java/util/concurrent/CopyOnWriteArrayList$COWIterator", "java/util/concurrent/ConcurrentHashMap$KeyIterator",
+    "java/util/concurrent/ConcurrentHashMap$ValueIterator", "java/util/concurrent/ConcurrentHashMap$EntryIterator",
+    "it/unimi/dsi/fastutil/objects/ObjectArrayList$1", "it/unimi/dsi/fastutil/objects/ObjectLinkedOpenHashSet$SetIterator",
+    "it/unimi/dsi/fastutil/objects/ObjectOpenHashSet$SetIterator", "it/unimi/dsi/fastutil/objects/Object2BooleanOpenHashMap$KeyIterator",
+    "it/unimi/dsi/fastutil/objects/Object2ObjectOpenHashMap$KeyIterator", "it/unimi/dsi/fastutil/objects/Object2ObjectOpenHashMap$ValueIterator",
+    "it/unimi/dsi/fastutil/ints/Int2ObjectOpenHashMap$ValueIterator", "it/unimi/dsi/fastutil/ints/Int2ObjectOpenHashMap$KeyIterator",
+    "it/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap$ValueIterator", "it/unimi/dsi/fastutil/longs/LongAVLTreeSet$Subset$SubsetIterator",
+    "com/google/common/collect/Iterators$SingletonIterator",
+)
+_ITER_USES = {("hasNext", "()Z"), ("next", "()Ljava/lang/Object;"), ("remove", "()V")}
+
+
+def find_iterator_scopes(insns) -> dict:
+    """for-each shape: `x.iterator()` stored in a local that is only used through hasNext/next/remove until the loop
+    exit. Returns {exit pc: [local slots]}: where the loop ends the iterator is dead and can be given back.
+
+    javac reuses a local slot for later variables, so the scope is cut at the loop exit: after it no `aload` of the slot
+    may come before the next `astore` of it (otherwise the iterator is still used and nothing is returned)."""
+    out: dict = {}
+    n = len(insns)
+    for i in range(1, n):
+        st = insns[i]
+        if st.op != "astore":
+            continue
+        pv = insns[i - 1]
+        if pv.op not in ("invokeinterface", "invokevirtual") or pv.arg.name not in ("iterator", "listIterator"):
+            continue
+        if not pv.arg.desc.endswith(("Ljava/util/Iterator;", "Ljava/util/ListIterator;")):
+            continue
+        slot = st.arg
+        exit_pc = None
+        for j in range(i + 1, n - 2):
+            if insns[j].op == "aload" and insns[j].arg == slot and insns[j + 1].op in ("invokeinterface", "invokevirtual") \
+                    and (insns[j + 1].arg.name, insns[j + 1].arg.desc) == ("hasNext", "()Z") and insns[j + 2].op == "ifeq":
+                exit_pc = insns[j + 2].targets[0]
+                break
+        if exit_pc is None or exit_pc <= st.pc:
+            continue
+        ok = True
+        for j in range(i + 1, n):
+            x = insns[j]
+            if x.pc >= exit_pc:
+                break
+            if x.op == "astore" and x.arg == slot:
+                ok = False
+                break
+            if x.op == "aload" and x.arg == slot:
+                nx = insns[j + 1] if j + 1 < n else None
+                if nx is None or nx.op not in ("invokeinterface", "invokevirtual") or (nx.arg.name, nx.arg.desc) not in _ITER_USES:
+                    ok = False
+                    break
+            if x.op in ("ret", "jsr", "jsr_w"):
+                ok = False
+                break
+        if not ok:
+            continue
+        for j in range(n):          # after the exit: the slot must be rewritten before it is read again
+            x = insns[j]
+            if x.pc < exit_pc:
+                continue
+            if x.op == "astore" and x.arg == slot:
+                break
+            if x.op == "aload" and x.arg == slot:
+                ok = False
+                break
+        if ok:
+            out.setdefault(exit_pc, []).append(slot)
+    return out
+
+
 class MethodGen:
     def __init__(self, gen, ci, m):
         self.g, self.p, self.w, self.ci, self.m = gen, gen.prog, gen.world, ci, m
@@ -472,9 +552,12 @@ class MethodGen:
                 self.emit_link_err(e, "java/lang/NoClassDefFoundError", str(le), stk, 0, "Ljava/lang/Object;")
                 return None
             self.init_class(ci2, e)
+            rslot = self.g.recycle_slot(a.name)
             if ins.pc in self.noescape:
                 self.has_arena = True
                 push("A", f"rt::alloc_arena({cr})")
+            elif rslot is not None:
+                push("A", f"rt::alloc_recyclable({cr}, {rslot})")
             else:
                 push("A", f"rt::alloc({cr})")
         elif op == "newarray":
@@ -758,6 +841,11 @@ class MethodGen:
                 if s not in entry:
                     entry[s] = list(stk)
                     work.append(s)
+        for exit_pc, slots in find_iterator_scopes(insns).items():
+            if exit_pc in blocks:
+                for sl in slots:
+                    ln = self.lname(sl, "A")
+                    blocks[exit_pc].insert(0, f"rt::recycle_scope({ln}); {ln} = rt::Ref::NULL;")
         params = []
         init = []
         slot = 0
@@ -1275,6 +1363,39 @@ class Gen:
     def sel(self, name: str, desc: str) -> int:
         """Global selector id of an interface method (name + descriptor)."""
         return self.sels.setdefault(name + desc, len(self.sels))
+
+    def recycle_slot(self, cn: str):
+        """Slot of a recyclable iterator class, or None. A class qualifies when it is on the list and every
+        `new` of it in its own top-level class family is `new C; dup; ..; invokespecial C.<init>; areturn` (the object
+        is created for the caller and handed to nobody else)."""
+        if cn not in RECYCLABLE_ITERATORS:
+            return None
+        if not hasattr(self, "_recycle"):
+            self._recycle, self._recycle_ok = {}, {}
+        if cn in self._recycle_ok:
+            return self._recycle.get(cn) if self._recycle_ok[cn] else None
+        ok = self.world.get(cn) is not None
+        if ok:
+            top = cn.split("$")[0]
+            for name in list(self.world.classes):
+                if name != top and not name.startswith(top + "$"):
+                    continue
+                ci = self.world.classes[name]
+                for m in ci.cf.methods:
+                    if m.code is None:
+                        continue
+                    ins = self.prog.insns(ci, m)
+                    for k, x in enumerate(ins):
+                        if x.op == "new" and x.arg.name == cn:
+                            j = k + 1
+                            while j < len(ins) and not (ins[j].op == "invokespecial" and ins[j].arg.owner == cn and ins[j].arg.name == "<init>"):
+                                j += 1
+                            if j + 1 >= len(ins) or ins[j + 1].op != "areturn":
+                                ok = False
+        self._recycle_ok[cn] = ok and len(self._recycle) < 32
+        if self._recycle_ok[cn]:
+            self._recycle[cn] = len(self._recycle)
+        return self._recycle.get(cn) if self._recycle_ok[cn] else None
 
     def need_class(self, name: str):
         ci = self.world.get(name)

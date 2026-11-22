@@ -488,7 +488,7 @@ pub fn c_str_arg(s: Ref) -> Res<std::ffi::CString> {
         .map_err(|_| Thrown { obj: (hooks().throw_new)("java/lang/IllegalArgumentException", new_str("Nul byte in path".to_string())) })
 }
 
-pub use crate::gc::{safepoint as gc_safepoint, ArenaGuard, ThreadGuard};
+pub use crate::gc::{recycle as recycle_scope, safepoint as gc_safepoint, ArenaGuard, ThreadGuard};
 
 #[inline(always)]
 pub fn gc_thread_guard() -> ThreadGuard {
@@ -500,6 +500,10 @@ pub fn alloc(class: &'static Class) -> Ref {
 }
 
 #[inline(always)]
+/// `new` of a class whose instances are recycled at the end of their scope (iterators of for-each loops).
+pub fn alloc_recyclable(class: &'static Class, slot: usize) -> Ref {
+    crate::gc::alloc_recyclable(class, slot)
+}
 pub fn alloc_arena(class: &'static Class) -> Ref {
     crate::gc::alloc_arena(class, class.size.max(16))
 }

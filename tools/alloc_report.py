@@ -83,6 +83,33 @@ class Symbols:
         return r
 
 
+def subtract(P: dict, B: dict) -> dict:
+    """P minus the earlier snapshot B: counters and sites since B. Live bytes and ages stay P's (the state now)."""
+    base = {c["name"]: c for c in B["classes"]}
+    cl = []
+    for c in P["classes"]:
+        b = base.get(c["name"])
+        if b:
+            c = dict(c, an=c["an"] - b["an"], ab=c["ab"] - b["ab"], arn=c["arn"] - b["arn"], arb=c["arb"] - b["arb"],
+                     dn=[x - y for x, y in zip(c["dn"], b["dn"])], db=[x - y for x, y in zip(c["db"], b["db"])])
+        if c["an"] > 0:
+            cl.append(c)
+    bs = {(s["c"], tuple(s["f"])): s for s in B["sites"]}
+    sites = []
+    for s in P["sites"]:
+        b = bs.get((s["c"], tuple(s["f"])))
+        if b:
+            s = dict(s, b=s["b"] - b["b"], s=s["s"] - b["s"])
+        if s["b"] > 0:
+            sites.append(s)
+    bt = {t["name"]: t for t in B["threads"]}
+    th = [dict(t, b=t["b"] - bt.get(t["name"], {"b": 0})["b"]) for t in P["threads"]]
+    T = {k: P["total"][k] - B["total"][k] for k in P["total"]}
+    gcs = [g for g in P["gcs"] if g["t_ms"] > B["elapsed_ms"]]
+    return dict(P, classes=cl, sites=sites, threads=[t for t in th if t["b"] > 0], total=T, gcs=gcs,
+                elapsed_ms=P["elapsed_ms"] - B["elapsed_ms"])
+
+
 def classify(c) -> tuple[str, float, int]:
     db, lb = c["db"], c["lb"]
     died, live = sum(db), sum(lb)
@@ -103,10 +130,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("profile")
     ap.add_argument("--exe", help="the executable that produced the profile (default: from the profile's memory map)")
+    ap.add_argument("--base", help="an earlier snapshot of the same run (MONO_ALLOC_SNAPSHOTS=1): report only what happened after it, "
+                                   "i.e. the steady state without the start-up")
     ap.add_argument("--md")
     ap.add_argument("--top", type=int, default=40)
     a = ap.parse_args()
     P = json.load(open(a.profile))
+    if a.base:
+        P = subtract(P, json.load(open(a.base)))
     classes_file = a.profile + ".classes"
     all_classes = open(classes_file).read().split("\n") if os.path.exists(classes_file) else [c["name"] for c in P["classes"]]
     maps = [(int(lo, 16), int(hi, 16), int(off, 16), path) for lo, hi, off, path in P["maps"]]
