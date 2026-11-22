@@ -2135,6 +2135,8 @@ def _android_build(a, files, rt_dir) -> int:
         obj = os.path.join(out, name + ".o")
         key = hashlib.sha256(files[fn].encode("utf-8")).hexdigest()[:20]
         cached_obj = os.path.join(cache, f"{name}_{a.opt}_{rt_hash}_{key}.o")
+        if a.reuse_objs and os.path.exists(obj):
+            return fn, obj, 0
         if os.path.exists(cached_obj):
             shutil.copy(cached_obj, obj)
             return fn, obj, 0
@@ -2170,6 +2172,70 @@ def _android_build(a, files, rt_dir) -> int:
     return 0
 
 
+def _host_build(a, files, rt_dir) -> int:
+    """rustc pipeline for the host: mono_rt.rlib + shard objects + main.rs -> executable `prog`."""
+    rlib = os.path.join(a.output, "libmono_rt.rlib")
+    rt_hasher = hashlib.sha256()
+    for f in sorted(os.listdir(rt_dir)):
+        if f.endswith(".rs"):
+            rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
+    rt_hash = rt_hasher.hexdigest()[:16]
+    cache_dir = os.path.join("/tmp", "monolith_shard_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    cached_rlib = os.path.join(cache_dir, f"libmono_rt_{a.opt}_{rt_hash}.rlib")
+    if os.path.exists(cached_rlib):
+        shutil.copy(cached_rlib, rlib)
+    else:
+        r = subprocess.run(["rustc", "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
+                            "--crate-type", "rlib", "--crate-name", "mono_rt",
+                            os.path.join(a.output, "lib.rs"), "-o", rlib], capture_output=True, text=True)
+        if r.returncode:
+            sys.stderr.write(r.stderr[-6000:])
+            return r.returncode
+        shutil.copy(rlib, cached_rlib)
+    link_args = []
+    shard_files = sorted(fn for fn in files if fn.startswith("shard_"))
+    if shard_files:
+        from concurrent.futures import ThreadPoolExecutor
+        def compile_shard(fn: str):
+            name = fn[:-3]
+            obj = os.path.join(a.output, name + ".o")
+            src_bytes = files[fn].encode("utf-8")
+            sh_key = hashlib.sha256(src_bytes).hexdigest()[:20]
+            cached_obj = os.path.join(cache_dir, f"{name}_{a.opt}_{rt_hash}_{sh_key}.o")
+            if a.reuse_objs and os.path.exists(obj):
+                return fn, obj, subprocess.CompletedProcess([], 0, "", "")
+            if os.path.exists(cached_obj):
+                shutil.copy(cached_obj, obj)
+                return fn, obj, subprocess.CompletedProcess([], 0, "", "")
+            res = subprocess.run(["rustc", "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
+                                  "--crate-type", "lib", "--crate-name", name, "--emit=obj",
+                                  "--extern", f"mono_rt={rlib}",
+                                  os.path.join(a.output, fn), "-o", obj], capture_output=True, text=True)
+            if res.returncode == 0 and os.path.exists(obj):
+                shutil.copy(obj, cached_obj)
+            return fn, obj, res
+        with ThreadPoolExecutor(max_workers=max(1, a.shard_jobs)) as ex:
+            for fn, obj, res in ex.map(compile_shard, shard_files):
+                if res.returncode:
+                    sys.stderr.write(f"shard {fn} failed:\n" + res.stderr[-6000:])
+                    return res.returncode
+                link_args.extend(["-C", f"link-arg={obj}"])
+    exe = os.path.join(a.output, "prog")
+    main_opt = 0 if len(shard_files) >= 16 else a.opt
+    cgu_args = ["-C", "codegen-units=1"] if len(shard_files) >= 16 else []
+    lld_args = ["-C", "link-arg=-fuse-ld=lld"] if shutil.which("ld.lld") else []
+    r = subprocess.run(["rustc", "-C", f"opt-level={main_opt}", *cgu_args, "--edition", "2021", "-C", "panic=abort",
+                        "--extern", f"mono_rt={rlib}", *lld_args, *link_args,
+                        os.path.join(a.output, "main.rs"), "-o", exe], capture_output=True, text=True)
+    if r.returncode:
+        sys.stderr.write(r.stderr[-6000:])
+        return r.returncode
+    if a.run:
+        return subprocess.run([exe]).returncode
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Monolith back end: Java bytecode (application + JDK) -> Rust")
     ap.add_argument("--cp", action="append", required=True)
@@ -2188,8 +2254,11 @@ def main() -> int:
     ap.add_argument("--ndk", default=os.environ.get("ANDROID_NDK_HOME", ""), help="Android NDK root (default: $ANDROID_NDK_HOME or $ANDROID_HOME/ndk/*)")
     ap.add_argument("--api", type=int, default=24, help="Android API level of the NDK linker")
     ap.add_argument("--lib-name", default="libminecraft_mono.so")
+    ap.add_argument("--reuse-objs", action="store_true",
+                    help="with --resume: link the shard objects already in the output directory as they are (runtime fixes "
+                         "that keep the runtime's types and signatures unchanged only need mono_rt rebuilt and a relink)")
     ap.add_argument("--resume", action="store_true",
-                    help="with --android: skip code generation and compile the sources already in the output directory "
+                    help="skip code generation and compile the sources already in the output directory "
                          "(a separate process keeps memory low: the generator alone needs ~5 GiB)")
     a = ap.parse_args()
     cp_dirs = []
@@ -2206,8 +2275,6 @@ def main() -> int:
     rt_dir = os.path.join(ROOT, "monolith", "rt")
     natives = os.path.join(rt_dir, "natives.rs")
     if a.resume:
-        if not a.android:
-            raise SystemExit("monolith: --resume needs --android")
         files = {fn: open(os.path.join(a.output, fn), encoding="utf-8").read()
                  for fn in sorted(os.listdir(a.output)) if fn.startswith("shard_") and fn.endswith(".rs")}
         if not files:
@@ -2215,7 +2282,10 @@ def main() -> int:
         for f in os.listdir(rt_dir):  # pick up runtime fixes without regenerating
             if f.endswith(".rs"):
                 shutil.copy(os.path.join(rt_dir, f), os.path.join(a.output, f))
-        return _android_build(a, files, rt_dir)
+        if a.android:
+            return _android_build(a, files, rt_dir)
+        files["main.rs"] = open(os.path.join(a.output, "main.rs"), encoding="utf-8").read()
+        return _host_build(a, files, rt_dir)
     files, g = _generate_parts(a.main, natives, cp_dirs, a.strict, no_lwjgl=a.no_lwjgl, reflect_classes=ref_classes, shards=a.shards)
     if a.android:
         files["main.rs"] = _to_library_entry(files["main.rs"])
@@ -2247,63 +2317,7 @@ def main() -> int:
     if a.android:
         return _android_build(a, files, rt_dir)
     if a.run or a.compile:
-        rlib = os.path.join(a.output, "libmono_rt.rlib")
-        rt_hasher = hashlib.sha256()
-        for f in sorted(os.listdir(rt_dir)):
-            if f.endswith(".rs"):
-                rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
-        rt_hash = rt_hasher.hexdigest()[:16]
-        cache_dir = os.path.join("/tmp", "monolith_shard_cache")
-        os.makedirs(cache_dir, exist_ok=True)
-        cached_rlib = os.path.join(cache_dir, f"libmono_rt_{a.opt}_{rt_hash}.rlib")
-        if os.path.exists(cached_rlib):
-            shutil.copy(cached_rlib, rlib)
-        else:
-            r = subprocess.run(["rustc", "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
-                                "--crate-type", "rlib", "--crate-name", "mono_rt",
-                                os.path.join(a.output, "lib.rs"), "-o", rlib], capture_output=True, text=True)
-            if r.returncode:
-                sys.stderr.write(r.stderr[-6000:])
-                return r.returncode
-            shutil.copy(rlib, cached_rlib)
-        link_args = []
-        shard_files = sorted(fn for fn in files if fn.startswith("shard_"))
-        if shard_files:
-            from concurrent.futures import ThreadPoolExecutor
-            def compile_shard(fn: str):
-                name = fn[:-3]
-                obj = os.path.join(a.output, name + ".o")
-                src_bytes = files[fn].encode("utf-8")
-                sh_key = hashlib.sha256(src_bytes).hexdigest()[:20]
-                cached_obj = os.path.join(cache_dir, f"{name}_{a.opt}_{rt_hash}_{sh_key}.o")
-                if os.path.exists(cached_obj):
-                    shutil.copy(cached_obj, obj)
-                    return fn, obj, subprocess.CompletedProcess([], 0, "", "")
-                res = subprocess.run(["rustc", "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
-                                      "--crate-type", "lib", "--crate-name", name, "--emit=obj",
-                                      "--extern", f"mono_rt={rlib}",
-                                      os.path.join(a.output, fn), "-o", obj], capture_output=True, text=True)
-                if res.returncode == 0 and os.path.exists(obj):
-                    shutil.copy(obj, cached_obj)
-                return fn, obj, res
-            with ThreadPoolExecutor(max_workers=max(1, a.shard_jobs)) as ex:
-                for fn, obj, res in ex.map(compile_shard, shard_files):
-                    if res.returncode:
-                        sys.stderr.write(f"shard {fn} failed:\n" + res.stderr[-6000:])
-                        return res.returncode
-                    link_args.extend(["-C", f"link-arg={obj}"])
-        exe = os.path.join(a.output, "prog")
-        main_opt = 0 if len(shard_files) >= 16 else a.opt
-        cgu_args = ["-C", "codegen-units=1"] if len(shard_files) >= 16 else []
-        lld_args = ["-C", "link-arg=-fuse-ld=lld"] if shutil.which("ld.lld") else []
-        r = subprocess.run(["rustc", "-C", f"opt-level={main_opt}", *cgu_args, "--edition", "2021", "-C", "panic=abort",
-                            "--extern", f"mono_rt={rlib}", *lld_args, *link_args,
-                            os.path.join(a.output, "main.rs"), "-o", exe], capture_output=True, text=True)
-        if r.returncode:
-            sys.stderr.write(r.stderr[-6000:])
-            return r.returncode
-        if a.run:
-            return subprocess.run([exe]).returncode
+        return _host_build(a, files, rt_dir)
     return 0
 
 
