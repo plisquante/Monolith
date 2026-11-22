@@ -143,10 +143,13 @@ Tam yeniden üretim pahalı (~65 dk) olduğu için işler ikiye ayrılır:
 
 ## 7. Bağımlılık ve araç politikası
 
-* Rust: `rustc` sürümü sabit (stable, belgelenmiş); çapraz hedefler `rustup target`.
-* Rust crate kullanımı (`winit`, `cpal`, `rustls`, `naga`, Vorbis çözücü vb.): **içeri alınmış (vendored), sürümü ve karması sabit, lisansı denetlenmiş**. Yapı ağ gerektirmez. Önce crates.io erişimi ve derleme düzeni (rustc doğrudan mı, cargo mu) bir kerelik doğrulanır; erişilemezse küçük bileşenler elle yazılır.
-* Sistem paketi bağımlılığı (apt `libshaderc`, `libopenal`) sürümde sıfır; geliştirme ortamında geçici olabilir.
-* Lisans uyumu: bağımlılık listesi `docs/THIRD_PARTY.md`.
+Hedef JVM'den ve Java'dan çıkmaktır; harici kütüphane yasağı yoktur. İyi, olgun bir kütüphane varsa yeniden yazmak yerine kullanılır (Rust ya da C/C++ fark etmez).
+
+* Seçim ölçütü sırası: (1) doğru ve olgun, (2) hedef platformların hepsinde derleniyor, (3) lisansı uyumlu, (4) ölçülmüş kazancı var, (5) bakım yükü düşük.
+* Her bağımlılık içeri alınır (vendored), sürümü ve karması sabittir; yapı ağ gerektirmez. Liste ve lisanslar `docs/THIRD_PARTY.md`.
+* Adaylar (kullanım ölçümle onaylanır): bellek: mimalloc (çalışma zamanı geneli, büyük diziler; nesne slab'ı kalır, bkz. GC_PLAN), pencere: winit ya da doğrudan platform API'si, ses: cpal ya da doğrudan arka uçlar, TLS: rustls, gölgelendirici: naga, Vorbis çözücü, zlib/deflate (zlib-rs ya da zlib).
+* `rustc` sürümü sabit (stable, belgelenmiş), çapraz hedefler `rustup target`. Önce crates.io erişimi ve derleme düzeni (rustc doğrudan mı, cargo mu) bir kerelik doğrulanır.
+* Sistem paketi bağımlılığı (apt `libshaderc`, `libopenal`) sürümde sıfır olmalı: ya içeri alınır ya da kaldırılır.
 
 ## 8. Sürüm 1.0 onay listesi (hepsi ölçülmüş olmalı)
 
