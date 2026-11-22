@@ -1,0 +1,40 @@
+{
+  "_comment": "Hand-written Rust replacements for translated methods. Only OUR code lives here: a patch names a method (class, name, descriptor) and a Rust function; see patches/README.md and monolith/patches.py.",
+  "files": {
+    "bitstorage.rs": {
+      "fields": {
+        "size": "net/minecraft/util/SimpleBitStorage.size",
+        "data": "net/minecraft/util/SimpleBitStorage.data",
+        "mask": "net/minecraft/util/SimpleBitStorage.mask",
+        "bits": "net/minecraft/util/SimpleBitStorage.bits",
+        "values_per_long": "net/minecraft/util/SimpleBitStorage.valuesPerLong",
+        "divide_mul": "net/minecraft/util/SimpleBitStorage.divideMul",
+        "divide_add": "net/minecraft/util/SimpleBitStorage.divideAdd",
+        "divide_shift": "net/minecraft/util/SimpleBitStorage.divideShift"
+      }
+    },
+    "world_height.rs": {
+      "fields": {
+        "holder_value": "net/minecraft/core/Holder$Reference.value",
+        "level_dim": "net/minecraft/world/level/Level.dimensionTypeRegistration",
+        "dim_min_y": "net/minecraft/world/level/dimension/DimensionType.minY",
+        "chunk_accessor": "net/minecraft/world/level/chunk/ChunkAccess.levelHeightAccessor"
+      },
+      "classes": {
+        "Holder": "net/minecraft/core/Holder$Reference",
+        "DimType": "net/minecraft/world/level/dimension/DimensionType",
+        "ClientLevel": "net/minecraft/client/multiplayer/ClientLevel",
+        "ServerLevel": "net/minecraft/server/level/ServerLevel"
+      }
+    }
+  },
+  "patches": [
+    {"class": "net/minecraft/util/SimpleBitStorage", "method": "cellIndex", "desc": "(I)I",  "file": "bitstorage.rs", "fn": "cell_index", "orig": true},
+    {"class": "net/minecraft/util/SimpleBitStorage", "method": "get",       "desc": "(I)I",  "file": "bitstorage.rs", "fn": "get_value", "orig": true},
+    {"class": "net/minecraft/util/SimpleBitStorage", "method": "set",       "desc": "(II)V", "file": "bitstorage.rs", "fn": "set_value", "orig": true},
+    {"class": "net/minecraft/core/Holder$Reference", "method": "value", "desc": "()Ljava/lang/Object;", "file": "world_height.rs", "fn": "holder_value", "orig": true},
+    {"class": "net/minecraft/world/level/Level", "method": "dimensionType", "desc": "()Lnet/minecraft/world/level/dimension/DimensionType;", "file": "world_height.rs", "fn": "level_dimension_type", "orig": true},
+    {"class": "net/minecraft/world/level/LevelReader", "method": "getMinY", "desc": "()I", "file": "world_height.rs", "fn": "reader_min_y", "orig": true},
+    {"class": "net/minecraft/world/level/chunk/ChunkAccess", "method": "getMinY", "desc": "()I", "file": "world_height.rs", "fn": "chunk_min_y", "orig": true}
+  ]
+}

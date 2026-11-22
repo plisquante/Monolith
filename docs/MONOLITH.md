@@ -45,3 +45,8 @@ assetsDir, input)`. The entry starts the game on its own 256 MiB thread and retu
 never blocks. The TouchCore host (`libtouchcore_mono.so`) supplies EGL, input and the surface through the `tc_android_*`
 symbols that `natives_rhi.rs` resolves. JNA needs libffi, which is built once as a static library from the official
 release (checksum pinned). `tools/mcbuild_rust.py --android` wraps jar, library and asset download plus this command.
+
+## Patches (game logic in Rust)
+`patches/rust/manifest.json` replaces translated methods with hand-written Rust, see `patches/README.md`. 7 patches ship
+(`SimpleBitStorage` get/set/cellIndex and the world-height chain); `python3 monolith/patch_tests.py` checks the
+mechanism against HotSpot, in `MONO_PATCH_VERIFY` mode, and that a wrong patch is caught.

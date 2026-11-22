@@ -2027,6 +2027,15 @@ def generate(main: str, natives_src: str, cp_dirs: list, strict: bool = False,
     return files["main.rs"], g
 
 
+def _older_obj(cache_dir: str, name: str, opt: str, key: str):
+    """Newest cached object of a shard whose generated source is byte-identical (`key`), built against any runtime
+    version. For runtime changes that keep the existing code valid (new functions or modules); a changed runtime
+    function that shards inline would keep its old behaviour in such an object."""
+    import glob
+    hits = glob.glob(os.path.join(cache_dir, f"{name}_{opt}_*_{key}.o"))
+    return max(hits, key=os.path.getmtime) if hits else None
+
+
 def _to_library_entry(main_rs: str) -> str:
     """Turn the generated `fn main()` into `pub fn mono_run() -> i32` (the host process keeps running)."""
     head = "fn main() {\n    rt::init_hooks"
@@ -2162,8 +2171,11 @@ def _android_build(a, files, rt_dir) -> int:
         obj = os.path.join(out, name + ".o")
         key = hashlib.sha256(files[fn].encode("utf-8")).hexdigest()[:20]
         cached_obj = os.path.join(cache, f"{name}_{a.opt}_{rt_hash}_{key}.o")
-        if a.reuse_objs and os.path.exists(obj):
-            return fn, obj, 0
+        if a.reuse_objs and not os.path.exists(cached_obj):
+            older = _older_obj(cache, name, a.opt, key)
+            if older:
+                shutil.copy(older, obj)
+                return fn, obj, 0
         if os.path.exists(cached_obj):
             shutil.copy(cached_obj, obj)
             return fn, obj, 0
@@ -2230,8 +2242,11 @@ def _host_build(a, files, rt_dir) -> int:
             src_bytes = files[fn].encode("utf-8")
             sh_key = hashlib.sha256(src_bytes).hexdigest()[:20]
             cached_obj = os.path.join(cache_dir, f"{name}_{a.opt}_{rt_hash}_{sh_key}.o")
-            if a.reuse_objs and os.path.exists(obj):
-                return fn, obj, subprocess.CompletedProcess([], 0, "", "")
+            if a.reuse_objs and not os.path.exists(cached_obj):
+                older = _older_obj(cache_dir, name, a.opt, sh_key)
+                if older:
+                    shutil.copy(older, obj)
+                    return fn, obj, subprocess.CompletedProcess([], 0, "", "")
             if os.path.exists(cached_obj):
                 shutil.copy(cached_obj, obj)
                 return fn, obj, subprocess.CompletedProcess([], 0, "", "")
@@ -2282,8 +2297,8 @@ def main() -> int:
     ap.add_argument("--api", type=int, default=24, help="Android API level of the NDK linker")
     ap.add_argument("--lib-name", default="libminecraft_mono.so")
     ap.add_argument("--reuse-objs", action="store_true",
-                    help="with --resume: link the shard objects already in the output directory as they are (runtime fixes "
-                         "that keep the runtime's types and signatures unchanged only need mono_rt rebuilt and a relink)")
+                    help="with --resume: reuse the cached object of every shard whose source is unchanged even when the runtime "
+                         "changed (only for runtime changes that leave existing code valid, e.g. a new function or module)")
     ap.add_argument("--resume", action="store_true",
                     help="skip code generation and compile the sources already in the output directory "
                          "(a separate process keeps memory low: the generator alone needs ~5 GiB)")
