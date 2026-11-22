@@ -39,6 +39,14 @@ pub const AL_MIN_GAIN: i32 = 0x100D;
 pub const AL_MAX_GAIN: i32 = 0x100E;
 pub const AL_ORIENTATION: i32 = 0x100F;
 pub const AL_SOURCE_RELATIVE: i32 = 0x202;
+/// Kaynak başına mesafe modeli (Minecraft'ın ses kanalı bunu alSourcei ile ister).
+pub const AL_DISTANCE_MODEL: i32 = 0xD000;
+pub const AL_INVERSE_DISTANCE: i32 = 0xD001;
+pub const AL_INVERSE_DISTANCE_CLAMPED: i32 = 0xD002;
+pub const AL_LINEAR_DISTANCE: i32 = 0xD003;
+pub const AL_LINEAR_DISTANCE_CLAMPED: i32 = 0xD004;
+pub const AL_EXPONENT_DISTANCE: i32 = 0xD005;
+pub const AL_EXPONENT_DISTANCE_CLAMPED: i32 = 0xD006;
 pub const AL_GAIN: i32 = 0x100A;
 pub const AL_PITCH: i32 = 0x1003;
 pub const AL_LOOPING: i32 = 0x1007;
@@ -173,6 +181,8 @@ pub struct Source {
     pub cone_inner: f32,
     pub cone_outer: f32,
     pub cone_outer_gain: f32,
+    /// mesafe modeli (AL_INVERSE_DISTANCE_CLAMPED varsayılan); 0 = AL_NONE (kazanç 1)
+    pub dist_model: i32,
 }
 
 impl Source {
@@ -197,6 +207,7 @@ impl Source {
             cone_inner: 360.0,
             cone_outer: 360.0,
             cone_outer_gain: 0.0,
+            dist_model: AL_INVERSE_DISTANCE_CLAMPED,
         }
     }
 }
@@ -208,6 +219,8 @@ pub struct Context {
     pub listener_pos: [f32; 3],
     pub listener_gain: f32,
     pub listener_vel: [f32; 3],
+    /// dinleyicinin ileri yönü (AL_ORIENTATION, varsayılan -Z); sağ yön ileriden ve yukarıdan türetilir
+    pub listener_fwd: [f32; 3],
     /// error of the last failed call (AL_NO_ERROR when none); `error()` returns it and clears it
     err: i32,
     next_id: u32,
@@ -215,7 +228,7 @@ pub struct Context {
 
 impl Context {
     pub fn new() -> Context {
-        Context { listener_gain: 1.0, next_id: 1, ..Default::default() }
+        Context { listener_gain: 1.0, next_id: 1, listener_fwd: [0.0, 0.0, -1.0], ..Default::default() }
     }
 
 
@@ -407,6 +420,7 @@ impl Context {
             AL_LOOPING => s.looping as i32,
             AL_BUFFER => s.queue.front().or(s.processed.front()).copied().unwrap_or(0) as i32,
             AL_SOURCE_RELATIVE => s.relative as i32,
+            AL_DISTANCE_MODEL => s.dist_model,
             AL_SOURCE_TYPE => {
                 // one buffer that loops is static; a queue is streaming; nothing queued is undetermined
                 if s.queue.is_empty() && s.processed.is_empty() {
@@ -438,6 +452,13 @@ impl Context {
         match param {
             AL_LOOPING => s.looping = value != AL_FALSE,
             AL_SOURCE_RELATIVE => s.relative = value != AL_FALSE,
+            AL_DISTANCE_MODEL => {
+                let ok = matches!(value, 0 | AL_INVERSE_DISTANCE..=AL_EXPONENT_DISTANCE_CLAMPED);
+                if !ok {
+                    return self.fail(AL_INVALID_VALUE);
+                }
+                s.dist_model = value;
+            }
             AL_BUFFER => {
                 if value != 0 && !self.buffers.contains_key(&(value as u32)) {
                     return self.fail(AL_INVALID_VALUE);
@@ -546,6 +567,13 @@ impl Context {
         match param {
             AL_POSITION => self.listener_pos = v,
             AL_VELOCITY => self.listener_vel = v,
+            AL_ORIENTATION => {
+                // ileri vektör; sıfır vektör geçersizdir
+                if v == [0.0, 0.0, 0.0] {
+                    return self.fail(AL_INVALID_VALUE);
+                }
+                self.listener_fwd = v;
+            }
             _ => {
                 trace_param("source param", param);
                 return self.fail(AL_INVALID_ENUM);
@@ -588,7 +616,7 @@ impl Context {
                         s.pos = 0.0;
                         continue;
                     }
-                    let (gl, gr) = source_gains(&self.listener_pos, &s, self.listener_gain);
+                    let (gl, gr) = source_gains(&self.listener_pos, &self.listener_fwd, &s, self.listener_gain);
                     let step = buf.freq as f64 / MIX_RATE as f64 * s.pitch as f64;
                     let idx = s.pos as usize;
                     let frac = (s.pos - idx as f64) as f32;
@@ -632,7 +660,7 @@ impl Context {
 /// gain = ref / (ref + rolloff * (clamp(d, ref, max) - ref)), then clamped to [min_gain, max_gain] and multiplied by
 /// the source gain. The pan follows the x axis of the listener with a constant-power law. A source at the origin
 /// without AL_SOURCE_RELATIVE is treated as not positioned (no attenuation, centred).
-fn source_gains(listener: &[f32; 3], s: &Source, listener_gain: f32) -> (f32, f32) {
+fn source_gains(listener: &[f32; 3], fwd: &[f32; 3], s: &Source, listener_gain: f32) -> (f32, f32) {
     let (dx, dy, dz) = if s.relative {
         (s.position[0], s.position[1], s.position[2])
     } else {
@@ -640,17 +668,47 @@ fn source_gains(listener: &[f32; 3], s: &Source, listener_gain: f32) -> (f32, f3
     };
     let dist = (dx * dx + dy * dy + dz * dz).sqrt();
     let positioned = s.relative || s.position != [0.0, 0.0, 0.0];
+    // sağ yön: ileri x yukarı (yukarı = +Y)
+    // ileri x (0,1,0) = (-fwd.z, 0, fwd.x)
+    let right = normalize([-fwd[2], 0.0, fwd[0]]);
     let (atten, pan) = if !positioned {
         (1.0, 0.0)
     } else {
-        let d = dist.clamp(s.reference_distance, s.max_distance.max(s.reference_distance));
-        let denom = s.reference_distance + s.rolloff * (d - s.reference_distance);
-        let a = if denom > 0.0 { s.reference_distance / denom } else { 1.0 };
-        (a.clamp(0.0, 1.0), (dx / dist.max(1e-6)).clamp(-1.0, 1.0))
+        let r = s.reference_distance;
+        let rolloff = s.rolloff;
+        let clamped = s.dist_model == AL_INVERSE_DISTANCE_CLAMPED
+            || s.dist_model == AL_LINEAR_DISTANCE_CLAMPED
+            || s.dist_model == AL_EXPONENT_DISTANCE_CLAMPED;
+        let d = if clamped { dist.clamp(r, s.max_distance.max(r)) } else { dist.max(r) };
+        let a = match s.dist_model {
+            AL_INVERSE_DISTANCE | AL_INVERSE_DISTANCE_CLAMPED => {
+                let denom = r + rolloff * (d - r);
+                if denom > 0.0 { r / denom } else { 1.0 }
+            }
+            AL_LINEAR_DISTANCE | AL_LINEAR_DISTANCE_CLAMPED => {
+                let span = s.max_distance - r;
+                if span > 0.0 { 1.0 - rolloff * (d - r) / span } else { 1.0 }
+            }
+            AL_EXPONENT_DISTANCE | AL_EXPONENT_DISTANCE_CLAMPED => {
+                if r > 0.0 { (d / r).powf(-rolloff) } else { 1.0 }
+            }
+            _ => 1.0, // AL_NONE
+        };
+        let pan = if dist > 1e-6 { dot([dx, dy, dz], right) / dist } else { 0.0 };
+        (a.clamp(0.0, 1.0), pan.clamp(-1.0, 1.0))
     };
     let g = (s.gain * atten * listener_gain).clamp(s.min_gain, s.max_gain.max(s.min_gain));
     let angle = (pan + 1.0) * std::f32::consts::FRAC_PI_4;
     (g * angle.cos(), g * angle.sin())
+}
+
+fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn normalize(v: [f32; 3]) -> [f32; 3] {
+    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    if l < 1e-9 { [1.0, 0.0, 0.0] } else { [v[0] / l, v[1] / l, v[2] / l] }
 }
 
 /// Output of rendered blocks (a device, or a file in tests).
@@ -851,14 +909,50 @@ mod tests {
             s
         };
         let l0 = [0.0, 0.0, 0.0];
-        let quiet = source_gains(&l0, &src([0.0, 0.0, 10.0]), 1.0);
-        let near = source_gains(&l0, &src([0.0, 0.0, 2.0]), 1.0);
-        let half = source_gains(&l0, &src([0.0, 0.0, 0.0]), 0.5);
+        let quiet = source_gains(&l0, &[0.0, 0.0, -1.0], &src([0.0, 0.0, 10.0]), 1.0);
+        let near = source_gains(&l0, &[0.0, 0.0, -1.0], &src([0.0, 0.0, 2.0]), 1.0);
+        let half = source_gains(&l0, &[0.0, 0.0, -1.0], &src([0.0, 0.0, 0.0]), 0.5);
         assert!(quiet.0 < near.0 && near.0 < 1.0, "attenuation with distance");
         assert!((half.0 - 0.5 * std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6, "not positioned: gain 0.5, equal power");
-        let left = source_gains(&l0, &src([-5.0, 0.0, 0.0]), 1.0);
-        let right = source_gains(&l0, &src([5.0, 0.0, 0.0]), 1.0);
+        let left = source_gains(&l0, &[0.0, 0.0, -1.0], &src([-5.0, 0.0, 0.0]), 1.0);
+        let right = source_gains(&l0, &[0.0, 0.0, -1.0], &src([5.0, 0.0, 0.0]), 1.0);
         assert!(left.0 > left.1 && right.1 > right.0, "pan follows x");
+    }
+
+    #[test]
+    fn listener_orientation_decides_left_and_right() {
+        let mut ctx = Context::new();
+        let s = ctx.gen_sources(1)[0];
+        ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 5.0]);
+        // varsayılan yön (-Z): +Z'deki kaynak arkada, pan merkeze yakın; yönü +X yapınca +Z sağa düşer
+        ctx.set_listener_3f(AL_ORIENTATION, [1.0, 0.0, 0.0]);
+        assert_eq!(ctx.error(), AL_NO_ERROR);
+        let (l, r) = source_gains(&ctx.listener_pos, &ctx.listener_fwd, ctx.sources.get(&s).unwrap(), 1.0);
+        assert!(r > l, "facing +X, source at +Z: right channel louder ({l} {r})");
+        assert_eq!(ctx.set_listener_3f(AL_ORIENTATION, [0.0; 3]), AL_INVALID_VALUE);
+    }
+
+    #[test]
+    fn distance_models_follow_the_spec() {
+        let mut ctx = Context::new();
+        let s = ctx.gen_sources(1)[0];
+        ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 6.0]);
+        ctx.set_source_f(s, AL_REFERENCE_DISTANCE, 1.0);
+        ctx.set_source_f(s, AL_MAX_DISTANCE, 11.0);
+        ctx.set_source_f(s, AL_ROLLOFF_FACTOR, 1.0);
+        let gain = |ctx: &Context| source_gains(&[0.0; 3], &[0.0, 0.0, -1.0], ctx.sources.get(&s).unwrap(), 1.0).0 * std::f32::consts::SQRT_2;
+        // linear: 1 - (6-1)/(11-1) = 0.5
+        ctx.set_source_i(s, AL_DISTANCE_MODEL, AL_LINEAR_DISTANCE_CLAMPED);
+        assert!((gain(&ctx) - 0.5).abs() < 1e-4, "linear clamped {}", gain(&ctx));
+        // exponent: (6/1)^-1 = 1/6
+        ctx.set_source_i(s, AL_DISTANCE_MODEL, AL_EXPONENT_DISTANCE_CLAMPED);
+        assert!((gain(&ctx) - 1.0 / 6.0).abs() < 1e-4, "exponent {}", gain(&ctx));
+        // none: gain 1 everywhere
+        ctx.set_source_i(s, AL_DISTANCE_MODEL, 0);
+        assert!((gain(&ctx) - 1.0).abs() < 1e-4, "none {}", gain(&ctx));
+        assert_eq!(ctx.set_source_i(s, AL_DISTANCE_MODEL, 0x1234), AL_INVALID_VALUE);
+        assert_eq!(ctx.get_source_i(s, AL_DISTANCE_MODEL), Ok(0));
+        assert_eq!(ctx.error(), AL_INVALID_VALUE);
     }
 
     #[test]
@@ -868,7 +962,7 @@ mod tests {
         // ref 1, rolloff 1: gain at distance 3 is 1 / (1 + 2) = 1/3 (inverse clamped model)
         assert_eq!(ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 3.0]), AL_NO_ERROR);
         let src = ctx.sources.get(&s).unwrap();
-        let g = source_gains(&[0.0; 3], src, 1.0).0;
+        let g = source_gains(&[0.0; 3], &[0.0, 0.0, -1.0], src, 1.0).0;
         // pan 0 (straight ahead): left = gain * cos(pi/4)
         assert!((g - (1.0f32 / 3.0) * std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-4, "gain {g}");
         // the parameters Minecraft's sound engine sets must not be errors
@@ -884,9 +978,9 @@ mod tests {
         assert_eq!(ctx.error(), AL_NO_ERROR);
         // inside the reference distance there is no attenuation
         ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 4.0]);
-        let g_in = source_gains(&[0.0; 3], ctx.sources.get(&s).unwrap(), 1.0).0;
+        let g_in = source_gains(&[0.0; 3], &[0.0, 0.0, -1.0], ctx.sources.get(&s).unwrap(), 1.0).0;
         ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 0.5]);
-        let g_near = source_gains(&[0.0; 3], ctx.sources.get(&s).unwrap(), 1.0).0;
+        let g_near = source_gains(&[0.0; 3], &[0.0, 0.0, -1.0], ctx.sources.get(&s).unwrap(), 1.0).0;
         assert!(g_near >= g_in);
     }
 
