@@ -22,7 +22,7 @@ Plan ile bu dosya çelişirse bu dosya geçerlidir. Bir görevde bu dosyada yazm
 | D2 | `mono_rt` rustc ile doğrudan derlenmeye devam eder (`rustgen.py` ~satır 2299). Üçüncü parti crate'ler `rt_deps/` (Cargo workspace, `Cargo.lock`, `vendor/`) içinde cargo ile `--release` rlib olarak derlenir; `rustgen` `--extern ad=yol` ve `-L dependency=dizin` geçirir. Doğrulandı: cargo/rustc 1.97 kurulu, crates.io erişilebilir. Sürümler `Cargo.lock` + `cargo vendor` ile sabit, `rust-toolchain.toml` ile rustc sabit. |
 | D3 | macOS: OpenGL 3.3 core. Gerekçe: bağlam zaten 3.3 core isteniyor (`natives_rhi.rs`), oyunun tüm gölgelendiricileri `#version 330`, macOS 4.1 core'a kadar destekler. Vulkan/MoltenVK yok. |
 | D4 | Android: GLES 3.0+ ve gölgelendirici başlık dönüştürme (`#version 330 core` -> `#version 300 es` + precision) metin geçişi, Zig `gl_shim.zig` mantığı Rust'a taşınır (B6). naga/SPIRV yok. |
-| D5 | Ses: OpenAL alt kümesi Rust'ta (aşağıdaki 23 fonksiyon). Aygıt çıkışı `cpal` crate'i (ALSA/WASAPI/CoreAudio/AAudio). Ogg çözme: oyun **JOrbis** kullanıyor (saf Java, zaten Rust'a çevriliyor); Rust Vorbis çözücü şimdilik gerekmez. |
+| D5 | Ses: OpenAL alt kümesi Rust'ta (aşağıdaki 23 fonksiyon, `monolith/rt/audio.rs`, bağımlılıksız). Aygıt çıkışı: Linux'ta `libasound` çalışma zamanında dlopen ile (`cpal` denendi: `alsa-sys` ALSA geliştirme başlıklarını derleme zamanında ister, bu da 'sistem paketi bağımlılığı sıfır' kuralına aykırı; karar değişti), Windows'ta WASAPI, macOS'ta CoreAudio, Android'de AAudio. Ogg çözme: oyun **JOrbis** kullanıyor (saf Java, zaten Rust'a çevriliyor); Rust Vorbis çözücü şimdilik gerekmez. |
 | D6 | Pencere/giriş/ses aygıtı: Linux mevcut X11 kodu kalır. Windows/macOS/Android için iki aday yan yana denenir (B4): (a) `winit`+`glutin`(+`cpal`), (b) SDL3 (C, tek bağımlılık: pencere, GL/GLES bağlamı, giriş, oyun kolu, ses aygıtı, Android desteği). Kural: dört platformda spike'ı geçen seçilir; ikisi de geçerse Android desteği daha az bağımlılıkla olan (öncelikle SDL3) seçilir. Aşağıdaki ayrıntı (a) için geçerli: Windows/macOS: `winit` (pump_events ile oyun döngüsünden) + `glutin` (WGL/CGL), önce küçük test programı (B4). Oyunun ana iş parçacığı = render iş parçacığı = process ana iş parçacığı (macOS gereği). |
 | D7 | TLS: önce çevrilmiş JSSE (`sun.security.ssl`) soketlerimizin üzerinde çalıştırılır (B5 spike). Gerçek uç noktaya (HTTPS GET) başarıyla bağlanırsa D7a: JSSE kalır. Bağlanamazsa D7b: sınıf seviyesi yama ile rustls. Karar B5 çıktısıyla bu tabloya yazılır. |
 | D8 | Tahsis edici: kendi slab'ımız kalır. Üçüncü parti tahsis edici yalnızca ölçüm gerektirirse. |
@@ -126,3 +126,22 @@ Etiket: **[H]** = sınırları net, küçük modelle yapılabilir; **[S]** = der
 * Hukuk kapısı (D13): herkese açık dağıtım öncesi karar.
 * Gerçek GPU/cihaz testleri: kullanıcı cihazlarında veya erişilebilir donanımda.
 * D7 (TLS) ve D6 (winit modeli) spike sonuçlarına bağlıdır; her iki durum için de kabul testi ve yol yazılıdır.
+
+
+## 6. Durum (her commit'te güncellenir)
+
+| Görev | Durum | Kanıt |
+|---|---|---|
+| B0 rt_deps (vendored, çevrimdışı derleme, rustgen bağlantısı) | tamam | `monolith/crc_tests.py` (CRC32 HotSpot ile eşleşiyor); `863e99d` |
+| B1 native envanteri (976 native, hepsi rt'de) | tamam (statik; çalışma zamanı sayacı sonraki tam üretimde) | `docs/NATIVES.md`, `tools/native_report.py` |
+| Netty NIO varsayılanı (174 epoll/kqueue native'i yükten çıkarır) | tamam | `monolith/netty_tests.py`; `1a3120f` |
+| B2 ses çekirdeği (OpenAL alt kümesi, karıştırıcı, WAV çıkış) | tamam (çekirdek; aygıt yok) | `rustc --test monolith/rt/audio.rs`: 7/7 |
+| B3 ses bağlama + aygıt arka uçları (ALSA dlopen, WASAPI, CoreAudio, AAudio) | açık | sıradaki; ALSA aygıtı bu ortamda yok (`Unknown PCM default`) |
+| B4 pencere spike (winit/glutin, SDL3) | açık | Windows/macOS koşucusu gerekir |
+| B5 TLS spike | açık | ağ erişimi var; sıradaki |
+| B6 GLES gölgelendirici dönüşümü | açık | |
+| B7 paketleme | açık | |
+| B8 belgeler | kısmen (NATIVES.md, THIRD_PARTY.md) | |
+| A1–A9 (GC, yama, sahiplik, soak) | açık | GC_PLAN / IMPL_SPEC §2 |
+| WS7 Java kaplamaları → Rust | açık | |
+| WS12 Android cihaz, WS3 gerçek GPU, WS10 CI makinesi | açık, donanım/kaynak gerektirir | |
