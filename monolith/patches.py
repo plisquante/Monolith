@@ -10,7 +10,10 @@ generated bindings for everything the manifest declares:
         "fields":  {"size": "net/minecraft/util/SimpleBitStorage.size"},   # F_size: usize (byte offset)
         "statics": {"x": "pkg/Cls.field"},                                  # s_x() -> *mut T
         "classes": {"Level": "net/minecraft/world/level/Level"},            # class_Level(), is_Level(o), init_Level()
-        "calls":   {"foo": "pkg/Cls.foo(I)I"}                               # c_foo(args) -> rt::Res<R>
+        "calls":   {"foo": "pkg/Cls.foo(I)I"},                              # c_foo(args) -> rt::Res<R>, direct (static / private / final)
+        "vcalls":  {"next": "pkg/RandomSource.nextInt(I)I"},                # v_next(this, args) -> rt::Res<R>, virtual or interface dispatch
+        "news":    {"pos": "net/minecraft/core/BlockPos.<init>(III)V"},     # n_pos(args) -> rt::Res<rt::Ref>: allocate and construct
+        "strings": {"tick": "randomTick"}                                   # str_tick() -> rt::Ref: an interned Java String
       }
     },
     "patches": [
@@ -50,6 +53,9 @@ class PatchFile:
     statics: dict = field(default_factory=dict)
     classes: dict = field(default_factory=dict)
     calls: dict = field(default_factory=dict)
+    vcalls: dict = field(default_factory=dict)
+    news: dict = field(default_factory=dict)
+    strings: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -116,12 +122,16 @@ class PatchSet:
         self.patches = [p for p in self.patches if p.key in self.by_key]
 
     def roots(self) -> list[tuple[str, str, str]]:
-        """Methods the bindings call: they must be compiled even if nothing else reaches them."""
+        """Methods the bindings call directly (or construct): they must be compiled even if nothing else reaches them."""
         out = []
         for f in self.files.values():
-            for spec in f.calls.values():
+            for spec in list(f.calls.values()) + list(f.news.values()):
                 out.append(_split_call(spec))
         return out
+
+    def virtual_roots(self) -> list[tuple[str, str, str]]:
+        """Virtual and interface methods the bindings dispatch: every implementation must be kept."""
+        return [_split_call(spec) for f in self.files.values() for spec in f.vcalls.values()]
 
     # ------------------------------------------------------------------ code generation
     def module_for(self, g, patch: Patch) -> tuple[str, str]:
@@ -198,6 +208,63 @@ class PatchSet:
                 init = f"unsafe {{ {g.init_name(dc)}() }}.res()?; "
             out.append(f"    /// {owner}.{mname}{desc}")
             out.append(f"    pub fn c_{name}({', '.join(params)}) -> rt::Res<{rret}> {{ {init}unsafe {{ {fname(dc.name, m.name, m.desc)}({', '.join(call)}) }}.res() }}")
+        # virtual / interface calls: the same dispatch the translated code uses
+        for name, spec in sorted(pf.vcalls.items()):
+            owner, mname, desc = _split_call(spec)
+            oci = g.need_class(owner)
+            try:
+                dc, m = w.resolve_method(owner, mname, desc, interface=oci.is_interface)
+            except Exception as e:
+                raise PatchError(f"{pf.name}: vcall '{name}': {e}")
+            g.need_class(dc.name)
+            g.need_method(dc, m)
+            args, ret = _parse(desc)
+            ptypes = ["rt::Ref"] + [RT[kind_of(d)] for d in args]
+            params = ["this: rt::Ref"] + [f"a{j}: {RT[kind_of(d)]}" for j, d in enumerate(args)]
+            call_args = ", ".join(["this"] + [f"a{j}" for j in range(len(args))])
+            rret = "()" if ret == "V" else RT[kind_of(ret)]
+            cret = "rt::CVoid" if ret == "V" else f"rt::CRes<{RT[kind_of(ret)]}>"
+            fnty = f"extern \"C\" fn({', '.join(ptypes)}) -> {cret}"
+            if m.is_static:
+                raise PatchError(f"{pf.name}: vcall '{name}': {owner}.{mname}{desc} is static, use \"calls\"")
+            obj_slot = w.vindex(w.req("java/lang/Object")).get(m.name + m.desc)
+            if m.is_private or (m.access & 0x0010) or (dc.cf.access & 0x0010):
+                target = f"unsafe {{ {fname(dc.name, m.name, m.desc)}({call_args}) }}.res()"
+                body = f"rt::nn(this)?; {target}"
+            elif oci.is_interface and obj_slot is None:
+                sel = g.sel(m.name, m.desc)
+                body = (f"let o = rt::nn(this)?; let f: {fnty} = unsafe {{ std::mem::transmute::<*const (), {fnty}>("
+                        f"rt::itab_find((*o).class, {sel})) }}; f({call_args}).res()")
+            else:
+                slot = obj_slot if obj_slot is not None else w.vindex(oci).get(m.name + m.desc)
+                if slot is None:
+                    raise PatchError(f"{pf.name}: vcall '{name}': no vtable slot for {owner}.{mname}{desc}")
+                body = (f"let o = rt::nn(this)?; let f: {fnty} = unsafe {{ std::mem::transmute::<*const (), {fnty}>("
+                        f"(*(*o).class).vtable[{slot}].0) }}; f({call_args}).res()")
+            out.append(f"    /// virtual: {owner}.{mname}{desc}")
+            out.append(f"    pub fn v_{name}({', '.join(params)}) -> rt::Res<{rret}> {{ {body} }}")
+        # constructors: allocate, initialize the class, run <init>
+        for name, spec in sorted(pf.news.items()):
+            owner, mname, desc = _split_call(spec)
+            if mname != "<init>":
+                raise PatchError(f"{pf.name}: new '{name}': {spec} is not a constructor")
+            ci = g.need_class(owner)
+            m = ci.cf.method("<init>", desc)
+            if m is None:
+                raise PatchError(f"{pf.name}: new '{name}': {owner} has no constructor {desc}")
+            g.need_method(ci, m)
+            args, _ = _parse(desc)
+            params = [f"a{j}: {RT[kind_of(d)]}" for j, d in enumerate(args)]
+            call = ", ".join(["o"] + [f"a{j}" for j in range(len(args))])
+            init = f"unsafe {{ {g.init_name(ci)}() }}.res()?; " if g.needs_init(ci) else ""
+            out.append(f"    /// new {owner}{desc}")
+            out.append(f"    pub fn n_{name}({', '.join(params)}) -> rt::Res<rt::Ref> {{ {init}let o = rt::alloc(unsafe {{ &{g.class_name(ci)} }}); "
+                       f"unsafe {{ {fname(ci.name, '<init>', desc)}({call}) }}.res()?; Ok(o) }}")
+        # interned Java strings
+        for name, text in sorted(pf.strings.items()):
+            out.append(f"    /// the interned String {text!r}")
+            out.append(f"    pub fn str_{name}() -> rt::Ref {{ static C: std::sync::OnceLock<usize> = std::sync::OnceLock::new(); "
+                       f"rt::Ref(*C.get_or_init(|| {{ let r = rt::intern_string(rt::new_str({rstr(text)}.to_string())); mono_rt::gc::pin_ref(r); r.0 as usize }}) as *mut rt::Obj) }}")
         out.append("")
         out.append(pf.source)
         out.append("}")
@@ -248,12 +315,13 @@ def load(path: str | None = None) -> PatchSet:
         fp = os.path.join(base, name)
         if not os.path.isfile(fp):
             raise PatchError(f"patch file {name}: not found in {base}")
-        for kind in ("fields", "statics", "classes", "calls"):
+        for kind in ("fields", "statics", "classes", "calls", "vcalls", "news", "strings"):
             for k in cfg.get(kind, {}):
                 if not _IDENT.match(k):
                     raise PatchError(f"{name}: binding name '{k}' is not an identifier")
         files[name] = PatchFile(name, open(fp, encoding="utf-8").read(), cfg.get("fields", {}), cfg.get("statics", {}),
-                                cfg.get("classes", {}), cfg.get("calls", {}))
+                                cfg.get("classes", {}), cfg.get("calls", {}), cfg.get("vcalls", {}), cfg.get("news", {}),
+                                cfg.get("strings", {}))
     patches = []
     for e in doc.get("patches", []):
         for req in ("class", "method", "desc", "file", "fn"):

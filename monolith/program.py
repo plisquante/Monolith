@@ -381,7 +381,7 @@ class Program:
             self.report("link-error", str(e))
             return None
 
-    def run(self, main_class: str, extra_roots: list[tuple[str, str, str]] = ()):
+    def run(self, main_class: str, extra_roots: list[tuple[str, str, str]] = (), extra_vroots: list[tuple[str, str, str]] = ()):
         for n in RT_LOADED:
             self.load(n)
         for n in RT_INSTANTIATED:
@@ -406,6 +406,9 @@ class Program:
             if n == "<init>":
                 self.instantiate(o)
             self.mark(ci, m)
+        for o, n, d in extra_vroots:
+            if self.load(o):
+                self.vcall(o, n, d)
         for o, n, d in RT_VIRTUAL_ROOTS + OPTIONAL_VIRTUAL_ROOTS:
             if (o, n, d) in OPTIONAL_VIRTUAL_ROOTS and self.w.cp.find(o) is None:
                 continue

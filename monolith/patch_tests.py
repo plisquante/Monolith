@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory() as work:
     g = build(work, good, cdir)
     check("patched program == HotSpot", g.stdout == java.stdout and g.returncode == java.returncode,
           f"rust exit {g.returncode}\n{g.stderr[-1500:]}\n--- java\n{java.stdout}\n--- rust\n{g.stdout}")
-    check("report: all 10 patches applied", "patches: 10 applied, 0 unused" in g.stderr, g.stderr[-600:])
+    check("report: all 11 patches applied", "patches: 11 applied, 0 unused" in g.stderr, g.stderr[-600:])
 
     v = build(work, good, cdir, verify=True)
     check("MONO_PATCH_VERIFY=1 passes and still == HotSpot", v.stdout == java.stdout and v.returncode == 0,

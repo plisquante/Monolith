@@ -82,3 +82,14 @@ pub fn shapes_area(orig: impl Fn(rt::Ref) -> rt::Res<i32>, s: rt::Ref) -> rt::Re
     }
     orig(s)
 }
+
+/// Interface call (Op.apply), virtual calls (Animal.legs / sound), a constructor (Pt) and an interned String, all from Rust.
+pub fn virt_run(op: rt::Ref, an: rt::Ref, n: i32) -> rt::Res<i32> {
+    let p = n_pt(n, n.wrapping_add(1))?;
+    let sum = unsafe { get::<i32>(p, F_pt_x).wrapping_add(get::<i32>(p, F_pt_y)) };
+    let applied = v_apply(op, sum)?;
+    let legs = v_legs(an)?;
+    let len = v_len(v_sound(an)?)?;
+    let _ = v_len(str_hello())?; // the String binding works (and is side-effect free)
+    Ok(applied.wrapping_add(legs).wrapping_add(len))
+}

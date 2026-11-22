@@ -1732,7 +1732,7 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
     from . import patches as P
     pset = P.load(os.environ.get("MONO_PATCH_MANIFEST") or None) if use_patches else P.PatchSet({}, [])
     pset.validate(world)
-    prog.run(main, extra_roots=pset.roots())
+    prog.run(main, extra_roots=pset.roots(), extra_vroots=pset.virtual_roots())
     if analyze_only:
         return world, prog, cp
     esc_res = None

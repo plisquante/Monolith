@@ -48,6 +48,18 @@ public class Patch1 {
         static int areaOf(Shape s) { return s.area(); }
     }
 
+    interface Op { int apply(int x); }
+    static final class Inc implements Op { public int apply(int x) { return x + 1; } }
+    static final class Dbl implements Op { public int apply(int x) { return x * 2; } }
+    static abstract class Animal { abstract String sound(); int legs() { return 4; } }
+    static final class Dog extends Animal { String sound() { return "woof"; } }
+    static final class Bird extends Animal { String sound() { return "tweet"; } int legs() { return 2; } }
+    static final class Pt { final int x, y; Pt(int x, int y) { this.x = x; this.y = y; } int sum() { return x + y; } }
+    static final class Virt {
+        /** The patch uses interface dispatch, virtual dispatch, a constructor and an interned String from Rust. */
+        static int run(Op op, Animal an, int n) { Pt p = new Pt(n, n + 1); return op.apply(p.sum()) + an.legs() + an.sound().length(); }
+    }
+
     public static void main(String[] a) {
         long h = 0;
         for (int i = 0; i < 2000; i++) h = h * 1000003 + PatchTarget.mix(i, i * 7 - 1000);
@@ -74,6 +86,10 @@ public class Patch1 {
         Acc acc = new Acc();
         for (int i = 1; i <= 10; i++) acc.add(i);
         System.out.println("acc " + acc.add(0));
+        long v = 0;
+        for (int i = 0; i < 100; i++) v += Virt.run((i & 1) == 0 ? new Inc() : new Dbl(), (i % 3) == 0 ? new Dog() : new Bird(), i);
+        System.out.println("virt " + v);
+        try { Virt.run(null, new Dog(), 1); } catch (NullPointerException e) { System.out.println("virt npe"); }
         System.out.println("shapes " + Shapes.areaOf(new Sq(5)) + " " + Shapes.areaOf(new Rect(3, 4)) + " " + Shapes.areaOf(() -> 42));
     }
 }
