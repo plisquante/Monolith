@@ -1,0 +1,23 @@
+{
+  "files": {
+    "test_patch.rs": {
+      "fields":  {"size": "Patch1$Bits.size", "data": "Patch1$Bits.data", "a": "Patch1$Derived.a", "b": "Patch1$Derived.b",
+                  "total": "Patch1$Acc.total", "sq_s": "Patch1$Sq.s", "rect_w": "Patch1$Rect.w", "rect_h": "Patch1$Rect.h"},
+      "statics": {"count": "Patch1$Reg.count"},
+      "classes": {"Bits": "Patch1$Bits", "Sq": "Patch1$Sq", "Rect": "Patch1$Rect"},
+      "calls":   {"helper": "Patch1$Reg.helper(I)I"}
+    }
+  },
+  "patches": [
+    {"class": "Patch1$PatchTarget", "method": "mix",   "desc": "(II)I",  "file": "test_patch.rs", "fn": "mix"},
+    {"class": "Patch1$PatchTarget", "method": "scale", "desc": "(DF)D",  "file": "test_patch.rs", "fn": "scale"},
+    {"class": "Patch1$PatchTarget", "method": "sum",   "desc": "(J)J",   "file": "test_patch.rs", "fn": "sum"},
+    {"class": "Patch1$PatchTarget", "method": "nan",   "desc": "()D",    "file": "test_patch.rs", "fn": "nan"},
+    {"class": "Patch1$Bits", "method": "get", "desc": "(I)I",  "file": "test_patch.rs", "fn": "bits_get", "orig": true},
+    {"class": "Patch1$Bits", "method": "set", "desc": "(II)V", "file": "test_patch.rs", "fn": "bits_set", "orig": true},
+    {"class": "Patch1$Derived", "method": "total", "desc": "()I", "file": "test_patch.rs", "fn": "derived_total"},
+    {"class": "Patch1$Reg", "method": "bump", "desc": "(I)I", "file": "test_patch.rs", "fn": "reg_bump", "verify": false},
+    {"class": "Patch1$Acc", "method": "add", "desc": "(I)I", "file": "test_patch.rs", "fn": "acc_add", "verify": false},
+    {"class": "Patch1$Shapes", "method": "areaOf", "desc": "(LPatch1$Shape;)I", "file": "test_patch.rs", "fn": "shapes_area", "orig": true}
+  ]
+}

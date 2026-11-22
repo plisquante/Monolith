@@ -562,7 +562,7 @@ class MethodGen:
                 push(kind_of(ret), call)
         elif op == "invokespecial":
             args, ret = parse_method_desc(a.desc)
-            if a.owner == "java/lang/Object" and a.name == "<init>":
+            if a.owner == "java/lang/Object" and a.name == "<init>" and ("java/lang/Object", "<init>", "()V") not in self.g.patches:
                 for _ in range(len(args)):
                     pop()
                 recv = pop()
@@ -821,6 +821,11 @@ class MethodGen:
         cret = cret_type(ret)
         cwrap = cret_wrap(ret)
         self.g.fn_sigs[fn_nm] = f"pub fn {fn_nm}({', '.join(params)}) -> {cret};"
+        pe = self.g.patches.by_key.get((self.ci.name, m.name, m.desc))
+        pmod = pmod_src = ""
+        if pe is not None:
+            self.g.patches.used.add(pe.key)
+            pmod, pmod_src = self.g.patches.module_for(self.g, pe)
         if m.access & 0x0020:
             lock = "this" if not m.is_static else f"rt::class_mirror({self.cref(self.ci.name)})?"
             call_args = ", ".join((["this"] if not m.is_static else []) + [f"a{j}" for j in range(len(args))])
@@ -829,6 +834,12 @@ class MethodGen:
                        f"        let lock = {lock};\n        rt::monitorenter(lock)?;\n"
                        f"        let r = {fn_nm}__body({call_args});\n        rt::monitorexit(lock)?;\n        r\n"
                        f"    }})())\n}}\n")
+            if pe is not None:
+                sig = f"fn {fn_nm}__body_orig({', '.join(params)}) -> rt::Res<{rret}> {{"
+                pw = self.g.patches.wrapper(self.g, pe, f"{fn_nm}__body", f"{fn_nm}__body_orig", params,
+                                            ([] if m.is_static else ["this"]) + [f"a{j}" for j in range(len(args))],
+                                            ret, rret, pmod)
+                return pmod_src + wrapper + sig + "\n" + "\n".join(body) + "\n}\n" + pw
             sig = f"fn {fn_nm}__body({', '.join(params)}) -> rt::Res<{rret}> {{"
             return wrapper + sig + "\n" + "\n".join(body) + "\n}\n"
         else:
@@ -851,6 +862,14 @@ class MethodGen:
                 wrapper = (f"#[no_mangle] pub extern \"C\" fn {fn_nm}({', '.join(params)}) -> {cret} {{\n"
                            f"    rt::{cwrap}(Ok({r_nm}({call_args})))\n}}\n")
                 return rsig + "\n" + "\n".join(nt_body) + "\n}\n" + wrapper
+            if pe is not None:
+                rsig = f"fn {r_nm}_orig({', '.join(params)}) -> rt::Res<{rret}> {{"
+                wrapper = (f"#[no_mangle] pub extern \"C\" fn {fn_nm}({', '.join(params)}) -> {cret} {{\n"
+                           f"    rt::{cwrap}({r_nm}({call_args}))\n}}\n")
+                pw = self.g.patches.wrapper(self.g, pe, r_nm, f"{r_nm}_orig", params,
+                                            ([] if m.is_static else ["this"]) + [f"a{j}" for j in range(len(args))],
+                                            ret, rret, pmod, inline="#[inline] ")
+                return pmod_src + rsig + "\n" + "\n".join(body) + "\n}\n" + pw + wrapper
             rsig = f"{inl}fn {r_nm}({', '.join(params)}) -> rt::Res<{rret}> {{"
             wrapper = (f"#[no_mangle] pub extern \"C\" fn {fn_nm}({', '.join(params)}) -> {cret} {{\n"
                        f"    rt::{cwrap}({r_nm}({call_args}))\n}}\n")
@@ -1086,8 +1105,10 @@ class Gen:
     """Whole-program state. Classes and methods are discovered from the entry point: a class is emitted once it is
     referenced, a method once it is called directly, reachable (Program's analysis) or needed by a vtable/itable."""
 
-    def __init__(self, world, prog, natives_src: str, esc_res=None):
+    def __init__(self, world, prog, natives_src: str, esc_res=None, patches=None):
         self.world, self.prog, self.esc = world, prog, esc_res
+        from .patches import PatchSet
+        self.patches = patches if patches is not None else PatchSet({}, [])
         self.lits: dict[str, tuple] = {}
         self.sels: dict[str, int] = {}
         self.class_q: list = []
@@ -1148,6 +1169,9 @@ class Gen:
         if not hasattr(self, "_nothrow_cache"):
             self._nothrow_cache = {}
         ok = False
+        if (dc.name, m.name, m.desc) in self.patches:
+            self._nothrow_cache[k] = False
+            return False
         if not m.is_native and m.code is not None and not m.code.handlers and not (m.access & 0x0020):
             insns = self.prog.insns(dc, m)
             ok = True
@@ -1559,7 +1583,7 @@ def _sym_scan(text: str) -> set[str]:
 
 def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = False,
                     no_lwjgl: bool = False, reflect_classes: list[str] | None = None,
-                    shards: int = 1, use_escape: bool = False) -> tuple[dict[str, str], Gen]:
+                    shards: int = 1, use_escape: bool = False, use_patches: bool = True) -> tuple[dict[str, str], Gen]:
     sys.path.insert(0, ROOT)
     import heapq
     from . import __main__ as M
@@ -1583,12 +1607,15 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
     main = main.replace(".", "/")
     if world.get(main) is None:
         raise RustGenError(f"main class {main} not found")
-    prog.run(main)
+    from . import patches as P
+    pset = P.load(os.environ.get("MONO_PATCH_MANIFEST") or None) if use_patches else P.PatchSet({}, [])
+    pset.validate(world)
+    prog.run(main, extra_roots=pset.roots())
     esc_res = None
     if use_escape:
         from .escape import analyze as escape_analyze
         esc_res = escape_analyze(prog, budget_s=120.0)
-    g = Gen(world, prog, natives_src, esc_res=esc_res)
+    g = Gen(world, prog, natives_src, esc_res=esc_res, patches=pset)
     g.shards = shards
 
     mci = g.need_class(main)
@@ -2307,6 +2334,8 @@ def main() -> int:
         shutil.copytree(conf, os.path.join(a.output, "conf"), dirs_exist_ok=True)
     sys.stderr.write(f"monolith: {len(g.seen_classes)} classes, {len(g.seen_methods)} methods, "
                      f"{len(g.errors)} untranslatable, {len(g.link_errors)} link-errors, {len(g.missing_natives)} natives missing\n")
+    if g.patches:
+        sys.stderr.write("monolith: " + g.patches.report() + "\n")
     if os.environ.get("MONO_VERBOSE"):
         for x in g.errors:
             sys.stderr.write("  untranslatable: " + x + "\n")
