@@ -50,3 +50,10 @@ release (checksum pinned). `tools/mcbuild_rust.py --android` wraps jar, library 
 `patches/rust/manifest.json` replaces translated methods with hand-written Rust, see `patches/README.md`. 7 patches ship
 (`SimpleBitStorage` get/set/cellIndex and the world-height chain); `python3 monolith/patch_tests.py` checks the
 mechanism against HotSpot, in `MONO_PATCH_VERIFY` mode, and that a wrong patch is caught.
+
+## Allocation profile (leaving the GC)
+`MONO_ALLOC_PROFILE=<file> ./run.sh` records, per class, how much is allocated and how long it lives (collections
+survived: 0, 1, 2, 3+), plus sampled allocation sites; `python3 tools/alloc_report.py <file> --exe <prog>` classifies every
+class as TEMP (dies young), MIXED or LONG and lists the methods that allocate the most. `docs/ALLOC_BASELINE.md` is the
+first measurement (4 minutes of play, Minecraft 26.3). Limits: the sampler records physical frames, so a method that
+the compiler inlined is charged to its caller; the allocation hook is a single relaxed load when profiling is off.
