@@ -1639,7 +1639,7 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
     for px in sorted(prog.proxies):
         if world.get(px) is not None:
             g.need_class(px)
-    for rc in sorted(set(prog.reflect_classes)):
+    for rc in sorted(set(prog.reflect_classes) | prog.reflected_seen):
         if world.get(rc) is not None:
             g.need_class(rc)
     if no_lwjgl:

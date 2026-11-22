@@ -184,6 +184,7 @@ class Program:
         self._net_roots = False
         self._mh_stubs: dict[str, MemberRef] = {}
         self.reflect_classes: list[str] = []
+        self.reflected_seen: set[str] = set()  # classes kept for reflection (registries, rules); the back end must emit them
         self._annotations_seen: set[str] = set()
         self.why: dict[tuple[str, str], tuple[str, str]] = {}
         self._cur: tuple[str, str] = ("<root>", "")
@@ -699,6 +700,7 @@ class Program:
         ci = self.load(name)
         if ci is None:
             return
+        self.reflected_seen.add(name)
         self._cur = ("<root>", f"reflection:{name}")
         for m in ci.cf.methods:
             if m.name == "<clinit>" or (only is not None and m.name != only):
