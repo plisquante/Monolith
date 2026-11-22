@@ -36,7 +36,6 @@ extern "C" {
 
 #[link(name = "z")]
 extern "C" {
-    fn crc32(crc: c_ulong, buf: *const u8, len: c_uint) -> c_ulong;
     fn adler32(adler: c_ulong, buf: *const u8, len: c_uint) -> c_ulong;
     fn inflateInit2_(strm: *mut ZStream, window_bits: c_int, version: *const c_char, stream_size: c_int) -> c_int;
     fn inflate(strm: *mut ZStream, flush: c_int) -> c_int;
@@ -683,9 +682,15 @@ pub fn n_java_io_UnixFileSystem__getNameMax0(_this: Ref, path: Ref) -> Res<i64> 
 }
 
 // ------------------------------------------------------------------ java.util.zip CRC32 / Adler32
+/// CRC-32 continued from `crc` (the value Java's CRC32 holds): same result as zlib's `crc32(crc, buf, len)`.
+fn crc32_continue(crc: u32, data: &[u8]) -> u32 {
+    let mut h = crc32fast::Hasher::new_with_initial(crc);
+    h.update(data);
+    h.finalize()
+}
+
 pub fn n_java_util_zip_CRC32__update(crc_val: i32, b: i32) -> Res<i32> {
-    let byte = b as u8;
-    Ok(unsafe { crc32(crc_val as u32 as c_ulong, &byte, 1) as u32 as i32 })
+    Ok(crc32_continue(crc_val as u32, &[b as u8]) as i32)
 }
 
 pub fn n_java_util_zip_CRC32__updateBytes0(crc_val: i32, b: Ref, off: i32, len: i32) -> Res<i32> {
@@ -694,7 +699,7 @@ pub fn n_java_util_zip_CRC32__updateBytes0(crc_val: i32, b: Ref, off: i32, len: 
         return Ok(crc_val);
     }
     let s = unsafe { &rt::byte_slice(b)?[off as usize..off as usize + len as usize] };
-    Ok(unsafe { crc32(crc_val as u32 as c_ulong, s.as_ptr(), s.len() as c_uint) as u32 as i32 })
+    Ok(crc32_continue(crc_val as u32, s) as i32)
 }
 
 pub fn n_java_util_zip_CRC32__updateByteBuffer0(crc_val: i32, addr: i64, off: i32, len: i32) -> Res<i32> {
@@ -702,7 +707,8 @@ pub fn n_java_util_zip_CRC32__updateByteBuffer0(crc_val: i32, addr: i64, off: i3
         return Ok(crc_val);
     }
     let ptr = unsafe { (addr as usize as *const u8).add(off as usize) };
-    Ok(unsafe { crc32(crc_val as u32 as c_ulong, ptr, len as c_uint) as u32 as i32 })
+    let s = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
+    Ok(crc32_continue(crc_val as u32, s) as i32)
 }
 
 pub fn n_java_util_zip_Adler32__update(adler_val: i32, b: i32) -> Res<i32> {

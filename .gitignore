@@ -11,3 +11,4 @@ mc/
 build/
 .claude/settings.local.json
 logs/
+rt_deps/target/

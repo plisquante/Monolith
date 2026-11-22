@@ -1,0 +1,13 @@
+# Third-party crates linked into mono_rt. Versions pinned by Cargo.lock; sources vendored in vendor/.
+# Build: cd rt_deps && cargo build --release --offline   (see docs/THIRD_PARTY.md)
+[package]
+name = "mono_rt_deps"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+crc32fast = "=1.4.2"
