@@ -112,7 +112,6 @@ def subtract(P: dict, B: dict) -> dict:
 
 def classify(c) -> tuple[str, float, int]:
     db, lb = c["db"], c["lb"]
-    died, live = sum(db), sum(lb)
     survivors = sum(db[1:]) + sum(lb[1:])
     judged = db[0] + survivors
     if judged == 0:
@@ -148,7 +147,7 @@ def main() -> int:
     w = out.append
     T = P["total"]
     secs = max(P["elapsed_ms"] / 1000, 0.001)
-    w(f"# Allocation profile\n")
+    w("# Allocation profile\n")
     w(f"- run time: {secs:,.0f} s; allocated {mb(T['b'])} MiB in {T['n']:,} objects ({mb(T['b']) .replace(',', '')} MiB, "
       f"{T['b'] / 1048576 / secs:,.1f} MiB/s, {T['b'] / 1048576 / secs * 60 / 1024:,.1f} GiB/min)")
     w(f"- {mb(T['arena_b'])} MiB ({100 * T['arena_b'] / max(T['b'], 1):.1f}%) were served without the collected heap "
@@ -173,8 +172,8 @@ def main() -> int:
     for k in ("TEMP", "MIXED", "LONG", "NEW"):
         w(f"| {k} | {100 * cat_b[k] / max(T['b'], 1):.1f}% | {mb(cat_b[k])} |")
     w("")
-    w(f"TEMP is what must stop reaching a collector (stack, arena, no allocation); LONG is what must be owned (freed by `Drop` "
-      f"when its chunk/world goes); MIXED needs the allocating method looked at.\n")
+    w("TEMP is what must stop reaching a collector (stack, arena, no allocation); LONG is what must be owned (freed by `Drop` "
+      "when its chunk/world goes); MIXED needs the allocating method looked at.\n")
 
     w(f"## Top {a.top} classes by allocated bytes\n")
     w("| class | allocated MiB | objects | avg B | survive>=1 GC | class | live MiB | not on the heap MiB |")
@@ -183,7 +182,7 @@ def main() -> int:
         w(f"| {c['name']} | {mb(c['ab'])} | {c['an']:,} | {c['ab'] // max(c['an'], 1)} | {100 * c['f']:.0f}% | {c['cat']} | {mb(c['live'])} | {mb(c['arb'])} |")
     w("")
 
-    w(f"## Long-lived data: classes with the most live bytes after the last collection\n")
+    w("## Long-lived data: classes with the most live bytes after the last collection\n")
     w("| class | live MiB | objects | allocated MiB | age 0/1/2/3+ (MiB) |")
     w("|---|---:|---:|---:|---|")
     for c in sorted(cl, key=lambda c: -c["live"])[:a.top]:
@@ -226,7 +225,7 @@ def main() -> int:
             frm = ", ".join(f"{k.rsplit('.', 2)[-2] + '.' + k.rsplit('.', 1)[-1] if '.' in k else k}" for k, _ in e[3].most_common(2))
             w(f"| {m} | {mb(e[0])} | {100 * e[0] / tot_s:.1f}% | {100 * temp / e[0]:.0f}% | {top} | {frm} |")
         w("")
-        w(f"## First patch candidates: methods producing the most TEMP garbage\n")
+        w("## First patch candidates: methods producing the most TEMP garbage\n")
         w("A Rust patch for these allocates nothing (stack values, reused buffers, iterators without boxing) or a scope arena.\n")
         w("| method | TEMP MiB (est.) | classes |")
         w("|---|---:|---|")

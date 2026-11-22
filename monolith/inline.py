@@ -18,7 +18,6 @@ Not inlined: patched methods (the patch must keep running), caller-sensitive met
 """
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import replace
 
 from .bytecode import Insn

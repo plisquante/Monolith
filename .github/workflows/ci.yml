@@ -41,6 +41,16 @@ jobs:
       - name: Guard hook self-test
         run: python .claude/hooks/guard.py --self-test
 
+      - name: Runtime audio unit tests (mixer and device layer, no JDK needed)
+        run: |
+          rustc --edition 2021 --test tests/rust/audio_main.rs -o /tmp/audio_tests
+          /tmp/audio_tests
+
+      - name: Runtime dependencies build offline (rt_deps, vendored)
+        run: |
+          cd rt_deps
+          cargo build --release --offline
+
       - name: JDK 25 install
         run: |
           mkdir -p "$HOME/.cache/monolith/temurin-25"

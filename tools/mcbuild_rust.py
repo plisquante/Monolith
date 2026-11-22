@@ -10,7 +10,7 @@ Needs rustc (+ `rustup target add aarch64-linux-android` and the Android NDK for
 12 GiB RAM for 3 parallel shards. Code generation runs in its own process first (it needs ~5 GiB) so the
 compile does not run out of memory.
 """
-import argparse, json, os, subprocess, sys
+import argparse, os, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)

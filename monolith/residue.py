@@ -62,7 +62,7 @@ def main() -> int:
     print(f"{'origin':58} {'classes':>8} {'methods':>9} {'KiB':>8} {'share':>7}")
     for g, (cs, ms, b) in sorted(groups.items(), key=lambda kv: -kv[1][2]):
         print(f"{g[:58]:58} {len(cs):8d} {ms:9d} {b/1024:8.0f} {100*b/total_b:6.1f}%")
-    print(f"\nlargest game packages (bytecode KiB):")
+    print("\nlargest game packages (bytecode KiB):")
     for pk, (ms, b) in sorted(pkgs.items(), key=lambda kv: -kv[1][1])[:a.top]:
         print(f"  {pk:55} {ms:7d} methods {b/1024:7.0f} KiB")
     if a.json:

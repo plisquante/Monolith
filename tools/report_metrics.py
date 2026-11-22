@@ -11,7 +11,6 @@ A run is one report zip (the launcher's "Dışa aktar"). Figures come from:
 Figures a report does not contain stay null and the page says "veri yok"; nothing is estimated.
 RUNS.json is plain JSON (one object per run), meant to be committed with the project later.
 """
-import html
 import json
 import os
 import re

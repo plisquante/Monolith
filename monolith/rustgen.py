@@ -1680,7 +1680,7 @@ class Gen:
             self.fn_sigs[inm] = f"pub fn {inm}() -> rt::CVoid;"
             out.append(f"static {st}: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);")
             body = [f"#[no_mangle] pub extern \"C\" fn {inm}() -> rt::CVoid {{",
-                    f"    rt::cvoid((|| -> rt::Res<()> {{",
+                    "    rt::cvoid((|| -> rt::Res<()> {",
                     f"        if !rt::init_enter(&{st}, {rstr(ci.name)})? {{ return Ok(()); }}",
                     "        let r = (|| -> rt::Res<()> {"]
             if sup is not None and self.needs_init(sup):
@@ -1716,7 +1716,6 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
                     shards: int = 1, use_escape: bool = False, use_patches: bool = True,
                     analyze_only: bool = False, escape_budget: int = 120, use_inline: bool = False) -> tuple[dict[str, str], Gen]:
     sys.path.insert(0, ROOT)
-    import heapq
     from . import __main__ as M
     from .classpath import ClassPath, builtin_classes, builtin_nolwjgl_classes, jdk_jmods
     from .program import Program, Report

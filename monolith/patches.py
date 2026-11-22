@@ -36,7 +36,6 @@ import os
 import re
 from dataclasses import dataclass, field
 
-from .classfile import MemberRef
 
 PATCH_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "patches", "rust")
 
@@ -148,7 +147,7 @@ class PatchSet:
     def _module_source(self, g, pf: PatchFile, mod: str) -> str:
         from .rustgen import RT, kind_of, mang, fname, rstr
         w = g.world
-        out = [f"#[allow(unused, non_snake_case, non_upper_case_globals, clippy::all)]",
+        out = ["#[allow(unused, non_snake_case, non_upper_case_globals, clippy::all)]",
                f"mod {mod} {{", "    use super::*;", "    use mono_rt::patch::*;", ""]
         # instance fields -> byte offsets
         for name, spec in sorted(pf.fields.items()):
@@ -288,7 +287,6 @@ class PatchSet:
         return sig + f"    {body}\n}}\n"
 
     def report(self) -> str:
-        n_all = len(self.patches)
         unused = [p.where() for p in self.patches if p.key not in self.used]
         s = f"patches: {len(self.used)} applied, {len(unused)} unused (method not compiled)"
         if self.skipped:
