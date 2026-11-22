@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Monolith differential tests: every monolith/tests/*.java runs on HotSpot and as generated Rust; stdout and exit code must match."""
+"""Monolith differential tests (MONO_TEST_ARGS="--escape" adds generator options, e.g. the escape analysis): every monolith/tests/*.java runs on HotSpot and as generated Rust; stdout and exit code must match."""
 import glob, os, subprocess, sys, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 JDK = os.environ.get("MONO_JDK_HOME", "/opt/tools/jdk25")
@@ -15,7 +15,7 @@ for n in names:
             print("FAIL", n, "javac:", r.stderr[-300:]); fails += 1; continue
         j = subprocess.run([f"{JDK}/bin/java", "-cp", cdir, n], capture_output=True, text=True, env=env)
         out = os.path.join(d, "out")
-        g = subprocess.run([sys.executable, "-m", "monolith.rustgen", "--cp", cdir, "--main", n, "-o", out, "--shards", "8", "--shard-jobs", "2", "--opt", "2", "--run"], capture_output=True, text=True, cwd=ROOT, env=env)
+        g = subprocess.run([sys.executable, "-m", "monolith.rustgen", "--cp", cdir, "--main", n, "-o", out, "--shards", "8", "--shard-jobs", "2", "--opt", "2", "--run"] + os.environ.get("MONO_TEST_ARGS", "").split(), capture_output=True, text=True, cwd=ROOT, env=env)
         if g.stdout == j.stdout and g.returncode == j.returncode:
             print("PASS", n, f"({len(j.stdout.splitlines())} lines, exit {j.returncode})")
         else:

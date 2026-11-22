@@ -573,14 +573,34 @@ impl Drop for ArenaGuard {
     }
 }
 
-/// Allocation site proven non-escaping by the escape analysis. The scope arena is switched off (see
-/// `_alloc_arena_unused`), so these still come from the collected heap; the profiler counts them separately.
+/// Allocation site proven non-escaping by the escape analysis: bump-allocated in the thread's scope arena, released
+/// when the method returns (`ArenaGuard`). `MONO_ARENA=0` turns it off (those objects then come from the heap), for
+/// comparing runs and as a rollback if the analysis is ever wrong; `MONO_ARENA_CHECK=1` verifies at every collection
+/// that no heap object or static points into an arena.
 pub fn alloc_arena(class: &'static Class, size: usize) -> Ref {
     crate::prof::on_alloc(class, size, true);
-    return Ref(alloc_obj_inner(class, size));
+    if !arena_enabled() {
+        return Ref(alloc_obj_inner(class, size));
+    }
+    alloc_arena_bump(class, size)
 }
-#[allow(dead_code)]
-fn _alloc_arena_unused(class: &'static Class, size: usize) -> Ref {
+
+fn arena_enabled() -> bool {
+    static V: OnceLock<bool> = OnceLock::new();
+    *V.get_or_init(|| std::env::var("MONO_ARENA").map_or(true, |v| v != "0"))
+}
+
+/// 0 off, 1 report, 2 abort on the first violation.
+fn arena_check_mode() -> u8 {
+    static V: OnceLock<u8> = OnceLock::new();
+    *V.get_or_init(|| match std::env::var("MONO_ARENA_CHECK").as_deref() {
+        Ok("abort") => 2,
+        Ok(v) if !v.is_empty() && v != "0" => 1,
+        _ => 0,
+    })
+}
+
+fn alloc_arena_bump(class: &'static Class, size: usize) -> Ref {
     let sz = ((size.max(16)) + 15) & !15;
     let reg = cur_reg();
     if reg.is_null() {
@@ -815,6 +835,32 @@ pub fn collect() {
     }
 
     // 4. Precise heap graph mark
+    let check = arena_check_mode();
+    let mut arena_ranges: Vec<(usize, usize)> = Vec::new();
+    if check != 0 {
+        for &tp in &h.threads {
+            unsafe { for ch in &(*tp).arena { arena_ranges.push((ch.ptr as usize, ch.ptr as usize + ch.cap)); } }
+        }
+        arena_ranges.sort_unstable();
+    }
+    let in_arena = |a: usize| -> bool {
+        if a == 0 || arena_ranges.is_empty() { return false; }
+        let i = arena_ranges.partition_point(|&(lo, _)| lo <= a);
+        i > 0 && a < arena_ranges[i - 1].1
+    };
+    let mut violations = 0u32;
+    // statics first: a static holding an arena object is the plainest escape
+    if check != 0 {
+        for &c in hooks.all_classes {
+            for sp in c.static_refs {
+                let r = unsafe { *(sp.0 as *const Ref) };
+                if in_arena(r.0 as usize) {
+                    violations += 1;
+                    if violations <= 20 { eprintln!("[mono:arena] escape violation: static of {} holds an arena object", c.name); }
+                }
+            }
+        }
+    }
     while let Some(obj) = work.pop() {
         unsafe {
             let c = (*obj).class;
@@ -826,17 +872,32 @@ pub fn collect() {
                 let n = (*(obj as *const Arr)).len.max(0) as usize;
                 let data = (obj as *const u8).add(24) as *const Ref;
                 for i in 0..n {
+                    if check != 0 && in_arena((*data.add(i)).0 as usize) {
+                        violations += 1;
+                        if violations <= 20 { eprintln!("[mono:arena] escape violation: element {} of a {} holds an arena object", i, c.name); }
+                    }
                     push_ref!(*data.add(i));
                 }
             } else {
                 for &off in c.ref_offsets {
                     let r = *((obj as *const u8).add(off as usize) as *const Ref);
+                    if check != 0 && in_arena(r.0 as usize) {
+                        violations += 1;
+                        if violations <= 20 {
+                            let tgt = unsafe { (*r.0).class.name };
+                            eprintln!("[mono:arena] escape violation: {} (field at +{}) holds an arena {}", c.name, off, tgt);
+                        }
+                    }
                     push_ref!(r);
                 }
             }
         }
     }
 
+    if check != 0 && violations > 0 {
+        eprintln!("[mono:arena] {} escape violation(s) at collection {}", violations, h.gc_count);
+        if check == 2 { rt::abort("arena escape violation"); }
+    }
     // 5. Sweep slabs
     let since_gc = BYTES_SINCE_GC.load(Ordering::Relaxed);
     let mut census = crate::prof::sweep_begin();

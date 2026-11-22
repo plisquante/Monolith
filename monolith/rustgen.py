@@ -1584,7 +1584,7 @@ def _sym_scan(text: str) -> set[str]:
 def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = False,
                     no_lwjgl: bool = False, reflect_classes: list[str] | None = None,
                     shards: int = 1, use_escape: bool = False, use_patches: bool = True,
-                    analyze_only: bool = False) -> tuple[dict[str, str], Gen]:
+                    analyze_only: bool = False, escape_budget: int = 120) -> tuple[dict[str, str], Gen]:
     sys.path.insert(0, ROOT)
     import heapq
     from . import __main__ as M
@@ -1617,7 +1617,8 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
     esc_res = None
     if use_escape:
         from .escape import analyze as escape_analyze
-        esc_res = escape_analyze(prog, budget_s=120.0)
+        esc_res = escape_analyze(prog, budget_s=float(escape_budget))
+        sys.stderr.write(f"monolith: escape analysis {esc_res.seconds:.0f}s, {sum(len(r.sites) - len(r.escaped) for r in esc_res.methods.values())} non-escaping allocation sites\n")
     g = Gen(world, prog, natives_src, esc_res=esc_res, patches=pset)
     g.shards = shards
 
@@ -2294,6 +2295,10 @@ def main() -> int:
     ap.add_argument("--shards", type=int, default=1, help="split generated classes across N parallel rustc object shards")
     ap.add_argument("--shard-jobs", type=int, default=2, help="max concurrent rustc shard compilations")
     ap.add_argument("--opt", default="1")
+    ap.add_argument("--escape", action="store_true",
+                    help="run the whole-program escape analysis: allocation sites whose object cannot outlive the method "
+                         "use the scope arena (rt::alloc_arena) instead of the collected heap")
+    ap.add_argument("--escape-budget", type=int, default=1800, help="seconds the escape analysis may take (the result is all or nothing)")
     ap.add_argument("--android", action="store_true",
                     help="build libminecraft_mono.so (aarch64-linux-android cdylib exporting mono_android_entry) instead of an executable")
     ap.add_argument("--ndk", default=os.environ.get("ANDROID_NDK_HOME", ""), help="Android NDK root (default: $ANDROID_NDK_HOME or $ANDROID_HOME/ndk/*)")
@@ -2331,7 +2336,8 @@ def main() -> int:
             return _android_build(a, files, rt_dir)
         files["main.rs"] = open(os.path.join(a.output, "main.rs"), encoding="utf-8").read()
         return _host_build(a, files, rt_dir)
-    files, g = _generate_parts(a.main, natives, cp_dirs, a.strict, no_lwjgl=a.no_lwjgl, reflect_classes=ref_classes, shards=a.shards)
+    files, g = _generate_parts(a.main, natives, cp_dirs, a.strict, no_lwjgl=a.no_lwjgl, reflect_classes=ref_classes, shards=a.shards,
+                                use_escape=a.escape, escape_budget=a.escape_budget)
     if a.android:
         files["main.rs"] = _to_library_entry(files["main.rs"])
     os.makedirs(a.output, exist_ok=True)

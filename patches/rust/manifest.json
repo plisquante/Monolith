@@ -26,15 +26,78 @@
         "ClientLevel": "net/minecraft/client/multiplayer/ClientLevel",
         "ServerLevel": "net/minecraft/server/level/ServerLevel"
       }
+    },
+    "datafix.rs": {
+      "calls": {
+        "completed": "java/util/concurrent/CompletableFuture.completedFuture(Ljava/lang/Object;)Ljava/util/concurrent/CompletableFuture;"
+      }
     }
   },
   "patches": [
-    {"class": "net/minecraft/util/SimpleBitStorage", "method": "cellIndex", "desc": "(I)I",  "file": "bitstorage.rs", "fn": "cell_index", "orig": true},
-    {"class": "net/minecraft/util/SimpleBitStorage", "method": "get",       "desc": "(I)I",  "file": "bitstorage.rs", "fn": "get_value", "orig": true},
-    {"class": "net/minecraft/util/SimpleBitStorage", "method": "set",       "desc": "(II)V", "file": "bitstorage.rs", "fn": "set_value", "orig": true},
-    {"class": "net/minecraft/core/Holder$Reference", "method": "value", "desc": "()Ljava/lang/Object;", "file": "world_height.rs", "fn": "holder_value", "orig": true},
-    {"class": "net/minecraft/world/level/Level", "method": "dimensionType", "desc": "()Lnet/minecraft/world/level/dimension/DimensionType;", "file": "world_height.rs", "fn": "level_dimension_type", "orig": true},
-    {"class": "net/minecraft/world/level/LevelReader", "method": "getMinY", "desc": "()I", "file": "world_height.rs", "fn": "reader_min_y", "orig": true},
-    {"class": "net/minecraft/world/level/chunk/ChunkAccess", "method": "getMinY", "desc": "()I", "file": "world_height.rs", "fn": "chunk_min_y", "orig": true}
+    {
+      "class": "net/minecraft/util/SimpleBitStorage",
+      "method": "cellIndex",
+      "desc": "(I)I",
+      "file": "bitstorage.rs",
+      "fn": "cell_index",
+      "orig": true
+    },
+    {
+      "class": "net/minecraft/util/SimpleBitStorage",
+      "method": "get",
+      "desc": "(I)I",
+      "file": "bitstorage.rs",
+      "fn": "get_value",
+      "orig": true
+    },
+    {
+      "class": "net/minecraft/util/SimpleBitStorage",
+      "method": "set",
+      "desc": "(II)V",
+      "file": "bitstorage.rs",
+      "fn": "set_value",
+      "orig": true
+    },
+    {
+      "class": "net/minecraft/core/Holder$Reference",
+      "method": "value",
+      "desc": "()Ljava/lang/Object;",
+      "file": "world_height.rs",
+      "fn": "holder_value",
+      "orig": true
+    },
+    {
+      "class": "net/minecraft/world/level/Level",
+      "method": "dimensionType",
+      "desc": "()Lnet/minecraft/world/level/dimension/DimensionType;",
+      "file": "world_height.rs",
+      "fn": "level_dimension_type",
+      "orig": true
+    },
+    {
+      "class": "net/minecraft/world/level/LevelReader",
+      "method": "getMinY",
+      "desc": "()I",
+      "file": "world_height.rs",
+      "fn": "reader_min_y",
+      "orig": true
+    },
+    {
+      "class": "net/minecraft/world/level/chunk/ChunkAccess",
+      "method": "getMinY",
+      "desc": "()I",
+      "file": "world_height.rs",
+      "fn": "chunk_min_y",
+      "orig": true
+    },
+    {
+      "class": "net/minecraft/util/datafix/DataFixers",
+      "method": "optimize",
+      "desc": "(Ljava/util/Set;)Ljava/util/concurrent/CompletableFuture;",
+      "file": "datafix.rs",
+      "fn": "optimize",
+      "orig": true,
+      "verify": false
+    }
   ]
 }
