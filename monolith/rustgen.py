@@ -2188,6 +2188,9 @@ def main() -> int:
     ap.add_argument("--ndk", default=os.environ.get("ANDROID_NDK_HOME", ""), help="Android NDK root (default: $ANDROID_NDK_HOME or $ANDROID_HOME/ndk/*)")
     ap.add_argument("--api", type=int, default=24, help="Android API level of the NDK linker")
     ap.add_argument("--lib-name", default="libminecraft_mono.so")
+    ap.add_argument("--resume", action="store_true",
+                    help="with --android: skip code generation and compile the sources already in the output directory "
+                         "(a separate process keeps memory low: the generator alone needs ~5 GiB)")
     a = ap.parse_args()
     cp_dirs = []
     for item in a.cp:
@@ -2202,6 +2205,17 @@ def main() -> int:
             ref_classes.append(spec)
     rt_dir = os.path.join(ROOT, "monolith", "rt")
     natives = os.path.join(rt_dir, "natives.rs")
+    if a.resume:
+        if not a.android:
+            raise SystemExit("monolith: --resume needs --android")
+        files = {fn: open(os.path.join(a.output, fn), encoding="utf-8").read()
+                 for fn in sorted(os.listdir(a.output)) if fn.startswith("shard_") and fn.endswith(".rs")}
+        if not files:
+            raise SystemExit(f"monolith: no shard_*.rs in {a.output}; generate first")
+        for f in os.listdir(rt_dir):  # pick up runtime fixes without regenerating
+            if f.endswith(".rs"):
+                shutil.copy(os.path.join(rt_dir, f), os.path.join(a.output, f))
+        return _android_build(a, files, rt_dir)
     files, g = _generate_parts(a.main, natives, cp_dirs, a.strict, no_lwjgl=a.no_lwjgl, reflect_classes=ref_classes, shards=a.shards)
     if a.android:
         files["main.rs"] = _to_library_entry(files["main.rs"])
