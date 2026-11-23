@@ -28,7 +28,8 @@ XVFB=$!
 sleep 2
 trap 'kill $GAME 2>/dev/null; kill $XVFB 2>/dev/null' EXIT INT TERM
 
-MONO_RESOURCES="$BUILD/resources" MONO_ALLOC_PROFILE="$PROFILE" MONO_ALLOC_DUMP_SECS=30 "$EXE" -Dmono.graphics.backend=opengl \
+# MONO_ALLOC_SNAPSHOTS=1 (optional) adds per-snapshot class tables; set only when wanted (the variable is checked for presence)
+env MONO_RESOURCES="$BUILD/resources" MONO_ALLOC_PROFILE="$PROFILE" MONO_ALLOC_DUMP_SECS=30 ${MONO_ALLOC_SNAPSHOTS:+MONO_ALLOC_SNAPSHOTS=1} "$EXE" -Dmono.graphics.backend=opengl \
   --version "${MC_VERSION:-26.3}" --gameDir "$BUILD/game" --assetsDir "$BUILD/assets" --assetIndex "${MC_ASSET_INDEX:-34}" \
   --username "${MC_USERNAME:-Player}" --accessToken 0 --userType legacy > "$BUILD/game/soak.log" 2>&1 &
 GAME=$!
