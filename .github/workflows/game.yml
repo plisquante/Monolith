@@ -69,6 +69,22 @@ jobs:
         run: |
           python tools/mcbuild_rust.py "$RUNNER_TEMP/client.jar" -o build/minecraft-26.3 --shards 32 --shard-jobs 2
 
+      - name: OpenGL 3.3 yazilim surucusu (Mesa, pal1000/mesa-dist-win)
+        # GitHub Windows koşucusunda donanım sürücüsü yok ve GDI yalnızca OpenGL 1.1 verir; oyun 3.3 core ister.
+        # Mesa'nın opengl32.dll'i oyunun dizinine kopyalanır: Windows DLL'i önce çalışma dizininde arar.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          URL=$(curl -sSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/pal1000/mesa-dist-win/releases/latest \
+            | python -c "import json,sys; d=json.load(sys.stdin); print([a['browser_download_url'] for a in d['assets'] if a['name'].endswith('release-msvc.7z')][0])")
+          echo "mesa: $URL"
+          curl -sSL --retry 4 -o "$RUNNER_TEMP/mesa.7z" "$URL"
+          7z x "$RUNNER_TEMP/mesa.7z" -o"$RUNNER_TEMP/mesa" -y > /dev/null
+          OGL=$(find "$RUNNER_TEMP/mesa" -iname opengl32.dll | head -1)
+          test -n "$OGL"
+          cp "$(dirname "$OGL")"/*.dll build/minecraft-26.3/rust/
+          sha256sum "$OGL"
+
       - name: Oyunu ac ve dogrula (120 sn, ekran goruntusu)
         shell: pwsh
         run: ./tools/ci_game_boot.ps1 -Build build\minecraft-26.3 -Seconds 120
