@@ -192,3 +192,10 @@ Kaynak: `MONO_GC_PHASES=1`, 150 sn headless oyun, 33 toplama.
   `unregister_thread` içinde toplamanın bitmesini bekliyor ve `paused` bayrağını set etmiyor. İkisi de sonsuza kadar bekler.
 - Düzeltme (`e3cca06`): `unregister_thread` güvenli nokta gibi davranır: yığın ve yazmaçları kaydeder, beklerken `paused` set eder.
 - Kanıt (düzeltilmiş ikili): 20/20 koşu, checksum HotSpot ile aynı, hang 0.
+
+## 11. Kayıtlı sızıntı kapısı: geçti (tek koşu)
+
+- Ölçüm: tam yeniden derlenmiş oyun, düzeltmeli GC (`e3cca06` ve önceki düzeltmeler), 60 dk sabit durum (`tools/leak_soak.sh`).
+- Kural (`docs/GC_PLAN.md`, önceden kaydedildi): ısınma 30 dk, eğim 30–60. dakika, bütçe 1 MiB/dk.
+- Sonuç: eğim **+0,013 MiB/dk**, 43 ölçüm noktası, canlı heap son değer 224 MiB, en uzun duraklama 806 ms.
+- Sınır: tek koşu. Kapının "geçti" sayılması bu tekrarlanabilirliği kanıtlamaz; ikinci bir koşu ve farklı bir senaryo gerekir.
