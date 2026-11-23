@@ -1487,10 +1487,31 @@ class Gen:
     def string_consts(self, ci):
         return [f for f in ci.cf.fields if f.is_static and (self.cv(f) or ("",))[0] == "string"]
 
+    def init_iface_supers(self, ci) -> list:
+        """Superinterfaces that declare default methods. JLS 12.4.2: initializing a class initializes them too."""
+        seen: set[str] = set()
+        out: list = []
+
+        def walk(x):
+            for i in x.interfaces:
+                if i.name in seen:
+                    continue
+                seen.add(i.name)
+                if any(not m.is_static and not m.is_abstract and m.name not in ("<clinit>", "<init>") for m in i.cf.methods):
+                    out.append(i)
+                walk(i)
+            if x.super is not None:
+                walk(x.super)
+
+        walk(ci)
+        return out
+
     def needs_init(self, ci) -> bool:
         if ci.cf.method("<clinit>", "()V") is not None or self.string_consts(ci):
             return True
-        return ci.super is not None and self.needs_init(ci.super)
+        if ci.super is not None and self.needs_init(ci.super):
+            return True
+        return not ci.is_interface and any(self.needs_init(i) for i in self.init_iface_supers(ci))
 
     def is_reachable(self, cname: str, m) -> bool:
         return (cname, m.name + m.desc) in self.prog.reachable
@@ -1694,6 +1715,10 @@ class Gen:
                     "        let r = (|| -> rt::Res<()> {"]
             if sup is not None and self.needs_init(sup):
                 body.append(f"            unsafe {{ {self.init_name(sup)}() }}.res()?;")
+            if not ci.is_interface:
+                for si in self.init_iface_supers(ci):
+                    if self.needs_init(si):
+                        body.append(f"            unsafe {{ {self.init_name(si)}() }}.res()?;")
             for f in self.string_consts(ci):
                 slot, data = self.lit(self.cv(f)[1])
                 body.append(f"            unsafe {{ {self.static_name(ci, f)} = rt::lit(&raw mut {slot}, &{data}); }}")
