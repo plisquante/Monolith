@@ -15,7 +15,7 @@ The first target is Minecraft Java Edition 26.3 (client).
 | Translation (bytecode to Rust), class and method coverage | works: 6 196 classes of the client closure, 0 untranslatable |
 | Desktop game on Linux x86_64 (menu, world, input, sound) | runs in plain mode; headless tests pass |
 | Known link gaps | 446 link-errors at translation time (CI log, 26.3 client). All are in optional dependency paths the game does not use on its boot path: log4j appenders (ZeroMQ, JMS, mail, Jackson, CSV, zstd), OSGi and netty logging, and the macOS `ca.weblite` bridge. Calls into them throw at run time. The macOS Window menu's "Close" item is not disabled (`patches/rust/macos_util.rs`, logged once) |
-| Garbage collector | stop-the-world mark and sweep (pauses up to about 1 s at 500 MB live); concurrent mode exists but is not yet stable in the game (`MONO_GC_CONCURRENT=1`, off by default) |
+| Garbage collector | stop-the-world mark and sweep (pauses up to about 1 s at 500 MB live); concurrent mode (`MONO_GC_CONCURRENT=1`, off by default) crashes in the game: a SIGSEGV in `Objects.hashCode` reached from `BakedQuad.MaterialInfo`, seen in the CI concurrent boot step. Open bug. `MONO_GC_POISON=1` fills freed slots with `0xDD` to confirm use-after-free |
 | Sound | Linux ALSA (`libasound`, loaded at run time), Windows WASAPI, macOS AudioQueue; silent fallback when no device |
 | Windows, macOS | window (Win32+WGL, AppKit+NSOpenGLContext), input and sound back ends are written; CI runs the back-end smoke test on both and a full game boot (`.github/workflows/game.yml`). Not yet tested on real hardware |
 | Android | a launcher APK exists; the native engine has not been tested on a device |
