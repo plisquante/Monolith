@@ -40,6 +40,9 @@ jobs:
       - name: Oyunu sanal ekranda ac ve dogrula (120 sn)
         run: sh tools/ci_game_boot.sh build/minecraft-26.3 --seconds 120 --out build/minecraft-26.3/boot
 
+      - name: Eszamanli GC ile acilis (MONO_GC_CONCURRENT=1, 120 sn)
+        run: MONO_GC_CONCURRENT=1 sh tools/ci_game_boot.sh build/minecraft-26.3 --seconds 120 --out build/minecraft-26.3/boot-concurrent --display :98
+
       - name: Ekran goruntusu ve gunluk
         if: always()
         uses: actions/upload-artifact@v4
