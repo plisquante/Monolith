@@ -175,6 +175,74 @@ pub fn satb_store(slot: *mut Ref, v: Ref) {
     }
 }
 
+// ------------------------------------------------------------------ Weak references
+//
+// A WeakReference does not keep its referent alive: the marker skips the `referent` field of every WeakReference
+// it scans and remembers the reference. After marking (before the sweep) a live WeakReference whose referent was not
+// marked is cleared, which is what HotSpot does for weak references. SoftReference and PhantomReference are traced
+// as strong references; no ReferenceQueue is filled.
+
+/// The WeakReference class (0 when the program does not load it) and the offset of Reference.referent.
+fn weak_info() -> (usize, u32) {
+    static W: OnceLock<(usize, u32)> = OnceLock::new();
+    *W.get_or_init(|| match rt::find_class("java/lang/ref/WeakReference") {
+        Some(wc) => match wc.find_field("referent", false) {
+            Some((_, f)) => match f.loc {
+                FLoc::Off(o) => (wc as *const Class as usize, o),
+                FLoc::Static(_) => (0, 0),
+            },
+            None => (0, 0),
+        },
+        None => (0, 0),
+    })
+}
+
+/// Weak references found by the current cycle's marking (live or not yet known to be live).
+static WEAK_SEEN: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+
+/// True for an instance of WeakReference (or a subclass) whose referent must not be traced.
+#[inline(always)]
+fn weak_object(c: &'static Class) -> bool {
+    let (wc, ro) = weak_info();
+    if wc == 0 || !c.ref_offsets.contains(&ro) {
+        return false;
+    }
+    let mut k: Option<&'static Class> = Some(c);
+    while let Some(x) = k {
+        if x as *const Class as usize == wc {
+            return true;
+        }
+        k = x.super_;
+    }
+    false
+}
+
+/// After marking: a marked WeakReference whose referent was not marked loses the referent.
+fn clear_dead_referents() {
+    let (wc, ro) = weak_info();
+    if wc == 0 {
+        return;
+    }
+    let seen = std::mem::take(&mut *WEAK_SEEN.lock().unwrap());
+    for o in seen {
+        unsafe {
+            let obj = o as *mut Obj;
+            if (*obj).gc & GC_MARK == 0 {
+                continue; // the WeakReference itself is garbage
+            }
+            let slot = (obj as *mut u8).add(ro as usize) as *mut Ref;
+            let r = *slot;
+            if r.0.is_null() {
+                continue;
+            }
+            let rg = (*r.0).gc;
+            if rg & GC_HEAP != 0 && rg & GC_MARK == 0 {
+                *slot = Ref::NULL;
+            }
+        }
+    }
+}
+
 /// Write barrier for a reference slot that is about to be overwritten by an atomic operation (Unsafe CAS/put,
 /// VarHandle store/CAS): the value it holds now goes to the SATB log while marking is on.
 #[inline(always)]
@@ -834,7 +902,17 @@ fn marker_scan(obj: *mut Obj, cyc: &ConcCycle, work: &mut Vec<*mut Obj>) {
                 try_push((*data.add(i)).0 as usize, &cyc.slabs, cyc.slab_min, cyc.slab_max, &cyc.large, cyc.large_min, cyc.large_max, work);
             }
         } else {
+            let weak = weak_object(c);
+            let skip = if weak {
+                WEAK_SEEN.lock().unwrap().push(obj as usize);
+                weak_info().1
+            } else {
+                u32::MAX
+            };
             for &off in c.ref_offsets {
+                if off == skip {
+                    continue; // a weak referent is not traced
+                }
                 let r = *((obj as *const u8).add(off as usize) as *const Ref);
                 try_push(r.0 as usize, &cyc.slabs, cyc.slab_min, cyc.slab_max, &cyc.large, cyc.large_min, cyc.large_max, work);
             }
@@ -869,6 +947,9 @@ fn marker_main() {
 
 #[inline(never)]
 fn collect_impl(begin_only: bool) {
+    if !FINISHING.load(Ordering::Acquire) {
+        WEAK_SEEN.lock().unwrap().clear(); // a new marking starts: the weak references it finds are its own
+    }
     let t_entry = std::time::Instant::now();
     let _regs = std::hint::black_box(capture_regs());
     let my_sp = flush_regs_and_sp();
@@ -1123,7 +1204,17 @@ fn collect_impl(begin_only: bool) {
                     push_ref!(*data.add(i));
                 }
             } else {
+                let weak = weak_object(c);
+                let skip = if weak {
+                    WEAK_SEEN.lock().unwrap().push(obj as usize);
+                    weak_info().1
+                } else {
+                    u32::MAX
+                };
                 for &off in c.ref_offsets {
+                    if off == skip {
+                        continue; // a weak referent is not traced
+                    }
                     let r = *((obj as *const u8).add(off as usize) as *const Ref);
                     if check != 0 && in_arena(r.0 as usize) {
                         violations += 1;
@@ -1142,6 +1233,7 @@ fn collect_impl(begin_only: bool) {
         eprintln!("[mono:arena] {} escape violation(s) at collection {}", violations, h.gc_count);
         if check == 2 { rt::abort("arena escape violation"); }
     }
+    clear_dead_referents();
     let t_mark = t_start.elapsed() - t_roots;
     // 5. Sweep slabs
     let since_gc = BYTES_SINCE_GC.load(Ordering::Relaxed);
