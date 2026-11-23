@@ -214,7 +214,7 @@ pub fn try_init(w: i32, h: i32) -> bool {
         if win == 0 { return false; }
         // title, input events, then show the window (an unmapped window is never visible)
         if let Some(f) = sym_fn!(&[x11], "XStoreName", extern "C" fn(*mut c_void, usize, *const c_char) -> i32) {
-            f(dpy, win, b"Monolith\0".as_ptr() as *const c_char);
+            f(dpy, win, c"Monolith".as_ptr());
         }
         if let Some(f) = sym_fn!(&[x11], "XSelectInput", extern "C" fn(*mut c_void, usize, i64) -> i32) {
             // Key, Button press/release, PointerMotion, StructureNotify, FocusChange
@@ -245,7 +245,7 @@ pub fn try_init(w: i32, h: i32) -> bool {
         let fb = *fbs;
         let mut ctx = std::ptr::null_mut();
         if let Some(get_proc) = sym_fn!(&[gl], "glXGetProcAddressARB", extern "C" fn(*const u8) -> *const c_void) {
-            let p = get_proc(b"glXCreateContextAttribsARB\0".as_ptr());
+            let p = get_proc(c"glXCreateContextAttribsARB".as_ptr().cast());
             if !p.is_null() {
                 let create_attribs: extern "C" fn(*mut c_void, usize, *mut c_void, i32, *const i32) -> *mut c_void =
                     std::mem::transmute(p);
@@ -293,7 +293,7 @@ pub fn proc_address(name: &str) -> *const c_void {
     let Ok(cs) = CString::new(name) else { return std::ptr::null() };
     let gl = gl_library();
     if gl.is_null() { return std::ptr::null(); }
-    let p = unsafe { loader::sym(gl, c"glXGetProcAddressARB".as_ptr() as *const c_char) };
+    let p = unsafe { loader::sym(gl, c"glXGetProcAddressARB".as_ptr()) };
     if p.is_null() { return std::ptr::null(); }
     let get: extern "C" fn(*const c_char) -> *const c_void = unsafe { std::mem::transmute(p) };
     get(cs.as_ptr())

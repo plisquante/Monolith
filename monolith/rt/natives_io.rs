@@ -1279,7 +1279,7 @@ pub fn n_java_lang_Runtime__load1(_this: Ref, path: Ref) -> Res<i32> {
         return Ok(0);
     }
     register_lib_handle(handle);
-    let onload = unsafe { dlsym(handle, b"JNI_OnLoad\0".as_ptr() as *const c_char) };
+    let onload = unsafe { dlsym(handle, c"JNI_OnLoad".as_ptr()) };
     if !onload.is_null() {
         // Defer full JavaVM InvokeInterface initialization if invoked by JNI libraries loaded later
         let _ = onload;

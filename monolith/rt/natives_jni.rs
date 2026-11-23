@@ -1111,14 +1111,14 @@ pub fn n_com_mojang_jtracy_TracyBindings__sectionLeave(_id: i32) -> Res<()> { Ok
 fn flite_lib() -> *mut c_void {
     static H: OnceLock<usize> = OnceLock::new();
     *H.get_or_init(|| {
-        let h = unsafe { dlopen(b"libflite.so.1\0".as_ptr() as *const c_char, 2 | 0x100) };
+        let h = unsafe { dlopen(c"libflite.so.1".as_ptr(), 2 | 0x100) };
         h as usize
     }) as *mut c_void
 }
 fn kal16_lib() -> *mut c_void {
     static H: OnceLock<usize> = OnceLock::new();
     *H.get_or_init(|| {
-        let h = unsafe { dlopen(b"libflite_cmu_us_kal16.so.1\0".as_ptr() as *const c_char, 2 | 0x100) };
+        let h = unsafe { dlopen(c"libflite_cmu_us_kal16.so.1".as_ptr(), 2 | 0x100) };
         h as usize
     }) as *mut c_void
 }
@@ -1135,7 +1135,7 @@ fn jna_ptr(peer: usize) -> Res<Ref> {
 pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__flite_init() -> Res<i32> {
     let h = flite_lib();
     if !h.is_null() {
-        let f = unsafe { dlsym(h, b"flite_init\0".as_ptr() as *const c_char) };
+        let f = unsafe { dlsym(h, c"flite_init".as_ptr()) };
         if !f.is_null() {
             let func: extern "C" fn() -> c_int = unsafe { std::mem::transmute(f) };
             return Ok(func());
@@ -1146,7 +1146,7 @@ pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__flite_init() -> Res<
 pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary_CmuUsKal16__register_cmu_us_kal16(vox: Ref) -> Res<Ref> {
     let h = kal16_lib();
     if !h.is_null() {
-        let f = unsafe { dlsym(h, b"register_cmu_us_kal16\0".as_ptr() as *const c_char) };
+        let f = unsafe { dlsym(h, c"register_cmu_us_kal16".as_ptr()) };
         if !f.is_null() {
             let cs = if vox.is_null() { CString::new("kal16").unwrap() } else { rt::c_str_arg(vox)? };
             let func: extern "C" fn(*const c_char) -> *mut c_void = unsafe { std::mem::transmute(f) };
@@ -1158,7 +1158,7 @@ pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary_CmuUsKal16__register_
 pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__flite_synth_text(text: Ref, voice: Ref) -> Res<Ref> {
     let h = flite_lib();
     if !h.is_null() && !voice.is_null() {
-        let f = unsafe { dlsym(h, b"flite_synth_text\0".as_ptr() as *const c_char) };
+        let f = unsafe { dlsym(h, c"flite_synth_text".as_ptr()) };
         if !f.is_null() {
             let cs = rt::c_str_arg(text)?;
             let vp = rt::get_i64(voice, "peer") as usize as *mut c_void;
@@ -1171,7 +1171,7 @@ pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__flite_synth_text(tex
 pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__utt_wave(utt: Ref) -> Res<Ref> {
     let h = flite_lib();
     if !h.is_null() && !utt.is_null() {
-        let f = unsafe { dlsym(h, b"utt_wave\0".as_ptr() as *const c_char) };
+        let f = unsafe { dlsym(h, c"utt_wave".as_ptr()) };
         if !f.is_null() {
             let up = rt::get_i64(utt, "peer") as usize as *mut c_void;
             let func: extern "C" fn(*mut c_void) -> *mut c_void = unsafe { std::mem::transmute(f) };
@@ -1183,7 +1183,7 @@ pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__utt_wave(utt: Ref) -
 pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__cst_wave_rescale(wave: Ref, fac: i32) -> Res<()> {
     let h = flite_lib();
     if !h.is_null() && !wave.is_null() {
-        let f = unsafe { dlsym(h, b"cst_wave_rescale\0".as_ptr() as *const c_char) };
+        let f = unsafe { dlsym(h, c"cst_wave_rescale".as_ptr()) };
         if !f.is_null() {
             let wp = rt::get_i64(wave, "peer") as usize as *mut c_void;
             let func: extern "C" fn(*mut c_void, c_int) = unsafe { std::mem::transmute(f) };
@@ -1195,7 +1195,7 @@ pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__cst_wave_rescale(wav
 pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__play_wave(wave: Ref) -> Res<()> {
     let h = flite_lib();
     if !h.is_null() && !wave.is_null() {
-        let f = unsafe { dlsym(h, b"play_wave\0".as_ptr() as *const c_char) };
+        let f = unsafe { dlsym(h, c"play_wave".as_ptr()) };
         if !f.is_null() {
             let wp = rt::get_i64(wave, "peer") as usize as *mut c_void;
             let func: extern "C" fn(*mut c_void) = unsafe { std::mem::transmute(f) };
@@ -1208,7 +1208,7 @@ pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__play_wave(wave: Ref)
 pub fn n_com_mojang_text2speech_NarratorLinux_FliteLibrary__delete_utterance(utt: Ref) -> Res<()> {
     let h = flite_lib();
     if !h.is_null() && !utt.is_null() {
-        let f = unsafe { dlsym(h, b"delete_utterance\0".as_ptr() as *const c_char) };
+        let f = unsafe { dlsym(h, c"delete_utterance".as_ptr()) };
         if !f.is_null() {
             let up = rt::get_i64(utt, "peer") as usize as *mut c_void;
             let func: extern "C" fn(*mut c_void) = unsafe { std::mem::transmute(f) };
