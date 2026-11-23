@@ -36,12 +36,14 @@ every file). The game's own files (saves, options, logs, crash reports) are neve
   Unsafe, VarHandle, reflection and patches; the crash remains in the last measured build. Until it is fixed the
   concurrent mode stays off by default, and the release uses stop-the-world collection.
 - The stop-the-world pause reaches about 1.1 s with a 500 MB live heap (measured, plain mode).
-- Windows, macOS and Android audio and window backends do not exist (no device or machine in this environment).
+- Android audio and window back ends are not tested on a device. Windows and macOS back ends exist and their smoke test
+  passes on CI runners; the game boots there in CI (`.github/workflows/game.yml`); no hardware run yet.
 - Java overlays (`classlib/`, `runtime/java_nolwjgl/`) and the JNA/Netty emulation are still in place.
 - Android device testing has not been done.
 - The leak gate passed in one run only.
 
 ## 5. Platforms
 
-Only Linux x86_64 is packaged. Windows, macOS and Android are separate releases, each with its own build and device
-tests (docs/MASTER_PLAN_TR.md, milestones M3 and M4).
+Only Linux x86_64 is packaged so far. Windows and macOS builds are produced by `tools/mcbuild_rust.py` on their own
+systems (run.bat, prog.exe); packaging and device tests for them, and Android, are separate releases
+(docs/MASTER_PLAN_TR.md, milestones M3 and M4).

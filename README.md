@@ -15,8 +15,8 @@ The first target is Minecraft Java Edition 26.3 (client).
 | Translation (bytecode to Rust), class and method coverage | works: 6 196 classes of the client closure, 0 untranslatable |
 | Desktop game on Linux x86_64 (menu, world, input, sound) | runs in plain mode; headless tests pass |
 | Garbage collector | stop-the-world mark and sweep (pauses up to about 1 s at 500 MB live); concurrent mode exists but is not yet stable in the game (`MONO_GC_CONCURRENT=1`, off by default) |
-| Sound | Linux ALSA via `libasound` (loaded at run time), silent fallback when no device |
-| Windows, macOS | not yet (window and sound back ends are not written) |
+| Sound | Linux ALSA (`libasound`, loaded at run time), Windows WASAPI, macOS AudioQueue; silent fallback when no device |
+| Windows, macOS | window (Win32+WGL, AppKit+NSOpenGLContext), input and sound back ends are written; CI runs the back-end smoke test on both and a full game boot (`.github/workflows/game.yml`). Not yet tested on real hardware |
 | Android | a launcher APK exists; the native engine has not been tested on a device |
 | Java class library overlays and JNA/Netty emulation | still in use; being replaced |
 
@@ -28,8 +28,9 @@ and [`docs/IMPL_SPEC.md`](docs/IMPL_SPEC.md) for the decisions and measurements.
 Requirements: Python 3.10 or newer, a JDK 25 (`MONO_JDK_HOME` points to it), rustc (stable), `jq` is not needed,
 about 12 GB of RAM for the three-shard build, and about an hour for the build.
 
-    python3 tools/mcbuild_rust.py /path/to/client.jar -o build/minecraft-26.3
-    build/minecraft-26.3/run.sh
+    python3 tools/fetch_client_jar.py --version 26.3 --out client.jar     # from Mojang's manifest, SHA-1 checked
+    python3 tools/mcbuild_rust.py client.jar -o build/minecraft-26.3
+    build/minecraft-26.3/run.sh      (Windows: build\minecraft-26.3\run.bat)
 
 The first start needs a world: create one in Singleplayer. Options for the build: `--opt`, `--shards`, `--shard-jobs`
 (use 1 on a machine with little memory).
@@ -62,8 +63,8 @@ mode. It loads an engine library (`libminecraft_mono.so`) built with `python3 to
 | Platform | Start | Notes |
 |---|---|---|
 | Linux | `./launch.sh` | needs python3 >= 3.10 |
-| macOS | `./launch.sh` or `launch.command` | the macOS back end is not written yet |
-| Windows | `launch.bat` | the Windows back end is not written yet |
+| macOS | `run.sh` in the build directory | back end written, verified by CI only |
+| Windows | `run.bat` in the build directory | back end written, verified by CI only |
 
 The desktop launcher (`launcher/launcher.py`, standard library only) opens a local page in the browser; it starts the
 `run.sh` that the build wrote. CLI: `./launch.sh --cli --play --username Steve`.
