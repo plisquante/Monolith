@@ -228,7 +228,8 @@ pub struct Hooks {
     pub new_unix_exception: fn(i32) -> Res<Ref>,
     pub new_direct_byte_buffer: fn(i64, i64) -> Res<Ref>,
 }
-static mut HOOKS: Option<Hooks> = None;
+/// Runtime hooks, set once by `init_hooks` before any Java code runs. Null until then.
+static HOOKS: std::sync::atomic::AtomicPtr<Hooks> = std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 #[cfg(target_os = "linux")]
 extern "C" fn segv_handler(sig: std::os::raw::c_int, info: *const usize, _ctx: *const u8) {
     unsafe extern "C" {
@@ -275,7 +276,8 @@ unsafe extern "C" {
     fn sigaction(sig: std::os::raw::c_int, act: *const u8, oldact: *mut u8) -> std::os::raw::c_int;
 }
 pub fn init_hooks(h: Hooks) {
-    unsafe { HOOKS = Some(h) }
+    // leaked on purpose: the hooks live for the whole process and are read without a lock
+    HOOKS.store(Box::leak(Box::new(h)), std::sync::atomic::Ordering::Release);
     crate::prof::init();
     #[cfg(target_os = "linux")]
     unsafe {
@@ -293,7 +295,7 @@ pub fn init_hooks(h: Hooks) {
 }
 #[inline(always)]
 pub fn hooks() -> &'static Hooks {
-    unsafe { (*(&raw const HOOKS)).as_ref().expect("Monolith: runtime hooks not registered") }
+    unsafe { HOOKS.load(std::sync::atomic::Ordering::Acquire).as_ref() }.expect("Monolith: runtime hooks not registered")
 }
 
 #[cold]
