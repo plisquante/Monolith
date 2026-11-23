@@ -12,3 +12,6 @@ build/
 .claude/settings.local.json
 logs/
 rt_deps/target/
+
+# cargo build output of the runtime check package (rt_deps/check) and the runtime deps
+rt_deps/check/target/
