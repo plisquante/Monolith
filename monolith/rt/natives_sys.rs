@@ -53,6 +53,11 @@ extern "C" {
     fn posix_spawn_file_actions_adddup2(fa: *mut c_void, fd: c_int, newfd: c_int) -> c_int;
     fn posix_spawn_file_actions_addclose(fa: *mut c_void, fd: c_int) -> c_int;
     fn posix_spawn_file_actions_addchdir_np(fa: *mut c_void, path: *const c_char) -> c_int;
+    #[cfg(not(windows))]
+    static environ: *const *const c_char;
+    // UCRT keeps the environment block in _environ
+    #[cfg(windows)]
+    #[link_name = "_environ"]
     static environ: *const *const c_char;
 }
 
