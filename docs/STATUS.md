@@ -109,6 +109,11 @@ impact:
 * `NullPointerException` messages are not "helpful" (HotSpot computes them from bytecode at run time).
 * `Object.hashCode()` identity hashes differ from HotSpot's (unspecified by the JLS).
 * Finalizers (`Object.finalize`) never run; soft references are cleared like weak references.
+* `System.gc()` is a no-op unless the program sets `-Dmono.explicit.gc` (Minecraft calls it every tick; a collection
+  stops the game for about half a second). With the property, it runs a complete collection before it returns, and
+  WeakReferences are cleared as in HotSpot (Rust backend, both GC modes; `tests/java/GcStress.java` sets the property).
+  The Zig backend's `GcStress` still keeps one WeakReference referent alive: its conservative stack scan finds a stale
+  reference to it. Open.
 * `Class.getDeclared*` reflection, dynamic class definition, hidden classes, method handles beyond
   VarHandles and the desugared invokedynamic bootstraps are not available.
 
