@@ -95,7 +95,7 @@ def _ref_params(m, is_static: bool) -> list[tuple[int, int]]:
 
 class EscapeAnalysis:
     def __init__(self, prog, budget_s: float = 1500.0):
-        from .zigen import ARITH, CONV, IF1, IF2, INTRINSICS
+        from .opclass import ARITH, CONV, IF1, IF2, INTRINSICS
         self.p = prog
         self.w = prog.w
         self.ARITH, self.CONV, self.IF1, self.IF2, self.INTRINSICS = ARITH, CONV, IF1, IF2, INTRINSICS

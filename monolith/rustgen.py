@@ -24,7 +24,7 @@ import subprocess
 import sys
 
 from .world import LinkError, parse_method_desc
-from .zigen import VH_MODES
+from .vh_modes import VH_MODES
 from .reflectmeta import CompactPool, inner_info, rewrite_annotations, rewrite_default, rewrite_param_annotations
 
 HERE = os.path.dirname(os.path.abspath(__file__))
