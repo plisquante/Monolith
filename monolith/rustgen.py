@@ -2474,6 +2474,19 @@ def _host_build(a, files, rt_dir) -> int:
     else:
         build_runtime_rlib(target, rlib)
         shutil.copy(rlib, cached_rlib)
+    # Probe the runtime rlib before the shards: a crate that rustc cannot load is reported here with the rlib's
+    # facts, not as an E0463 on every shard.
+    rlib = os.path.abspath(rlib)
+    probe_dir = tempfile.mkdtemp(prefix="mono_probe_")
+    with open(os.path.join(probe_dir, "probe.rs"), "w", encoding="utf-8") as fh:
+        fh.write("extern crate mono_rt;\npub fn probe() {}\n")
+    probe = subprocess.run(["rustc", *TGT, "--edition", "2021", "--crate-type", "lib", "--emit=metadata",
+                            *DEPS, "--extern", f"mono_rt={rlib}", os.path.join(probe_dir, "probe.rs"),
+                            "-o", os.path.join(probe_dir, "probe.rmeta")], capture_output=True, text=True)
+    if probe.returncode:
+        size = os.path.getsize(rlib) if os.path.exists(rlib) else -1
+        sys.stderr.write(f"monolith: the runtime rlib {rlib} ({size} bytes) cannot be loaded:\n" + probe.stderr[-6000:])
+        return probe.returncode
     link_args = []
     shard_files = sorted(fn for fn in files if fn.startswith("shard_"))
     if shard_files:
