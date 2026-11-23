@@ -25,6 +25,11 @@ extern "C" {
     fn utimes(filename: *const c_char, times: *const TimeVal) -> c_int;
     fn getloadavg(loadavg: *mut f64, nelem: c_int) -> c_int;
     fn localtime_r(timep: *const i64, result: *mut Tm) -> *mut Tm;
+    #[cfg(not(windows))]
+    static environ: *const *const c_char;
+    // UCRT keeps the environment block in _environ
+    #[cfg(windows)]
+    #[link_name = "_environ"]
     static environ: *const *const c_char;
 }
 

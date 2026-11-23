@@ -880,3 +880,105 @@ pub unsafe extern "C" fn if_nametoindex(_name: *const c_char) -> u32 {
     fail_errno(ENOSYS);
     0
 }
+
+// ----- POSIX names the runtime calls that UCRT does not export under those names
+
+extern "C" {
+    fn _commit(fd: c_int) -> c_int;
+    fn fgetc(stream: *mut c_void) -> c_int;
+    fn malloc(size: usize) -> *mut c_void;
+    fn realloc(p: *mut c_void, size: usize) -> *mut c_void;
+    fn _localtime64_s(out: *mut c_void, t: *const i64) -> c_int;
+    fn _get_timezone(seconds: *mut c_long) -> c_int;
+    fn _get_dstbias(seconds: *mut c_long) -> c_int;
+}
+
+/// fsync: UCRT _commit writes the file's buffers to disk.
+#[no_mangle]
+pub unsafe extern "C" fn fsync(fd: c_int) -> c_int {
+    _commit(fd)
+}
+
+/// Same field order as the runtime's `Tm` (natives_io.rs): nine ints, tm_gmtoff, tm_zone.
+#[repr(C)]
+pub struct TmOut {
+    fields: [c_int; 9],
+    gmtoff: c_long,
+    zone: *const c_char,
+}
+
+/// localtime_r: the local broken-down time. tm_gmtoff is the offset from UTC in seconds (DST included);
+/// tm_zone is NULL because UCRT has no zone name.
+#[no_mangle]
+pub unsafe extern "C" fn localtime_r(t: *const i64, result: *mut TmOut) -> *mut TmOut {
+    if _localtime64_s(result as *mut c_void, t) != 0 {
+        fail_errno(EINVAL);
+        return std::ptr::null_mut();
+    }
+    let mut timezone: c_long = 0;
+    let mut dstbias: c_long = 0;
+    if _get_timezone(&mut timezone) != 0 || _get_dstbias(&mut dstbias) != 0 {
+        fail_errno(EINVAL);
+        return std::ptr::null_mut();
+    }
+    let dst = (*result).fields[8] > 0;
+    (*result).gmtoff = -timezone - if dst { dstbias } else { 0 };
+    (*result).zone = std::ptr::null();
+    result
+}
+
+/// getline: reads one line (through '\n') into a buffer grown with realloc. -1 at end of file.
+#[no_mangle]
+pub unsafe extern "C" fn getline(lineptr: *mut *mut u8, n: *mut usize, stream: *mut c_void) -> isize {
+    if lineptr.is_null() || n.is_null() {
+        fail_errno(EINVAL);
+        return -1;
+    }
+    if (*lineptr).is_null() || *n == 0 {
+        let p = malloc(128) as *mut u8;
+        if p.is_null() {
+            fail_errno(ENOMEM);
+            return -1;
+        }
+        *lineptr = p;
+        *n = 128;
+    }
+    let mut len = 0usize;
+    loop {
+        let c = fgetc(stream);
+        if c == -1 {
+            if len == 0 {
+                return -1;
+            }
+            break;
+        }
+        if len + 2 > *n {
+            let cap = (*n * 2).max(len + 2);
+            let p = realloc(*lineptr as *mut c_void, cap) as *mut u8;
+            if p.is_null() {
+                fail_errno(ENOMEM);
+                return -1;
+            }
+            *lineptr = p;
+            *n = cap;
+        }
+        *(*lineptr).add(len) = c as u8;
+        len += 1;
+        if c == b'\n' as c_int {
+            break;
+        }
+    }
+    *(*lineptr).add(len) = 0;
+    len as isize
+}
+
+/// Windows has no real-time signals: the range is empty.
+#[no_mangle]
+pub extern "C" fn __libc_current_sigrtmax() -> c_int {
+    0
+}
+
+/// fchmod: Windows files have no POSIX mode bits; fails with ENOSYS instead of pretending.
+unsupported! {
+    fn fchmod(fd: c_int, mode: u32) -> c_int;
+}
