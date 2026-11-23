@@ -185,3 +185,10 @@ Kaynak: `MONO_GC_PHASES=1`, 150 sn headless oyun, 33 toplama.
   geri konur; tahsis dolu bir slab bulursa yeniden dener (panic yok).
 - Kanıt: `monolith/tests/GcSlabStress.java`, `MONO_GC_MB=1`. Düzeltme öncesi (`39d3c16`): 3/3 çökme (çıkış 134).
   Düzeltmeli: 3/3 geçti, checksum HotSpot ile aynı (276071380).
+
+## 10. GC kilitlenmesi: thread bitişi sırasında toplama (kanıtlandı ve düzeltildi)
+
+- `GcSlabStress` (`MONO_GC_MB=1`) 10 koşuda 2 hang. gdb: toplayıcı tüm thread'lerin durmasını bekliyor; biten thread
+  `unregister_thread` içinde toplamanın bitmesini bekliyor ve `paused` bayrağını set etmiyor. İkisi de sonsuza kadar bekler.
+- Düzeltme (`e3cca06`): `unregister_thread` güvenli nokta gibi davranır: yığın ve yazmaçları kaydeder, beklerken `paused` set eder.
+- Kanıt (düzeltilmiş ikili): 20/20 koşu, checksum HotSpot ile aynı, hang 0.
