@@ -28,6 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: Rust toolchain
         run: |
           rustc --version
@@ -38,16 +42,8 @@ jobs:
           cd rt_deps
           cargo build --release --offline
 
-      - name: Runtime type-check for this platform (rlib metadata)
-        run: |
-          # rlib'i cargo'nun kendi iletilerinden alıyoruz: target/ dizin düzeni cargo sürümüne göre değişiyor
-          # ve derleme betiği dizinlerindeki kopyalar başka bağımlılıklarla derlenmiş (E0460).
-          (cd rt_deps && cargo build --release --offline --message-format=json) > "$RUNNER_TEMP/rt_deps.json"
-          C=$(grep -o '"filenames":\["[^"]*libcrc32fast-[^"]*\.rlib"' "$RUNNER_TEMP/rt_deps.json" | head -1 | sed 's/.*\["//; s/"$//; s/\\\\/\//g') || true
-          if [ -z "$C" ] || [ ! -f "$C" ]; then echo "crc32fast rlib path not found in cargo's output"; exit 1; fi
-          D=$(dirname "$C")
-          rustc --edition 2021 --crate-type lib --crate-name mono_rt --emit=metadata \
-            -L dependency="$D" --extern crc32fast="$C" monolith/rt/lib.rs -o runtime.rmeta
+      - name: Runtime type-check for this platform (tools/rt_typecheck.py)
+        run: python tools/rt_typecheck.py
 
       - name: Audio mixer and device layer unit tests
         run: |

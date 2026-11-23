@@ -2375,20 +2375,26 @@ def rt_deps_flags() -> list:
     # The rlib is taken from cargo's own artifact messages: the directory layout of target/ changed between cargo
     # releases, and build-script output directories hold other copies of the same crate.
     import json
-    found = []
+    # Every rlib cargo built is passed by name. Passing only crc32fast is not enough: its own dependency cfg_if
+    # would then come from the toolchain's sysroot, which was built with another hash (E0460).
+    libs = {}
     for line in r.stdout.splitlines():
         try:
             msg = json.loads(line)
         except ValueError:
             continue
-        if msg.get("reason") == "compiler-artifact" and msg.get("target", {}).get("name") == "crc32fast":
-            found += [f for f in msg.get("filenames", []) if f.endswith(".rlib")]
-    found = sorted(set(found))
-    if len(found) != 1:
-        raise SystemExit(f"monolith: rt_deps: expected one crc32fast rlib in cargo's output, found {found}")
-    deps = os.path.dirname(found[0])
-    # the full path: rustc does not resolve a hashed rlib by name through -L alone
-    return ["-L", "dependency=" + deps, "--extern", "crc32fast=" + found[0]]
+        if msg.get("reason") != "compiler-artifact":
+            continue
+        for f in msg.get("filenames", []):
+            if f.endswith(".rlib"):
+                libs[msg["target"]["name"].replace("-", "_")] = f
+    if "crc32fast" not in libs:
+        raise SystemExit("monolith: rt_deps: cargo built no crc32fast rlib (see the cargo output)")
+    deps = os.path.dirname(libs["crc32fast"])
+    flags = ["-L", "dependency=" + deps]
+    for name in sorted(libs):
+        flags += ["--extern", f"{name}={libs[name]}"]
+    return flags
 
 
 def rt_deps_key() -> str:
