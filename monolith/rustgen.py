@@ -524,7 +524,11 @@ class MethodGen:
                 return None
             self.init_class(dc, e)
             v = pop()
-            e(f"unsafe {{ {self.g.static_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
+            if f.desc[0] in "L[":
+                # reference store: SATB write barrier (rt::satb_store), a no-op while no marking is active
+                e(f"unsafe {{ rt::satb_store(&raw mut {self.g.static_name(dc, f)}, {v}); }}")
+            else:
+                e(f"unsafe {{ {self.g.static_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
         elif op == "getfield":
             try:
                 dc, f = self.field(a, static=False)
@@ -544,7 +548,11 @@ class MethodGen:
                 return None
             v = pop()
             o = pop()
-            e(f"unsafe {{ (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
+            if f.desc[0] in "L[":
+                # reference store: SATB write barrier (rt::satb_store), a no-op while no marking is active
+                e(f"unsafe {{ rt::satb_store(&raw mut (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)}, {v}); }}")
+            else:
+                e(f"unsafe {{ (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
         elif op == "new":
             try:
                 ci2 = self.app_class(a.name)

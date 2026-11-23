@@ -823,6 +823,12 @@ pub fn astore<T: Copy>(a: Ref, i: i32, v: T) -> Res<()> {
     Ok(())
 }
 #[inline(always)]
+/// Referans yazma bariyeri; üretilen kod da bunu kullanır (rustgen: putfield/putstatic).
+#[inline(always)]
+pub fn satb_store(slot: *mut Ref, v: Ref) {
+    crate::gc::satb_store(slot, v)
+}
+
 pub fn aastore_ref(a: Ref, i: i32, v: Ref) -> Res<()> {
     let d = checked(a, i)?;
     if !v.is_null() {
@@ -834,7 +840,7 @@ pub fn aastore_ref(a: Ref, i: i32, v: Ref) -> Res<()> {
             }
         }
     }
-    unsafe { *(d as *mut Ref).add(i as usize) = v };
+    unsafe { crate::gc::satb_store((d as *mut Ref).add(i as usize), v) };
     Ok(())
 }
 

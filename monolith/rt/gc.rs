@@ -160,6 +160,34 @@ fn cur_reg() -> *mut ThreadReg {
     TLS_REG.with(|c| unsafe { *c.0.get() })
 }
 
+/// Eşzamanlı işaretleme (SATB) açık mı. Şimdilik hiçbir yer açmıyor; açıldığında yazmalar eski değeri kaydeder.
+pub static SATB_ON: AtomicBool = AtomicBool::new(false);
+static SATB_LOG: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+
+/// Referans yazma bariyeri (snapshot-at-the-beginning): işaretleme açıksa yazılacak yerin eski değerini kaydeder.
+#[inline(always)]
+pub fn satb_store(slot: *mut Ref, v: Ref) {
+    unsafe {
+        if SATB_ON.load(Ordering::Relaxed) {
+            satb_log((*slot).0 as usize);
+        }
+        *slot = v;
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn satb_log(old: usize) {
+    if old != 0 {
+        SATB_LOG.lock().unwrap().push(old);
+    }
+}
+
+/// İşaretleme sırasında kaydedilen eski değerleri alır (işaretleyici tüketir).
+pub fn satb_take() -> Vec<usize> {
+    std::mem::take(&mut *SATB_LOG.lock().unwrap())
+}
+
 pub static GC_STOPPING: AtomicU32 = AtomicU32::new(0);
 static BYTES_SINCE_GC: AtomicUsize = AtomicUsize::new(0);
 
