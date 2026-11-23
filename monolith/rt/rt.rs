@@ -1326,6 +1326,8 @@ struct FrameTag {
     class: &'static str,
     method: &'static str,
     file: &'static str,
+    /// source line of the statement being executed (-1 until the first line marker)
+    line: i32,
 }
 
 thread_local! {
@@ -1345,11 +1347,23 @@ impl Drop for FrameGuard {
     }
 }
 
+/// Marks the source line the current frame is executing; called at the start of each statement.
+#[inline(always)]
+pub fn set_line(line: i32) {
+    let _ = FRAMES.try_with(|f| {
+        if let Ok(mut v) = f.try_borrow_mut() {
+            if let Some(top) = v.last_mut() {
+                top.line = line;
+            }
+        }
+    });
+}
+
 #[inline(always)]
 pub fn enter_frame(class: &'static str, method: &'static str, file: &'static str) -> FrameGuard {
     let _ = FRAMES.try_with(|f| {
         if let Ok(mut v) = f.try_borrow_mut() {
-            v.push(FrameTag { class, method, file });
+            v.push(FrameTag { class, method, file, line: -1 });
         }
     });
     FrameGuard
@@ -1366,7 +1380,7 @@ pub fn capture_backtrace() -> String {
             .rev()
             .skip_while(|t| t.method == "<init>" || (t.class == "java/lang/Throwable" && t.method == "fillInStackTrace"))
         {
-            out.push_str(&format!("{}\t{}\t{}\t-1\n", t.class.replace('/', "."), t.method, t.file));
+            out.push_str(&format!("{}\t{}\t{}\t{}\n", t.class.replace('/', "."), t.method, t.file, t.line));
         }
         out.trim_end_matches('\n').to_string()
     })

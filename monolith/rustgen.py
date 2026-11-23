@@ -828,10 +828,14 @@ class MethodGen:
             lines: list = []
             i = self.idx[bpc]
             succs: list = []
+            line_at = dict(getattr(self.m.code, "line_numbers", None) or [])
             while True:
                 ins = insns[i]
                 if handlers:
                     lines.append(f"pc = {ins.pc};")
+                if ins.pc in line_at:
+                    # the source line of this statement: stack traces read it for every frame that calls out
+                    lines.append(f"rt::set_line({line_at[ins.pc]});")
                 if ins.targets and any(t <= ins.pc for t in ins.targets):
                     has_sp = True
                     lines.append("_sp_tick = _sp_tick.wrapping_add(1); if (_sp_tick & 1023) == 0 { rt::gc_safepoint(); }")
@@ -957,7 +961,7 @@ class MethodGen:
             if nt:
                 nt_body = []
                 for ln in body:
-                    if ln.startswith("    rt::stack_check()?;") or ln.startswith("    let _frame = rt::enter_frame("):
+                    if ln.startswith("    rt::stack_check()?;") or ln.startswith("    let _frame = rt::enter_frame(") or ln.lstrip().startswith("rt::set_line("):
                         continue  # a method that cannot throw makes no calls: no bound to check, no trace to record
                     s = ln.lstrip()
                     ind = ln[:len(ln) - len(s)]
