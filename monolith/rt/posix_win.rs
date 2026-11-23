@@ -195,3 +195,683 @@ pub unsafe extern "C" fn munmap(addr: *mut c_void, _length: usize) -> c_int {
         -1
     }
 }
+
+// ----- Winsock: sockets (sys/socket.h). A POSIX fd is the SOCKET value; Windows handles are multiples of 4 below
+// 2^31, so the value fits the C int the natives use.
+
+#[link(name = "ws2_32")]
+extern "system" {
+    fn WSAStartup(version: u16, data: *mut u8) -> c_int;
+    fn WSAGetLastError() -> c_int;
+    #[link_name = "socket"]
+    fn ws_socket(af: c_int, ty: c_int, proto: c_int) -> usize;
+    #[link_name = "bind"]
+    fn ws_bind(s: usize, addr: *const c_void, len: c_int) -> c_int;
+    #[link_name = "connect"]
+    fn ws_connect(s: usize, addr: *const c_void, len: c_int) -> c_int;
+    fn WSAPoll(fds: *mut WsaPollFd, count: u32, timeout: c_int) -> c_int;
+    fn closesocket(s: usize) -> c_int;
+}
+
+#[repr(C)]
+struct WsaPollFd {
+    fd: usize,
+    events: i16,
+    revents: i16,
+}
+
+/// POSIX pollfd (fd as int) as the natives declare it.
+#[repr(C)]
+pub struct PollFd {
+    pub fd: c_int,
+    pub events: i16,
+    pub revents: i16,
+}
+
+const INVALID_SOCKET: usize = usize::MAX;
+
+/// Starts Winsock 2.2 once for the process; a failure is reported on every socket call.
+fn winsock_ready() -> Result<(), c_int> {
+    static START: std::sync::OnceLock<c_int> = std::sync::OnceLock::new();
+    let r = *START.get_or_init(|| {
+        let mut data = [0u8; 512];
+        unsafe { WSAStartup(0x0202, data.as_mut_ptr()) }
+    });
+    if r == 0 { Ok(()) } else { Err(r) }
+}
+
+/// Maps a Winsock error code (WSA*) to the closest POSIX errno and sets it.
+fn set_winsock_errno() -> c_int {
+    let wsa = unsafe { WSAGetLastError() };
+    let e = match wsa {
+        10004 => 4,    // WSAEINTR
+        10009 => 9,    // WSAEBADF
+        10013 => 13,   // WSAEACCES
+        10014 => 14,   // WSAEFAULT
+        10022 => 22,   // WSAEINVAL
+        10024 => 24,   // WSAEMFILE
+        10035 => 11,   // WSAEWOULDBLOCK
+        10036 => 115,  // WSAEINPROGRESS
+        10048 => 98,   // WSAEADDRINUSE
+        10049 => 99,   // WSAEADDRNOTAVAIL
+        10050 => 100,  // WSAENETDOWN
+        10051 => 101,  // WSAENETUNREACH
+        10054 => 104,  // WSAECONNRESET
+        10060 => 110,  // WSAETIMEDOUT
+        10061 => 111,  // WSAECONNREFUSED
+        10038 => 88,   // WSAENOTSOCK
+        _ => 5,        // EIO for anything without a direct equivalent
+    };
+    fail_errno(e);
+    -1
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn socket(domain: c_int, ty: c_int, protocol: c_int) -> c_int {
+    if winsock_ready().is_err() {
+        return set_winsock_errno();
+    }
+    let s = ws_socket(domain, ty, protocol);
+    if s == INVALID_SOCKET {
+        return set_winsock_errno();
+    }
+    s as c_int
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const c_void, addrlen: u32) -> c_int {
+    if ws_bind(sockfd as usize, addr, addrlen as c_int) != 0 {
+        return set_winsock_errno();
+    }
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const c_void, addrlen: u32) -> c_int {
+    if ws_connect(sockfd as usize, addr, addrlen as c_int) != 0 {
+        return set_winsock_errno();
+    }
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poll(fds: *mut PollFd, nfds: u64, timeout: c_int) -> c_int {
+    if fds.is_null() && nfds != 0 {
+        fail_errno(EINVAL);
+        return -1;
+    }
+    let n = nfds as usize;
+    let mut w: Vec<WsaPollFd> = (0..n)
+        .map(|i| {
+            let p = &*fds.add(i);
+            WsaPollFd { fd: p.fd as usize, events: p.events, revents: 0 }
+        })
+        .collect();
+    let r = WSAPoll(w.as_mut_ptr(), n as u32, timeout);
+    if r < 0 {
+        return set_winsock_errno();
+    }
+    for (i, p) in w.iter().enumerate() {
+        (*fds.add(i)).revents = p.revents;
+    }
+    r
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn closesocket_posix(sockfd: c_int) -> c_int {
+    if closesocket(sockfd as usize) != 0 {
+        return set_winsock_errno();
+    }
+    0
+}
+
+// ----- processes: posix_spawnp runs CreateProcessW; waitpid waits on the process handle
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct StartupInfoW {
+    cb: u32,
+    _reserved: usize,
+    _desktop: usize,
+    _title: usize,
+    _x: u32,
+    _y: u32,
+    _xs: u32,
+    _ys: u32,
+    _xc: u32,
+    _yc: u32,
+    _fill: u32,
+    _flags: u32,
+    _show: u16,
+    _cb2: u16,
+    _cb3: usize,
+    _stdin: usize,
+    _stdout: usize,
+    _stderr: usize,
+}
+
+#[repr(C)]
+struct ProcessInformation {
+    process: usize,
+    thread: usize,
+    pid: u32,
+    tid: u32,
+}
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn CreateProcessW(app: *const u16, cmd: *mut u16, pa: *const c_void, ta: *const c_void, inherit: i32, flags: u32,
+                      env: *const u16, cwd: *const u16, si: *const StartupInfoW, pi: *mut ProcessInformation) -> i32;
+    fn WaitForSingleObject(h: usize, ms: u32) -> u32;
+    fn GetExitCodeProcess(h: usize, code: *mut u32) -> i32;
+    fn CloseHandle(h: usize) -> i32;
+}
+
+const CREATE_UNICODE_ENVIRONMENT: u32 = 0x0000_0400;
+const WNOHANG: c_int = 1;
+const ECHILD: c_int = 10;
+
+/// pid -> process handle of every child started by posix_spawnp and not yet reaped.
+static CHILDREN: std::sync::Mutex<Vec<(c_int, usize)>> = std::sync::Mutex::new(Vec::new());
+
+/// Quotes one argument for the Windows command line (CommandLineToArgvW rules).
+fn quote_arg(a: &str, out: &mut String) {
+    if !a.is_empty() && !a.contains([' ', '\t', '"']) {
+        out.push_str(a);
+        return;
+    }
+    out.push('"');
+    let mut backslashes = 0;
+    for c in a.chars() {
+        match c {
+            '\\' => backslashes += 1,
+            '"' => {
+                out.extend(std::iter::repeat('\\').take(backslashes * 2 + 1));
+                out.push('"');
+                backslashes = 0;
+            }
+            _ => {
+                out.extend(std::iter::repeat('\\').take(backslashes));
+                out.push(c);
+                backslashes = 0;
+            }
+        }
+    }
+    out.extend(std::iter::repeat('\\').take(backslashes * 2));
+    out.push('"');
+}
+
+unsafe fn c_strings(list: *const *const c_char) -> Vec<String> {
+    let mut v = Vec::new();
+    let mut p = list;
+    while !p.is_null() && !(*p).is_null() {
+        v.push(CStr::from_ptr(*p).to_string_lossy().into_owned());
+        p = p.add(1);
+    }
+    v
+}
+
+fn wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+/// Passes file actions as an opaque 8-byte record: the first word is set when an action Windows cannot perform
+/// (dup2, close, chdir) is recorded, so posix_spawnp refuses the spawn instead of ignoring the action.
+const FA_UNSUPPORTED: u64 = 1;
+
+#[no_mangle]
+pub unsafe extern "C" fn posix_spawn_file_actions_init(fa: *mut c_void) -> c_int {
+    if fa.is_null() {
+        return EINVAL;
+    }
+    *(fa as *mut u64) = 0;
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn posix_spawn_file_actions_destroy(fa: *mut c_void) -> c_int {
+    if !fa.is_null() {
+        *(fa as *mut u64) = 0;
+    }
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn posix_spawn_file_actions_adddup2(fa: *mut c_void, _fd: c_int, _newfd: c_int) -> c_int {
+    if !fa.is_null() {
+        *(fa as *mut u64) |= FA_UNSUPPORTED;
+    }
+    ENOSYS
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn posix_spawn_file_actions_addclose(fa: *mut c_void, _fd: c_int) -> c_int {
+    if !fa.is_null() {
+        *(fa as *mut u64) |= FA_UNSUPPORTED;
+    }
+    ENOSYS
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn posix_spawn_file_actions_addchdir_np(fa: *mut c_void, _path: *const c_char) -> c_int {
+    if !fa.is_null() {
+        *(fa as *mut u64) |= FA_UNSUPPORTED;
+    }
+    ENOSYS
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn posix_spawnp(pid: *mut c_int, file: *const c_char, fa: *const c_void, _attr: *const c_void,
+                                      argv: *const *const c_char, envp: *const *const c_char) -> c_int {
+    if !fa.is_null() && *(fa as *const u64) & FA_UNSUPPORTED != 0 {
+        return ENOSYS;
+    }
+    if file.is_null() {
+        return EINVAL;
+    }
+    let program = CStr::from_ptr(file).to_string_lossy().into_owned();
+    let mut args = c_strings(argv);
+    if args.is_empty() {
+        args.push(program.clone());
+    }
+    let mut cmd = String::new();
+    for (i, a) in args.iter().enumerate() {
+        if i > 0 {
+            cmd.push(' ');
+        }
+        quote_arg(a, &mut cmd);
+    }
+    let mut cmd_w = wide(&cmd);
+    let prog_w = wide(&program);
+    // envp: a block of NUL-terminated "NAME=value" entries, ended by an extra NUL; NULL means inherit
+    let env_block: Option<Vec<u16>> = if envp.is_null() {
+        None
+    } else {
+        let mut block = Vec::new();
+        for e in c_strings(envp) {
+            block.extend(e.encode_utf16());
+            block.push(0);
+        }
+        block.push(0);
+        Some(block)
+    };
+    let si = StartupInfoW {
+        cb: std::mem::size_of::<StartupInfoW>() as u32,
+        _reserved: 0, _desktop: 0, _title: 0, _x: 0, _y: 0, _xs: 0, _ys: 0, _xc: 0, _yc: 0, _fill: 0,
+        _flags: 0, _show: 0, _cb2: 0, _cb3: 0, _stdin: 0, _stdout: 0, _stderr: 0,
+    };
+    let mut pi = ProcessInformation { process: 0, thread: 0, pid: 0, tid: 0 };
+    let flags = if env_block.is_some() { CREATE_UNICODE_ENVIRONMENT } else { 0 };
+    let env_ptr = env_block.as_ref().map_or(std::ptr::null(), |b| b.as_ptr());
+    let ok = CreateProcessW(
+        prog_w.as_ptr(), cmd_w.as_mut_ptr(), std::ptr::null(), std::ptr::null(), 0, flags,
+        env_ptr as *const u16, std::ptr::null(), &si, &mut pi,
+    );
+    if ok == 0 {
+        let code = GetLastError();
+        // ERROR_FILE_NOT_FOUND (2) and ERROR_PATH_NOT_FOUND (3) mean ENOENT
+        fail_errno(if code == 2 || code == 3 { 2 } else { 13 });
+        return if code == 2 || code == 3 { 2 } else { 13 };
+    }
+    CloseHandle(pi.thread);
+    if let Ok(mut ch) = CHILDREN.lock() {
+        ch.push((pi.pid as c_int, pi.process));
+    }
+    if !pid.is_null() {
+        *pid = pi.pid as c_int;
+    }
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn waitpid(pid: c_int, status: *mut c_int, options: c_int) -> c_int {
+    let entry = {
+        let ch = match CHILDREN.lock() {
+            Ok(c) => c,
+            Err(_) => {
+                fail_errno(ECHILD);
+                return -1;
+            }
+        };
+        ch.iter().position(|&(p, _)| p == pid || pid <= 0).map(|i| ch[i])
+    };
+    let Some((p, handle)) = entry else {
+        fail_errno(ECHILD);
+        return -1;
+    };
+    const WAIT_OBJECT_0: u32 = 0;
+    const INFINITE: u32 = 0xFFFF_FFFF;
+    let wait_ms = if options & WNOHANG != 0 { 0 } else { INFINITE };
+    match WaitForSingleObject(handle, wait_ms) {
+        WAIT_OBJECT_0 => {
+            let mut code = 0u32;
+            GetExitCodeProcess(handle, &mut code);
+            CloseHandle(handle);
+            if let Ok(mut ch) = CHILDREN.lock() {
+                ch.retain(|&(q, _)| q != p);
+            }
+            if !status.is_null() {
+                // WIFEXITED / WEXITSTATUS encoding: exit code in the second byte
+                *status = ((code & 0xFF) << 8) as c_int;
+            }
+            p
+        }
+        0x102 => 0, // WAIT_TIMEOUT: WNOHANG and the child is still running
+        _ => {
+            fail_errno(ECHILD);
+            -1
+        }
+    }
+}
+
+// ----- functions with no Windows equivalent in the runtime's use: they fail with ENOSYS
+
+macro_rules! unsupported {
+    ($( fn $name:ident ( $($arg:ident : $ty:ty),* ) -> $ret:ty; )*) => {
+        $(
+            #[no_mangle]
+            pub unsafe extern "C" fn $name($($arg: $ty),*) -> $ret {
+                $( let _ = $arg; )*
+                fail_errno(ENOSYS);
+                <$ret>::from(-1i8)
+            }
+        )*
+    };
+}
+
+unsupported! {
+    fn pipe2(fds: *mut c_int, flags: c_int) -> c_int;
+    fn socketpair(domain: c_int, ty: c_int, protocol: c_int, sv: *mut c_int) -> c_int;
+    fn getaddrinfo(node: *const c_char, service: *const c_char, hints: *const c_void, res: *mut *mut c_void) -> c_int;
+    fn readv(fd: c_int, iov: *const c_void, iovcnt: c_int) -> isize;
+    fn writev(fd: c_int, iov: *const c_void, iovcnt: c_int) -> isize;
+    fn sendfile(out_fd: c_int, in_fd: c_int, offset: *mut i64, count: usize) -> isize;
+    fn splice(fd_in: c_int, off_in: *mut i64, fd_out: c_int, off_out: *mut i64, len: usize, flags: u32) -> isize;
+    fn timerfd_create(clockid: c_int, flags: c_int) -> c_int;
+    fn timerfd_settime(fd: c_int, flags: c_int, new_val: *const c_void, old_val: *mut c_void) -> c_int;
+    fn openat(dirfd: c_int, pathname: *const c_char, flags: c_int) -> c_int;
+    fn unlinkat(dirfd: c_int, pathname: *const c_char, flags: c_int) -> c_int;
+    fn renameat(olddirfd: c_int, oldpath: *const c_char, newdirfd: c_int, newpath: *const c_char) -> c_int;
+    fn fstatat(dirfd: c_int, pathname: *const c_char, statbuf: *mut c_void, flags: c_int) -> c_int;
+    fn utimensat(dirfd: c_int, pathname: *const c_char, times: *const c_void, flags: c_int) -> c_int;
+    fn utimes(filename: *const c_char, times: *const c_void) -> c_int;
+    fn symlink(target: *const c_char, linkpath: *const c_char) -> c_int;
+    fn readlink(pathname: *const c_char, buf: *mut c_char, bufsiz: usize) -> isize;
+    fn statvfs(path: *const c_char, buf: *mut c_void) -> c_int;
+    fn fstatvfs(fd: c_int, buf: *mut c_void) -> c_int;
+    fn posix_fadvise(fd: c_int, offset: i64, len: i64, advice: c_int) -> c_int;
+    fn pread(fd: c_int, buf: *mut c_void, count: usize, offset: i64) -> isize;
+    fn pwrite(fd: c_int, buf: *const c_void, count: usize, offset: i64) -> isize;
+    fn msync(addr: *mut c_void, length: usize, flags: c_int) -> c_int;
+    fn sysinfo(info: *mut c_void) -> c_int;
+}
+
+/// realpath: a NULL result with errno ENOSYS (the runtime resolves paths itself on Windows).
+#[no_mangle]
+pub unsafe extern "C" fn realpath(_path: *const c_char, _resolved: *mut c_char) -> *mut c_char {
+    fail_errno(ENOSYS);
+    std::ptr::null_mut()
+}
+
+/// setmntent: no mount table on Windows; NULL with errno ENOSYS.
+#[no_mangle]
+pub unsafe extern "C" fn setmntent(_filename: *const c_char, _ty: *const c_char) -> *mut c_void {
+    fail_errno(ENOSYS);
+    std::ptr::null_mut()
+}
+
+// ----- stat family: filled from GetFileInformationByHandle, in the glibc x86_64 struct stat layout the natives use
+
+#[repr(C)]
+struct ByHandleFileInformation {
+    file_attributes: u32,
+    creation_time: u64,
+    last_access_time: u64,
+    last_write_time: u64,
+    volume_serial: u32,
+    size_high: u32,
+    size_low: u32,
+    number_of_links: u32,
+    index_high: u32,
+    index_low: u32,
+}
+
+#[repr(C)]
+struct GlibcStat {
+    st_dev: u64,
+    st_ino: u64,
+    st_nlink: u64,
+    st_mode: u32,
+    st_uid: u32,
+    st_gid: u32,
+    pad0: i32,
+    st_rdev: u64,
+    st_size: i64,
+    st_blksize: i64,
+    st_blocks: i64,
+    st_atim_sec: i64,
+    st_atim_nsec: i64,
+    st_mtim_sec: i64,
+    st_mtim_nsec: i64,
+    st_ctim_sec: i64,
+    st_ctim_nsec: i64,
+    unused: [i64; 3],
+}
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn CreateFileW(name: *const u16, access: u32, share: u32, sa: *const c_void, disp: u32, flags: u32, tmpl: usize) -> usize;
+    fn GetFileInformationByHandle(h: usize, info: *mut ByHandleFileInformation) -> i32;
+}
+
+extern "C" {
+    fn _get_osfhandle(fd: c_int) -> isize;
+    fn _errno() -> *mut c_int;
+}
+
+const FILE_READ_ATTRIBUTES: u32 = 0x0080;
+const FILE_SHARE_ALL: u32 = 0x0000_0007;
+const OPEN_EXISTING: u32 = 3;
+const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000; // directories can be opened
+const FILE_ATTRIBUTE_READONLY: u32 = 0x1;
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+const S_IFDIR: u32 = 0o040000;
+const S_IFREG: u32 = 0o100000;
+const INVALID_HANDLE_VALUE: usize = usize::MAX;
+
+/// FILETIME (100 ns since 1601) to (seconds, nanoseconds since 1970).
+fn filetime_split(ft: u64) -> (i64, i64) {
+    let t = ft as i64 - 116_444_736_000_000_000;
+    (t.div_euclid(10_000_000), t.rem_euclid(10_000_000) * 100)
+}
+
+fn fill_stat(info: &ByHandleFileInformation, out: *mut GlibcStat) {
+    let dir = info.file_attributes & FILE_ATTRIBUTE_DIRECTORY != 0;
+    let mut perm: u32 = if dir { 0o755 } else { 0o644 };
+    if info.file_attributes & FILE_ATTRIBUTE_READONLY != 0 {
+        perm &= !0o222;
+    }
+    let size = ((info.size_high as u64) << 32) | info.size_low as u64;
+    let ino = ((info.index_high as u64) << 32) | info.index_low as u64;
+    let (at_s, at_ns) = filetime_split(info.last_access_time);
+    let (mt_s, mt_ns) = filetime_split(info.last_write_time);
+    let (ct_s, ct_ns) = filetime_split(info.creation_time);
+    unsafe {
+        *out = GlibcStat {
+            st_dev: info.volume_serial as u64,
+            st_ino: ino,
+            st_nlink: info.number_of_links as u64,
+            st_mode: (if dir { S_IFDIR } else { S_IFREG }) | perm,
+            st_uid: 0,
+            st_gid: 0,
+            pad0: 0,
+            st_rdev: 0,
+            st_size: size as i64,
+            st_blksize: 4096,
+            st_blocks: ((size + 511) / 512) as i64,
+            st_atim_sec: at_s,
+            st_atim_nsec: at_ns,
+            st_mtim_sec: mt_s,
+            st_mtim_nsec: mt_ns,
+            st_ctim_sec: ct_s,
+            st_ctim_nsec: ct_ns,
+            unused: [0; 3],
+        };
+    }
+}
+
+fn set_last_error_errno(code: u32) -> c_int {
+    // ERROR_FILE_NOT_FOUND 2, ERROR_PATH_NOT_FOUND 3 -> ENOENT; ERROR_ACCESS_DENIED 5 -> EACCES; others EIO
+    let e = match code {
+        2 | 3 => 2,
+        5 => 13,
+        _ => 5,
+    };
+    fail_errno(e);
+    -1
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stat(path: *const c_char, buf: *mut GlibcStat) -> c_int {
+    if path.is_null() || buf.is_null() {
+        fail_errno(EINVAL);
+        return -1;
+    }
+    let p = CStr::from_ptr(path).to_string_lossy().into_owned();
+    let w = wide(&p);
+    let h = CreateFileW(w.as_ptr(), FILE_READ_ATTRIBUTES, FILE_SHARE_ALL, std::ptr::null(), OPEN_EXISTING,
+                        FILE_FLAG_BACKUP_SEMANTICS, 0);
+    if h == INVALID_HANDLE_VALUE {
+        return set_last_error_errno(GetLastError());
+    }
+    let mut info: ByHandleFileInformation = std::mem::zeroed();
+    let ok = GetFileInformationByHandle(h, &mut info);
+    let err = GetLastError();
+    CloseHandle(h);
+    if ok == 0 {
+        return set_last_error_errno(err);
+    }
+    fill_stat(&info, buf);
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn lstat(path: *const c_char, buf: *mut GlibcStat) -> c_int {
+    // Windows symbolic links are reported as the file they point to
+    stat(path, buf)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn fstat(fd: c_int, buf: *mut GlibcStat) -> c_int {
+    if buf.is_null() {
+        fail_errno(EINVAL);
+        return -1;
+    }
+    let h = _get_osfhandle(fd);
+    if h == -1 {
+        fail_errno(9); // EBADF
+        return -1;
+    }
+    let mut info: ByHandleFileInformation = std::mem::zeroed();
+    if GetFileInformationByHandle(h as usize, &mut info) == 0 {
+        return set_last_error_errno(GetLastError());
+    }
+    fill_stat(&info, buf);
+    0
+}
+
+/// glibc's errno accessor, implemented over the C runtime's errno.
+#[no_mangle]
+pub unsafe extern "C" fn __errno_location() -> *mut c_int {
+    _errno()
+}
+
+// ----- Linux-only and network calls without a use on this platform yet: they fail with ENOSYS
+
+unsupported! {
+    fn epoll_create(size: c_int) -> c_int;
+    fn epoll_create1(flags: c_int) -> c_int;
+    fn epoll_ctl(epfd: c_int, op: c_int, fd: c_int, event: *mut c_void) -> c_int;
+    fn epoll_wait(epfd: c_int, events: *mut c_void, maxevents: c_int, timeout: c_int) -> c_int;
+    fn eventfd(init: u32, flags: c_int) -> c_int;
+    fn inotify_init() -> c_int;
+    fn inotify_add_watch(fd: c_int, path: *const c_char, mask: u32) -> c_int;
+    fn inotify_rm_watch(fd: c_int, wd: c_int) -> c_int;
+    fn accept4(fd: c_int, addr: *mut c_void, len: *mut u32, flags: c_int) -> c_int;
+    fn getsockname(fd: c_int, addr: *mut c_void, len: *mut u32) -> c_int;
+    fn getpeername(fd: c_int, addr: *mut c_void, len: *mut u32) -> c_int;
+    fn getsockopt(fd: c_int, level: c_int, name: c_int, val: *mut c_void, len: *mut u32) -> c_int;
+    fn setsockopt(fd: c_int, level: c_int, name: c_int, val: *const c_void, len: u32) -> c_int;
+    fn listen(fd: c_int, backlog: c_int) -> c_int;
+    fn shutdown(fd: c_int, how: c_int) -> c_int;
+    fn send(fd: c_int, buf: *const c_void, len: usize, flags: c_int) -> isize;
+    fn recv(fd: c_int, buf: *mut c_void, len: usize, flags: c_int) -> isize;
+    fn sendto(fd: c_int, buf: *const c_void, len: usize, flags: c_int, addr: *const c_void, alen: u32) -> isize;
+    fn recvfrom(fd: c_int, buf: *mut c_void, len: usize, flags: c_int, addr: *mut c_void, alen: *mut u32) -> isize;
+    fn getnameinfo(addr: *const c_void, alen: u32, host: *mut c_char, hlen: u32, serv: *mut c_char, slen: u32, flags: c_int) -> c_int;
+    fn getifaddrs(ifap: *mut *mut c_void) -> c_int;
+    fn gethostname(name: *mut c_char, len: usize) -> c_int;
+    fn tcgetattr(fd: c_int, t: *mut c_void) -> c_int;
+    fn tcsetattr(fd: c_int, act: c_int, t: *const c_void) -> c_int;
+    fn ioctl(fd: c_int, req: u64, arg: usize) -> c_int;
+    fn fcntl(fd: c_int, cmd: c_int, arg: usize) -> c_int;
+    fn getrlimit(res: c_int, rlim: *mut c_void) -> c_int;
+    fn getloadavg(loadavg: *mut f64, n: c_int) -> c_int;
+    fn sigaltstack(ss: *const c_void, old: *mut c_void) -> c_int;
+    fn pthread_kill(t: usize, sig: c_int) -> c_int;
+    fn kill(pid: c_int, sig: c_int) -> c_int;
+    fn madvise(addr: *mut c_void, len: usize, advice: c_int) -> c_int;
+    fn mincore(addr: *mut c_void, len: usize, vec: *mut u8) -> c_int;
+    fn fchmodat(dirfd: c_int, path: *const c_char, mode: u32, flags: c_int) -> c_int;
+    fn fchown(fd: c_int, uid: u32, gid: u32) -> c_int;
+    fn lchown(path: *const c_char, uid: u32, gid: u32) -> c_int;
+    fn chown(path: *const c_char, uid: u32, gid: u32) -> c_int;
+    fn mknod(path: *const c_char, mode: u32, dev: u64) -> c_int;
+    fn link(old: *const c_char, new: *const c_char) -> c_int;
+    fn fdatasync(fd: c_int) -> c_int;
+    fn futimens(fd: c_int, times: *const c_void) -> c_int;
+    fn endmntent(f: *mut c_void) -> c_int;
+    fn backtrace(buf: *mut *mut c_void, size: c_int) -> c_int;
+    fn syscall(number: i64, a: i64, b: i64, c: i64) -> i64;
+}
+
+/// Pointer-returning functions without a Windows equivalent: NULL with errno ENOSYS.
+#[no_mangle]
+pub unsafe extern "C" fn gai_strerror(_code: c_int) -> *const c_char {
+    b"address resolution is not available on this platform\0".as_ptr() as *const c_char
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn fdopendir(_fd: c_int) -> *mut c_void {
+    fail_errno(ENOSYS);
+    std::ptr::null_mut()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn getmntent_r(_f: *mut c_void, _ent: *mut c_void, _buf: *mut c_char, _len: c_int) -> *mut c_void {
+    fail_errno(ENOSYS);
+    std::ptr::null_mut()
+}
+
+/// Void functions without a Windows equivalent: they only set errno.
+#[no_mangle]
+pub unsafe extern "C" fn freeaddrinfo(_res: *mut c_void) {
+    fail_errno(ENOSYS);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn freeifaddrs(_ifa: *mut c_void) {
+    fail_errno(ENOSYS);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn backtrace_symbols_fd(_buf: *const *mut c_void, _size: c_int, _fd: c_int) {
+    fail_errno(ENOSYS);
+}
+
+/// if_nametoindex: 0 (no such interface) with errno ENOSYS.
+#[no_mangle]
+pub unsafe extern "C" fn if_nametoindex(_name: *const c_char) -> u32 {
+    fail_errno(ENOSYS);
+    0
+}
