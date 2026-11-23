@@ -814,6 +814,15 @@ fn throwOOM() E {
 }
 
 /// System.gc(): a full collection, then enqueue the references it cleared.
+/// Runtime.gc() from Java: System.gc() reaches it only when -Dmono.explicit.gc is set (the program asked for a
+/// collection), so the rate limit of gc() does not apply: every such call collects.
+pub fn gcExplicit() void {
+    const saved = st.gc_explicit_gap_ms;
+    st.gc_explicit_gap_ms = 0;
+    defer st.gc_explicit_gap_ms = saved;
+    gc();
+}
+
 pub fn gc() void {
     const now = std.time.milliTimestamp();
     if (st.gc_explicit_gap_ms > 0 and st.gc_last_end_ms != 0 and now - st.gc_last_end_ms < st.gc_explicit_gap_ms) {

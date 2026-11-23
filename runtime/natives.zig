@@ -244,7 +244,7 @@ pub fn J_java_lang_Runtime__maxMemory(this: Ref) E!i64 {
 }
 pub fn J_java_lang_Runtime__gc(this: Ref) E!void {
     _ = this;
-    rt.gc();
+    rt.gcExplicit();
 }
 
 // ------------------------------------------------------------------ java.lang.Thread
