@@ -166,7 +166,7 @@ static SATB_LOG: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 
 /// Referans yazma bariyeri (snapshot-at-the-beginning): işaretleme açıksa yazılacak yerin eski değerini kaydeder.
 #[inline(always)]
-pub fn satb_store(slot: *mut Ref, v: Ref) {
+pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
     unsafe {
         if SATB_ON.load(Ordering::Relaxed) {
             satb_log((*slot).0 as usize);
@@ -246,7 +246,7 @@ fn clear_dead_referents() {
 /// Write barrier for a reference slot that is about to be overwritten by an atomic operation (Unsafe CAS/put,
 /// VarHandle store/CAS): the value it holds now goes to the SATB log while marking is on.
 #[inline(always)]
-pub fn satb_overwrite(slot: *mut *mut Obj) {
+pub unsafe fn satb_overwrite(slot: *mut *mut Obj) {
     if SATB_ON.load(Ordering::Relaxed) {
         satb_log(unsafe { *slot } as usize);
     }
@@ -263,7 +263,7 @@ fn satb_log(old: usize) {
 /// Bir bellek aralığının (eski) içeriğini, işaretleme açıksa, SATB günlüğüne alır. Her 8 baytlık sözcük bir referans
 /// olabilir: sözcük bir nesne adresi değilse işaretleyici onu yok sayar, yani bu konservatif ve güvenlidir.
 /// Yazma bariyeri olmayan toplu yazımlar (arraycopy, Unsafe kopyası, VarHandle) bunu çağırır.
-pub fn satb_log_range(p: *const u8, bytes: usize) {
+pub unsafe fn satb_log_range(p: *const u8, bytes: usize) {
     if !SATB_ON.load(Ordering::Relaxed) {
         return;
     }

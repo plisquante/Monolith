@@ -169,7 +169,7 @@ pub fn set<T: Vt>(volatile: bool, vh: Ref, obj: Ref, idx: i32, nc: u8, v: T::St)
     let p = address::<T>(vh, obj, idx, nc)?;
     let x = T::from_st(v);
     store_check::<T>(obj, x, nc)?;
-    crate::gc::satb_log_range(p as *const u8, std::mem::size_of::<T>());
+    unsafe { crate::gc::satb_log_range(p as *const u8, std::mem::size_of::<T>()) };
     unsafe { if volatile { T::store(p, x) } else { std::ptr::write(p, x) } };
     Ok(())
 }

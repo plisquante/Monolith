@@ -503,7 +503,7 @@ pub fn alloc(class: &'static Class) -> Ref {
 /// iteration). `p` is the function's slot for this allocation site; it is cleared and given the class header on every
 /// execution of the `new`. The collector ignores it (not a heap address) and finds what it references by scanning stacks.
 #[inline(always)]
-pub fn stack_obj(p: *mut u8, class: &'static Class) -> Ref {
+pub unsafe fn stack_obj(p: *mut u8, class: &'static Class) -> Ref {
     unsafe {
         std::ptr::write_bytes(p, 0, class.size.max(16));
         let o = p as *mut Obj;
@@ -823,7 +823,7 @@ pub fn astore<T: Copy>(a: Ref, i: i32, v: T) -> Res<()> {
 }
 /// Referans yazma bariyeri; üretilen kod da bunu kullanır (rustgen: putfield/putstatic).
 #[inline(always)]
-pub fn satb_store(slot: *mut Ref, v: Ref) {
+pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
     crate::gc::satb_store(slot, v)
 }
 

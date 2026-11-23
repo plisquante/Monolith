@@ -567,7 +567,7 @@ class MethodGen:
                 # the object cannot outlive this call (or this loop iteration): a slot in this function's frame
                 var = f"stk{ins.pc}"
                 self.stack_slots[ins.pc] = (var, self.g.struct_name(ci2))
-                push("A", f"rt::stack_obj(&raw mut {var} as *mut u8, {cr})")
+                push("A", f"unsafe {{ rt::stack_obj(&raw mut {var} as *mut u8, {cr}) }}")
             elif rslot is not None:
                 push("A", f"rt::alloc_recyclable({cr}, {rslot})")
             else:

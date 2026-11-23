@@ -303,7 +303,7 @@ unsafe_put!(n_jdk_internal_misc_Unsafe__putFloat, f32, f32);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putDouble, f64, f64);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putIntVolatile, i32, i32);
 pub fn n_jdk_internal_misc_Unsafe__putReference(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
-    crate::gc::satb_store(addr(o, off) as *mut Ref, v);
+    unsafe { crate::gc::satb_store(addr(o, off) as *mut Ref, v) };
     Ok(())
 }
 pub fn n_jdk_internal_misc_Unsafe__putReferenceVolatile(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
@@ -348,7 +348,7 @@ pub fn n_jdk_internal_misc_Unsafe__fullFence(this: Ref) -> Res<()> {
     Ok(())
 }
 pub fn n_jdk_internal_misc_Unsafe__copyMemory0(this: Ref, so: Ref, soff: i64, d: Ref, doff: i64, n: i64) -> Res<()> {
-    crate::gc::satb_log_range(addr(d, doff) as *const u8, n as usize);
+    unsafe { crate::gc::satb_log_range(addr(d, doff) as *const u8, n as usize) };
     unsafe { std::ptr::copy(addr(so, soff), addr(d, doff), n as usize) };
     Ok(())
 }
