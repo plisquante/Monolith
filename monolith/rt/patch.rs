@@ -44,7 +44,7 @@ pub unsafe fn get<T: Copy>(o: Ref, off: usize) -> T {
 pub unsafe fn set<T>(o: Ref, off: usize, v: T) {
     let p = (o.0 as *mut u8).add(off);
     // a patch may store a reference: the overwritten bytes are logged for the SATB marker (cheap when no cycle runs)
-    crate::gc::satb_log_range(p as *const u8, std::mem::size_of::<T>());
+    crate::heap::satb_log_range(p as *const u8, std::mem::size_of::<T>());
     *(p as *mut T) = v;
 }
 

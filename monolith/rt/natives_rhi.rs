@@ -339,9 +339,9 @@ pub fn n_mono_rhi_NativeRhi__lastDrawBatches0() -> Res<i32> {
     Ok(rhi_state().lock().unwrap().last_batches)
 }
 pub fn n_mono_rhi_NativeRhi__arenaBytes0() -> Res<i64> { Ok(65536) }
-pub fn n_mono_rhi_NativeRhi__slabCommittedBytes0() -> Res<i64> { Ok(crate::gc::heap_bytes() as i64) }
+pub fn n_mono_rhi_NativeRhi__slabCommittedBytes0() -> Res<i64> { Ok(crate::heap::heap_bytes() as i64) }
 pub fn n_mono_rhi_NativeRhi__slabReclaimedBytes0() -> Res<i64> {
-    Ok(crate::gc::heap_bytes().saturating_sub(crate::gc::live_bytes()) as i64)
+    Ok(crate::heap::heap_bytes().saturating_sub(crate::heap::live_bytes()) as i64)
 }
 pub fn n_mono_rhi_NativeRhi__frameEpoch0() -> Res<i64> { Ok(FRAME_EPOCH.load(Ordering::Relaxed) as i64) }
 pub fn n_mono_rhi_NativeRhi__threadCount0() -> Res<i64> { Ok(1) }

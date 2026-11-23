@@ -1,7 +1,7 @@
 //! Netty native transport (epoll + unix domain/TCP/UDP sockets + BSD kqueue guard),
 //! JNA (`com.sun.jna.Native` over dlopen/dlsym/libffi), Tracy profiler bindings,
 //! and NarratorLinux (`libflite.so.1` via dlopen).
-use crate::gc::ScopedBlock;
+use crate::heap::ScopedBlock;
 use crate::rt::{self, Arr, Ref, Res};
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};

@@ -1,7 +1,7 @@
 //! Networking natives: sun.nio.ch.Net, SocketDispatcher, DatagramDispatcher,
 //! DatagramChannelImpl, NativeSocketAddress, UnixDomainSockets, InetAddress,
 //! Inet4AddressImpl, Inet6AddressImpl, NetworkInterface, DefaultProxySelector, SdpSupport.
-use crate::gc::ScopedBlock;
+use crate::heap::ScopedBlock;
 use crate::rt::{self, Ref, Res};
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_ulong, c_void};

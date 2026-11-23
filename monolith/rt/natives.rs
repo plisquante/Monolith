@@ -88,7 +88,7 @@ pub fn n_java_lang_System__arraycopy(src: Ref, sp: i32, dst: Ref, dp: i32, n: i3
                     let sptr = arr_data(src) as *const Ref;
                     let dptr = arr_data(dst) as *mut Ref;
                     // the overwritten elements are snapshot values (SATB)
-                    crate::gc::satb_log_range(dptr.add(dp as usize) as *const u8, n as usize * std::mem::size_of::<Ref>());
+                    crate::heap::satb_log_range(dptr.add(dp as usize) as *const u8, n as usize * std::mem::size_of::<Ref>());
                     let same = src.0 == dst.0;
                     for k in 0..n as usize {
                         let i = if same && sp < dp { n as usize - 1 - k } else { k };
@@ -105,7 +105,7 @@ pub fn n_java_lang_System__arraycopy(src: Ref, sp: i32, dst: Ref, dp: i32, n: i3
         let es = rt::elem_size(sc.elem);
         if sc.elem == b'A' {
             // reference array: the overwritten elements are snapshot values (SATB)
-            crate::gc::satb_log_range((arr_data(dst)).add(dp as usize * es), n as usize * es);
+            crate::heap::satb_log_range((arr_data(dst)).add(dp as usize * es), n as usize * es);
         }
         std::ptr::copy((arr_data(src)).add(sp as usize * es), (arr_data(dst)).add(dp as usize * es), n as usize * es);
     }
@@ -303,12 +303,12 @@ unsafe_put!(n_jdk_internal_misc_Unsafe__putFloat, f32, f32);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putDouble, f64, f64);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putIntVolatile, i32, i32);
 pub fn n_jdk_internal_misc_Unsafe__putReference(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
-    unsafe { crate::gc::satb_store(addr(o, off) as *mut Ref, v) };
+    unsafe { crate::heap::satb_store(addr(o, off) as *mut Ref, v) };
     Ok(())
 }
 pub fn n_jdk_internal_misc_Unsafe__putReferenceVolatile(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
     unsafe {
-        crate::gc::satb_overwrite(addr(o, off) as *mut *mut Obj);
+        crate::heap::satb_overwrite(addr(o, off) as *mut *mut Obj);
         std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).store(v.0, std::sync::atomic::Ordering::SeqCst)
     };
     Ok(())
@@ -333,13 +333,13 @@ pub fn n_jdk_internal_misc_Unsafe__compareAndExchangeLong(this: Ref, o: Ref, off
 }
 pub fn n_jdk_internal_misc_Unsafe__compareAndSetReference(this: Ref, o: Ref, off: i64, e: Ref, n: Ref) -> Res<i32> {
     Ok(unsafe {
-        crate::gc::satb_overwrite(addr(o, off) as *mut *mut Obj);
+        crate::heap::satb_overwrite(addr(o, off) as *mut *mut Obj);
         std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).compare_exchange(e.0, n.0, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst).is_ok()
     } as i32)
 }
 pub fn n_jdk_internal_misc_Unsafe__compareAndExchangeReference(this: Ref, o: Ref, off: i64, e: Ref, n: Ref) -> Res<Ref> {
     Ok(unsafe {
-        crate::gc::satb_overwrite(addr(o, off) as *mut *mut Obj);
+        crate::heap::satb_overwrite(addr(o, off) as *mut *mut Obj);
         match std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).compare_exchange(e.0, n.0, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst) { Ok(v) => Ref(v), Err(v) => Ref(v) }
     })
 }
@@ -348,7 +348,7 @@ pub fn n_jdk_internal_misc_Unsafe__fullFence(this: Ref) -> Res<()> {
     Ok(())
 }
 pub fn n_jdk_internal_misc_Unsafe__copyMemory0(this: Ref, so: Ref, soff: i64, d: Ref, doff: i64, n: i64) -> Res<()> {
-    unsafe { crate::gc::satb_log_range(addr(d, doff) as *const u8, n as usize) };
+    unsafe { crate::heap::satb_log_range(addr(d, doff) as *const u8, n as usize) };
     unsafe { std::ptr::copy(addr(so, soff), addr(d, doff), n as usize) };
     Ok(())
 }
@@ -444,15 +444,15 @@ pub fn n_java_lang_Runtime__halt0(status: i32) -> Res<()> {
     std::process::exit(status)
 }
 pub fn n_java_lang_Runtime__freeMemory(this: Ref) -> Res<i64> {
-    let h = crate::gc::heap_bytes().max(crate::gc::live_bytes()) as i64;
-    let l = crate::gc::live_bytes() as i64;
+    let h = crate::heap::heap_bytes().max(crate::heap::live_bytes()) as i64;
+    let l = crate::heap::live_bytes() as i64;
     Ok((h - l).max(1 << 20))
 }
 pub fn n_java_lang_Runtime__totalMemory(this: Ref) -> Res<i64> {
-    Ok((crate::gc::heap_bytes().max(32 << 20)) as i64)
+    Ok((crate::heap::heap_bytes().max(32 << 20)) as i64)
 }
 pub fn n_java_lang_Runtime__gc(this: Ref) -> Res<()> {
-    crate::gc::collect_explicit();
+    crate::heap::collect_explicit();
     Ok(())
 }
 pub fn n_java_security_SecureRandom__fill0(b: Ref) -> Res<()> {

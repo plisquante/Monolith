@@ -1,6 +1,7 @@
 #![allow(dead_code, non_snake_case, unused_imports, unused_variables, improper_ctypes, static_mut_refs)]
 pub mod rt;
 pub mod gc;
+pub mod heap;
 pub mod sync;
 pub mod vh;
 pub mod patch;

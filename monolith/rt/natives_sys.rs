@@ -1,6 +1,6 @@
 //! System, Process, Module, StackWalker, MethodHandle/MethodHandleNatives, CgroupMetrics,
 //! Continuation, Foreign/LibFallback (libffi), Management, NativeLibraries, and JFR natives.
-use crate::gc::ScopedBlock;
+use crate::heap::ScopedBlock;
 use crate::natives_io::{loaded_lib_handles, register_lib_handle};
 use crate::rt::{self, Arr, FLoc, Ref, Res};
 use std::collections::HashMap;
@@ -545,8 +545,8 @@ pub fn n_sun_management_MemoryImpl__getMemoryUsage0(_this: Ref, heap: i32) -> Re
     let o = rt::alloc(c);
     rt::set_i64(o, "init", 0);
     if heap != 0 {
-        let used = crate::gc::live_bytes() as i64;
-        let comm = crate::gc::heap_bytes().max(used as usize) as i64;
+        let used = crate::heap::live_bytes() as i64;
+        let comm = crate::heap::heap_bytes().max(used as usize) as i64;
         rt::set_i64(o, "used", used);
         rt::set_i64(o, "committed", comm);
         rt::set_i64(o, "max", -1);

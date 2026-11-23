@@ -498,7 +498,7 @@ pub fn c_str_arg(s: Ref) -> Res<std::ffi::CString> {
         .map_err(|_| Thrown { obj: (hooks().throw_new)("java/lang/IllegalArgumentException", new_str("Nul byte in path".to_string())) })
 }
 
-pub use crate::gc::{recycle as recycle_scope, safepoint as gc_safepoint, ArenaGuard, ThreadGuard};
+pub use crate::heap::{recycle as recycle_scope, safepoint as gc_safepoint, ArenaGuard, ThreadGuard};
 
 #[inline(always)]
 pub fn gc_thread_guard() -> ThreadGuard {
@@ -506,7 +506,7 @@ pub fn gc_thread_guard() -> ThreadGuard {
 }
 
 pub fn alloc(class: &'static Class) -> Ref {
-    Ref(crate::gc::alloc_obj(class, class.size.max(16)))
+    Ref(crate::heap::alloc_obj(class, class.size.max(16)))
 }
 
 /// An object kept in the frame of the function that creates it (the escape analysis proved it dies with that call or loop
@@ -520,17 +520,17 @@ pub unsafe fn stack_obj(p: *mut u8, class: &'static Class) -> Ref {
         std::ptr::write_bytes(p, 0, class.size.max(16));
         let o = p as *mut Obj;
         (*o).class = class;
-        (*o).gc = crate::gc::GC_ARENA;
+        (*o).gc = crate::heap::GC_ARENA;
         Ref(o)
     }
 }
 
 /// `new` of a class whose instances are recycled at the end of their scope (iterators of for-each loops).
 pub fn alloc_recyclable(class: &'static Class, slot: usize) -> Ref {
-    crate::gc::alloc_recyclable(class, slot)
+    crate::heap::alloc_recyclable(class, slot)
 }
 pub fn alloc_arena(class: &'static Class) -> Ref {
-    crate::gc::alloc_arena(class, class.size.max(16))
+    crate::heap::alloc_arena(class, class.size.max(16))
 }
 
 #[inline(always)]
@@ -612,7 +612,7 @@ pub fn intern_string(s: Ref) -> Ref {
     let key = str_units(s);
     let mut t = TABLE.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap();
     let ptr = *t.entry(key).or_insert_with(|| {
-        crate::gc::pin_ref(s);
+        crate::heap::pin_ref(s);
         s.0 as usize
     });
     Ref(ptr as *mut Obj)
@@ -629,7 +629,7 @@ pub unsafe fn lit(slot: *mut Ref, data: &'static [u16]) -> Ref {
     let r = intern_string(mk_string(data));
     match ap.compare_exchange(std::ptr::null_mut(), r.0, Ordering::AcqRel, Ordering::Acquire) {
         Ok(_) => {
-            crate::gc::register_static_slot(slot);
+            crate::heap::register_static_slot(slot);
             r
         }
         Err(old) => Ref(old),
@@ -721,7 +721,7 @@ pub fn array_class_of(elem_c: &'static Class) -> &'static Class {
     match elem_c.array_cache.0.compare_exchange(std::ptr::null_mut(), raw, Ordering::AcqRel, Ordering::Acquire) {
         Ok(_) => {
             let ac = unsafe { &*raw };
-            crate::gc::register_array_class(ac);
+            crate::heap::register_array_class(ac);
             ac
         }
         Err(old) => {
@@ -738,7 +738,7 @@ pub fn new_array_with_class(ac: &'static Class, e: u8, len: i32) -> Res<Ref> {
         return throw("java/lang/NegativeArraySizeException", len.to_string());
     }
     let size = 24 + esize(e) * len as usize;
-    let p = crate::gc::alloc_obj(ac, size) as *mut Arr;
+    let p = crate::heap::alloc_obj(ac, size) as *mut Arr;
     unsafe { (*p).len = len };
     Ok(Ref(p as *mut Obj))
 }
@@ -753,7 +753,7 @@ pub fn new_array_arena(e: u8, len: i32) -> Res<Ref> {
         return throw("java/lang/NegativeArraySizeException", len.to_string());
     }
     let size = 24 + esize(e) * len as usize;
-    let r = crate::gc::alloc_arena(arr_class(e), size);
+    let r = crate::heap::alloc_arena(arr_class(e), size);
     unsafe { (*(r.0 as *mut Arr)).len = len };
     Ok(r)
 }
@@ -762,7 +762,7 @@ pub fn new_obj_array_arena(elem_c: &'static Class, len: i32) -> Res<Ref> {
         return throw("java/lang/NegativeArraySizeException", len.to_string());
     }
     let size = 24 + 8 * len as usize;
-    let r = crate::gc::alloc_arena(array_class_of(elem_c), size);
+    let r = crate::heap::alloc_arena(array_class_of(elem_c), size);
     unsafe { (*(r.0 as *mut Arr)).len = len };
     Ok(r)
 }
@@ -840,7 +840,7 @@ pub fn astore<T: Copy>(a: Ref, i: i32, v: T) -> Res<()> {
 /// Same contract as `gc::satb_store`: `slot` must be a valid, aligned `Ref` location.
 #[inline(always)]
 pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
-    crate::gc::satb_store(slot, v)
+    crate::heap::satb_store(slot, v)
 }
 
 pub fn aastore_ref(a: Ref, i: i32, v: Ref) -> Res<()> {
@@ -854,7 +854,7 @@ pub fn aastore_ref(a: Ref, i: i32, v: Ref) -> Res<()> {
             }
         }
     }
-    unsafe { crate::gc::satb_store((d as *mut Ref).add(i as usize), v) };
+    unsafe { crate::heap::satb_store((d as *mut Ref).add(i as usize), v) };
     Ok(())
 }
 
@@ -1021,7 +1021,7 @@ pub fn monitorexit(r: Ref) -> Res<()> {
 
 pub fn set_main_thread(t: Ref) {
     crate::sync::set_current(t);
-    crate::gc::set_thread_obj(t);
+    crate::heap::set_thread_obj(t);
 }
 
 pub fn is_subclass(sub: &'static Class, sup: &'static Class) -> bool {
@@ -1114,7 +1114,7 @@ pub fn init_enter(st: &AtomicU64, name: &str) -> Res<bool> {
         return Ok(false);
     }
     let me = crate::sync::tid() * 4 + 1;
-    let _blk = crate::gc::ScopedBlock::enter();
+    let _blk = crate::heap::ScopedBlock::enter();
     let (m, cv) = init_lock();
     let trace = std::env::var_os("MONO_TRACE_INIT").is_some();
     let mut g = m.lock().unwrap();

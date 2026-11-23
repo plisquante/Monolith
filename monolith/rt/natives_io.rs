@@ -1,6 +1,6 @@
 //! File IO, UnixFileSystem, zlib compression/checksums, ServiceLoader, TimeZone,
 //! Atomics, Reflection Array/Executable helpers, System/Runtime IO, and remaining Unsafe ops.
-use crate::gc::ScopedBlock;
+use crate::heap::ScopedBlock;
 use crate::rt::{self, Arr, Ref, Res};
 use std::ffi::{CStr, CString};
 use std::io::ErrorKind;

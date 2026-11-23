@@ -1,7 +1,7 @@
 //! NIO filesystem and channel natives (UnixNativeDispatcher, LinuxNativeDispatcher,
 //! LinuxWatchService, UnixFileDispatcherImpl, FileDispatcherImpl, EPoll, EventFD,
 //! IOUtil, NativeThread, FileKey, UnixDispatcher, MappedMemoryUtils).
-use crate::gc::ScopedBlock;
+use crate::heap::ScopedBlock;
 use crate::rt::{self, Arr, Ref, Res};
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_long, c_uint, c_ulong, c_void};

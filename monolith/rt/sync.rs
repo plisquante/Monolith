@@ -59,7 +59,7 @@ pub fn enter(r: Ref) -> Res<()> {
             return Ok(());
         }
     }
-    let _blk = crate::gc::ScopedBlock::enter();
+    let _blk = crate::heap::ScopedBlock::enter();
     let mut st = m.st.lock().unwrap();
     loop {
         if st.owner == 0 {
@@ -120,7 +120,7 @@ pub fn wait(r: Ref, millis: i64, nanos: i32) -> Res<()> {
     if std::env::var_os("MONO_TRACE_PARK").is_some() {
         eprintln!("[mono:wait] millis={} nanos={}\n{}", millis, nanos, std::backtrace::Backtrace::force_capture());
     }
-    let _blk = crate::gc::ScopedBlock::enter();
+    let _blk = crate::heap::ScopedBlock::enter();
     let mut st = m.st.lock().unwrap();
     if st.owner != me {
         return rt::throw("java/lang/IllegalMonitorStateException", "current thread is not owner".to_string());
@@ -198,7 +198,7 @@ pub fn is_interrupted(t: Ref, clear: bool) -> Res<bool> {
 pub fn sleep(nanos: i64) -> Res<()> {
     let ts = tstate(current_thread());
     let end = Instant::now() + Duration::from_nanos(nanos.max(0) as u64);
-    let _blk = crate::gc::ScopedBlock::enter();
+    let _blk = crate::heap::ScopedBlock::enter();
     let mut g = ts.sleep_m.lock().unwrap();
     loop {
         if ts.interrupted.swap(false, Ordering::SeqCst) {
@@ -216,7 +216,7 @@ pub fn park(absolute: bool, time: i64) {
     if std::env::var_os("MONO_TRACE_PARK").is_some() {
         eprintln!("[mono:park] abs={} time={}\n{}", absolute, time, std::backtrace::Backtrace::force_capture());
     }
-    let _blk = crate::gc::ScopedBlock::enter();
+    let _blk = crate::heap::ScopedBlock::enter();
     let mut p = ts.permit.lock().unwrap();
     if *p {
         *p = false;
@@ -253,10 +253,10 @@ pub fn start(t: Ref, stack: i64) -> Res<()> {
     let addr = rt::nn_ref(t)?.0 as usize;
     let ss = if stack > 0 { (stack as usize).max(1 << 20) } else { 64 << 20 };
     let r = std::thread::Builder::new().stack_size(ss).spawn(move || {
-        let _gc_guard = crate::gc::ThreadGuard::enter();
+        let _gc_guard = crate::heap::ThreadGuard::enter();
         let t = Ref(addr as *mut Obj);
         set_current(t);
-        crate::gc::set_thread_obj(t);
+        crate::heap::set_thread_obj(t);
         let _ = (rt::hooks().thread_run)(t);
     });
     match r {
