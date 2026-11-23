@@ -1,0 +1,14 @@
+[package]
+name = "touchcore-native"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "touchcore_native"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+
+[profile.release]
+panic = "abort"
