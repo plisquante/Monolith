@@ -176,3 +176,12 @@ Kaynak: `MONO_GC_PHASES=1`, 150 sn headless oyun, 33 toplama.
 - En uzun toplam duraklama 1,14 sn. Önceki "profil kaynaklı" iddiası YANLIŞTI; 1,3–1,8 sn rakamları gerçekti, ağır heap'te ortaya çıkıyor.
 - Canlı heap 150 sn içinde 10 MB'dan 495 MB'a çıktı. Bu, oyun içinde yükleme (chunk) dışında bir büyüme olabilir: sızıntı bütçesi aracı ile ayrılmalı (A1).
 - Bariyer mikro ölçümü (`bench.rs`, bu oturumda): bariyer kapalıyken yazma 1,46 ns, açıkken (tampona itme dahil) 5,63 ns; yani işaretleme penceresinde ~3,9×. Pencere kısa olduğu sürece ortalama maliyet düşük, ama oyunda ölçülmeden %3 hedefi doğrulanmış sayılmaz.
+
+## 9. GC panic "fresh slab has slot" (kanıtlandı ve düzeltildi)
+
+- Oyun 26 dk'da çöktü (`gc.rs`, alloc_small_slow). Kök neden: kısmi (partial) listedeki bir slab'in boş yeri olmayabiliyordu;
+  thread çıkışında dolu slab'ler de listeye geri konuyordu, tahsis yolu ise boş yer varsayıyordu.
+- Düzeltme (`5fc6a64`): kısmi listeden yalnızca boş yeri olan slab alınır; thread çıkışında yalnızca boş yeri olanlar
+  geri konur; tahsis dolu bir slab bulursa yeniden dener (panic yok).
+- Kanıt: `monolith/tests/GcSlabStress.java`, `MONO_GC_MB=1`. Düzeltme öncesi (`39d3c16`): 3/3 çökme (çıkış 134).
+  Düzeltmeli: 3/3 geçti, checksum HotSpot ile aynı (276071380).
