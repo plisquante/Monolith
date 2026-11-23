@@ -1378,7 +1378,8 @@ pub fn capture_backtrace() -> String {
         for t in frames
             .iter()
             .rev()
-            .skip_while(|t| t.method == "<init>" || (t.class == "java/lang/Throwable" && t.method == "fillInStackTrace"))
+            // any Throwable subclass may override fillInStackTrace (the JDK's NullPointerException does)
+            .skip_while(|t| t.method == "<init>" || t.method == "fillInStackTrace")
         {
             out.push_str(&format!("{}\t{}\t{}\t{}\n", t.class.replace('/', "."), t.method, t.file, t.line));
         }
