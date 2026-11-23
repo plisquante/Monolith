@@ -70,9 +70,7 @@ extern "C" {
     static ffi_type_sint8: u8;
     static ffi_type_uint16: u8;
     static ffi_type_sint16: u8;
-    static ffi_type_uint32: u8;
     static ffi_type_sint32: u8;
-    static ffi_type_uint64: u8;
     static ffi_type_sint64: u8;
     static ffi_type_float: u8;
     static ffi_type_double: u8;
