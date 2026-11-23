@@ -579,7 +579,7 @@ pub struct StrObj {
 }
 /// A new String from UTF-16 code units.
 pub fn mk_string(chars: &[u16]) -> Ref {
-    let arr = new_array(b'C', chars.len() as i32).ok().expect("Monolith: out of memory");
+    let arr = new_array(b'C', chars.len() as i32).expect("Monolith: out of memory");
     unsafe {
         let d = (arr.0 as *mut u8).add(24) as *mut u16;
         std::ptr::copy_nonoverlapping(chars.as_ptr(), d, chars.len());

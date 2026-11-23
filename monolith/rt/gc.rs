@@ -391,8 +391,7 @@ fn capture_regs() -> [usize; 11] {
 #[inline(never)]
 fn flush_regs_and_sp() -> usize {
     let mut x: usize = 0;
-    let p = std::hint::black_box(&mut x as *mut usize as usize);
-    p
+    std::hint::black_box(&mut x as *mut usize as usize)
 }
 
 pub fn register_thread(stack_marker: usize) {
@@ -1354,7 +1353,7 @@ fn collect_impl(begin_only: bool) {
         eprintln!("[mono:gc_phases] gc={} wait={}us roots={}us mark={}us sweep={}us total={}us live={}B", h.gc_count, t_wait.as_micros(), t_roots.as_micros(), t_mark.as_micros(), t_sweep.as_micros(), t_entry.elapsed().as_micros(), new_live);
     }
     if let Some(c) = census.take() {
-        c.finish(h.gc_count as u64, new_live, h.heap_bytes, since_gc, stw_start);
+        c.finish(h.gc_count, new_live, h.heap_bytes, since_gc, stw_start);
     }
     h.live_bytes = new_live;
     h.gc_threshold = (new_live * 2).max(16 * 1024 * 1024);
