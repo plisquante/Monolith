@@ -1325,6 +1325,7 @@ pub fn init_failure(name: &str, r: Res<()>) -> Res<()> {
 struct FrameTag {
     class: &'static str,
     method: &'static str,
+    desc: &'static str,
     file: &'static str,
     /// source line of the statement being executed (-1 until the first line marker)
     line: i32,
@@ -1360,13 +1361,18 @@ pub fn set_line(line: i32) {
 }
 
 #[inline(always)]
-pub fn enter_frame(class: &'static str, method: &'static str, file: &'static str) -> FrameGuard {
+pub fn enter_frame(class: &'static str, method: &'static str, desc: &'static str, file: &'static str) -> FrameGuard {
     let _ = FRAMES.try_with(|f| {
         if let Ok(mut v) = f.try_borrow_mut() {
-            v.push(FrameTag { class, method, file, line: -1 });
+            v.push(FrameTag { class, method, desc, file, line: -1 });
         }
     });
     FrameGuard
+}
+
+/// Every frame on this thread, innermost first: (class internal name, method, descriptor, source file, line).
+pub fn frames_snapshot() -> Vec<(&'static str, &'static str, &'static str, &'static str, i32)> {
+    FRAMES.with(|f| f.borrow().iter().rev().map(|t| (t.class, t.method, t.desc, t.file, t.line)).collect())
 }
 
 /// One line per frame, innermost first: class (dotted), method, source file (may be empty), line (-1 unknown),

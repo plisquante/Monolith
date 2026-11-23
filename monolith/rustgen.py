@@ -882,7 +882,7 @@ class MethodGen:
         if handlers:
             self.sname(0, "A")
         body = ["    rt::stack_check()?;",
-                f"    let _frame = rt::enter_frame({rstr(self.ci.name)}, {rstr(m.name)}, {rstr(self.ci.cf.source_file or '')});"]
+                f"    let _frame = rt::enter_frame({rstr(self.ci.name)}, {rstr(m.name)}, {rstr(m.desc)}, {rstr(self.ci.cf.source_file or '')});"]
         for n, k in sorted(self.used_locals.items()):
             body.append(f"    let mut {n}: {RT[k]} = {DEFAULT[k]};")
         for n, k in sorted(self.used_stack.items()):

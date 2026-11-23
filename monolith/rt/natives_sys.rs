@@ -333,50 +333,34 @@ unsafe extern "system" {
 }
 
 pub fn n_java_lang_StackWalker__frames0() -> Res<Ref> {
-    let mut raw = [std::ptr::null_mut::<c_void>(); 128];
-    let n: usize = {
-        #[cfg(target_os = "linux")]
-        {
-            let cnt = unsafe { backtrace(raw.as_mut_ptr(), raw.len() as c_int) };
-            if cnt > 0 { cnt as usize } else { 0 }
-        }
-        #[cfg(target_os = "windows")]
-        {
-            unsafe { RtlCaptureStackBackTrace(0, raw.len() as u32, raw.as_mut_ptr(), std::ptr::null_mut()) as usize }
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-        {
-            0
-        }
-    };
-    let table = method_addr_table();
-    let mut frames: Vec<(Ref, &'static str, &'static str)> = Vec::new();
-    for &ptr in &raw[..n] {
-        let ip = ptr as usize;
-        if ip == 0 { continue; }
-        let idx = table.partition_point(|e| e.0 <= ip);
-        if idx > 0 {
-            let (start, c, m) = table[idx - 1];
-            if ip.saturating_sub(start) < 512 * 1024 {
-                frames.push((rt::class_mirror(c)?, m.name, m.desc));
-            }
-        }
-    }
-    let obj_cls = rt::hooks().object_class;
+    // The shadow stack is exact (generated methods push their own frame); the machine stack is not, because an
+    // instruction address only tells us the nearest method start, not the method that owns it.
+    let frames = rt::frames_snapshot();
     let cls_cls = rt::hooks().class_class;
     let str_cls = rt::hooks().string_class;
-    let len = frames.len() as i32;
+    let obj_cls = rt::hooks().object_class;
+    let mut mirrors: Vec<Ref> = Vec::with_capacity(frames.len());
+    let mut kept: Vec<(&'static str, &'static str, &'static str, i32)> = Vec::with_capacity(frames.len());
+    for (cls, method, desc, file, line) in frames {
+        // classes the program cannot name (generated lambda proxies have no class-table entry) are skipped
+        let Some(c) = rt::find_class(&cls.replace('/', ".")) else { continue };
+        mirrors.push(rt::class_mirror(c)?);
+        kept.push((method, desc, file, line));
+    }
+    let len = mirrors.len() as i32;
     let ca = rt::new_obj_array(cls_cls, len)?;
     let na = rt::new_obj_array(str_cls, len)?;
     let da = rt::new_obj_array(str_cls, len)?;
     let fa = rt::new_obj_array(str_cls, len)?;
     let la = rt::new_array(b'I', len)?;
-    for (i, (cm, mname, mdesc)) in frames.into_iter().enumerate() {
+    for (i, (cm, (method, desc, file, line))) in mirrors.into_iter().zip(kept).enumerate() {
         let idx = i as i32;
         rt::aastore_ref(ca, idx, cm)?;
-        rt::aastore_ref(na, idx, rt::new_str(mname.to_string()))?;
-        rt::aastore_ref(da, idx, rt::new_str(mdesc.to_string()))?;
-        rt::aastore_ref(fa, idx, Ref::NULL)?;
+        rt::aastore_ref(na, idx, rt::new_str(method.to_string()))?;
+        rt::aastore_ref(da, idx, rt::new_str(desc.to_string()))?;
+        let f = if file.is_empty() { Ref::NULL } else { rt::new_str(file.to_string()) };
+        rt::aastore_ref(fa, idx, f)?;
+        rt::astore(la, idx, line)?;
     }
     let out = rt::new_obj_array(obj_cls, 5)?;
     rt::aastore_ref(out, 0, ca)?;
