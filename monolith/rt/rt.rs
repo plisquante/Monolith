@@ -470,12 +470,16 @@ pub fn set_fd(fd_obj: Ref, fd: i32) -> Res<()> {
     Ok(())
 }
 
+/// # Safety
+/// `arr` must be a live byte array. The returned slice must not outlive the array and must not alias a live `&mut`.
 pub unsafe fn byte_slice<'a>(arr: Ref) -> Res<&'a [u8]> {
     let a = nn(arr)? as *const Arr;
     let len = (*a).len as usize;
     Ok(std::slice::from_raw_parts((a as *const u8).add(24), len))
 }
 
+/// # Safety
+/// `arr` must be a live byte array. The caller must hold exclusive access to its bytes for the slice's lifetime.
 pub unsafe fn byte_slice_mut<'a>(arr: Ref) -> Res<&'a mut [u8]> {
     let a = nn(arr)? as *mut Arr;
     let len = (*a).len as usize;
@@ -502,6 +506,8 @@ pub fn alloc(class: &'static Class) -> Ref {
 /// An object kept in the frame of the function that creates it (the escape analysis proved it dies with that call or loop
 /// iteration). `p` is the function's slot for this allocation site; it is cleared and given the class header on every
 /// execution of the `new`. The collector ignores it (not a heap address) and finds what it references by scanning stacks.
+/// # Safety
+/// `p` must be valid and aligned for `class.size.max(16)` bytes of writes, and must stay alive for the object's lifetime.
 #[inline(always)]
 pub unsafe fn stack_obj(p: *mut u8, class: &'static Class) -> Ref {
     unsafe {
@@ -605,6 +611,8 @@ pub fn intern_string(s: Ref) -> Ref {
     });
     Ref(ptr as *mut Obj)
 }
+/// # Safety
+/// `slot` must be valid for reads and writes of a `Ref` and must not be accessed concurrently without synchronization.
 pub unsafe fn lit(slot: *mut Ref, data: &'static [u16]) -> Ref {
     use std::sync::atomic::{AtomicPtr, Ordering};
     let ap = &*(slot as *const AtomicPtr<Obj>);
@@ -822,6 +830,8 @@ pub fn astore<T: Copy>(a: Ref, i: i32, v: T) -> Res<()> {
     Ok(())
 }
 /// Referans yazma bariyeri; üretilen kod da bunu kullanır (rustgen: putfield/putstatic).
+/// # Safety
+/// Same contract as `gc::satb_store`: `slot` must be a valid, aligned `Ref` location.
 #[inline(always)]
 pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
     crate::gc::satb_store(slot, v)

@@ -281,6 +281,8 @@ pub fn sweep_begin() -> Option<Sweep> {
 impl Sweep {
     /// A surviving object of `size` bytes: counted at its age, then one collection older (capped at 3).
     #[inline]
+    /// # Safety
+    /// `o` must point to an object of `size` bytes that is live from now on.
     pub unsafe fn live(&mut self, o: *mut Obj, size: usize) {
         let age = (((*o).gc & AGE_MASK) >> AGE_SHIFT) as usize;
         if let Some(i) = self.st.table.get((*o).class) {
@@ -293,6 +295,8 @@ impl Sweep {
     }
     /// An object that is being freed: counted at the age it reached. Call before the slot is reused.
     #[inline]
+    /// # Safety
+    /// `o` must point to an object of `size` bytes that has just been reclaimed.
     pub unsafe fn dead(&mut self, o: *mut Obj, size: usize) {
         let age = (((*o).gc & AGE_MASK) >> AGE_SHIFT) as usize;
         if let Some(i) = self.st.table.get((*o).class) {

@@ -8,9 +8,15 @@ pub trait Vt: Copy {
     const IS_REF: bool = false;
     fn to_st(self) -> Self::St;
     fn from_st(s: Self::St) -> Self;
+    /// # Safety
+    /// `p` must be valid and aligned for reads of `Self`.
     unsafe fn load(p: *mut Self) -> Self;
+    /// # Safety
+    /// `p` must be valid and aligned for writes of `Self`.
     unsafe fn store(p: *mut Self, v: Self);
     /// strong CAS; returns the previous value
+    /// # Safety
+    /// `p` must be valid and aligned for reads and writes of `Self`.
     unsafe fn cas(p: *mut Self, e: Self, n: Self) -> Self;
     fn bits_eq(a: Self, b: Self) -> bool;
     fn add(a: Self, b: Self) -> Self;

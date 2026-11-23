@@ -38,6 +38,8 @@ extern "C" {
 
 /// The process environment block: a NULL-terminated array of "K=V" strings.
 #[cfg(not(windows))]
+/// # Safety
+/// The returned pointer is invalidated by any environment mutation (`setenv`, `putenv`, `unsetenv`).
 pub unsafe fn environ_ptr() -> *const *const c_char {
     environ
 }
