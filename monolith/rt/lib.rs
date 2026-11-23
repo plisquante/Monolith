@@ -15,3 +15,6 @@ pub mod natives_jni;
 pub mod natives_rhi;
 pub mod audio;
 pub mod audio_dev;
+pub mod audio_wasapi;
+pub mod audio_coreaudio;
+pub mod desk;

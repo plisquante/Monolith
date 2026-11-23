@@ -1,6 +1,9 @@
-# Cross-platform verification of the Rust runtime: every OS builds the runtime's type-checked rlib and runs the unit
-# tests of the platform-independent parts. Linking and the game itself run only where the platform's libraries and
-# a display or audio device exist; see docs/RELEASE.md for what each platform still needs.
+# Platform doğrulaması. Her işletim sistemi:
+#   1. Çalışma zamanının (rt_deps ile birlikte) tip denetimini yapar,
+#   2. masaüstü arka ucunun duman testini çalıştırır: pencere açılır, OpenGL çizer ve bir pikseli geri okur,
+#      tampon değişir, girdi yoklanır, fare yakalama açılıp kapanır, ses aygıtına bir ton gönderilir.
+#      Linux'ta pencere Xvfb (sanal ekran) üzerinde açılır; ses aygıtı yoksa betik sessiz çıkışa düşer ve bunu bildirir.
+# Oyunun tamamı (çeviri, derleme, açılış) .github/workflows/game.yml içindedir.
 name: platforms
 
 on:
@@ -37,8 +40,8 @@ jobs:
 
       - name: Runtime type-check for this platform (rlib metadata)
         run: |
-          # the rlib cargo links against for the host is the one in target/release/deps; build-script output
-          # directories hold other copies of the crate built against other dependencies, so they are not taken
+          # Cargo'nun ana derleme için yazdığı rlib: target/release/deps. Derleme betiği dizinlerindeki kopyalar
+          # başka bağımlılıklarla derlenmiştir ve alınmamalıdır (E0460).
           C=$(find rt_deps/target/release/deps -maxdepth 1 -name 'libcrc32fast-*.rlib')
           N=$(printf '%s\n' "$C" | grep -c .)
           if [ "$N" != 1 ]; then echo "expected one crc32fast rlib in rt_deps/target/release/deps, found $N"; printf '%s\n' "$C"; exit 1; fi
@@ -50,6 +53,25 @@ jobs:
         run: |
           rustc --edition 2021 --test tests/rust/audio_main.rs -o audio_tests
           ./audio_tests
+
+      - name: Sanal ekran (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri
+
+      - name: Desktop back end smoke test (build)
+        run: |
+          case "$RUNNER_OS" in Windows) X=.exe;; *) X=;; esac
+          rustc --edition 2021 -O tests/rust/desktop_main.rs -o "desktop_smoke$X"
+
+      - name: Desktop back end smoke test (window, OpenGL, input, audio)
+        run: |
+          case "$RUNNER_OS" in
+            Linux) xvfb-run -a ./desktop_smoke ;;
+            Windows) ./desktop_smoke.exe ;;
+            macOS) ./desktop_smoke ;;
+          esac
 
   translator:
     runs-on: ubuntu-latest

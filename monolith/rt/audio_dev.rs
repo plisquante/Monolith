@@ -157,10 +157,26 @@ pub fn open_device() -> (Box<dyn Sink + Send>, String) {
             Err(e) => (Box::new(PacedSilence), format!("audio: no output device ({e}); playing silently")),
         }
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
     {
         let _ = want;
-        (Box::new(PacedSilence), "audio: this platform has no output device yet (Windows WASAPI and macOS CoreAudio are not written); playing silently".to_string())
+        match crate::audio_wasapi::WasapiSink::open() {
+            Ok(s) => (Box::new(s), "audio: WASAPI default output".to_string()),
+            Err(e) => (Box::new(PacedSilence), format!("audio: no output device ({e}); playing silently")),
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = want;
+        match crate::audio_coreaudio::AudioQueueSink::open() {
+            Ok(s) => (Box::new(s), "audio: AudioQueue default output".to_string()),
+            Err(e) => (Box::new(PacedSilence), format!("audio: no output device ({e}); playing silently")),
+        }
+    }
+    #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
+    {
+        let _ = want;
+        (Box::new(PacedSilence), "audio: this platform has no output device (playing silently)".to_string())
     }
 }
 

@@ -1,0 +1,60 @@
+# Oyunun CI'da derlenip sanal ekranda açılması (Linux x86_64).
+# Oyun istemci jar'ı depoda yoktur (Minecraft'ın telifli dosyası; depoya konmaz, dağıtılmaz). Jar'ın adresi
+# MC_CLIENT_JAR_URL gizli değişkeninde verilir. Gizli değişken yoksa iş açık bir hatayla durur; atlanmaz.
+name: game
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  boot-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Istemci jar'i (MC_CLIENT_JAR_URL)
+        env:
+          MC_CLIENT_JAR_URL: ${{ secrets.MC_CLIENT_JAR_URL }}
+        run: |
+          if [ -z "$MC_CLIENT_JAR_URL" ]; then
+            echo "FAIL: MC_CLIENT_JAR_URL gizli degiskeni tanimli degil; oyun derlenemez (bkz. docs/RELEASE.md)"
+            exit 1
+          fi
+          curl -sSL --retry 4 -o "$RUNNER_TEMP/client.jar" "$MC_CLIENT_JAR_URL"
+          test -s "$RUNNER_TEMP/client.jar"
+          echo "MC_JAR=$RUNNER_TEMP/client.jar" >> "$GITHUB_ENV"
+
+      - name: Sanal ekran ve OpenGL (Xvfb, Mesa)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri imagemagick
+
+      - name: JDK 25
+        run: |
+          mkdir -p "$HOME/.cache/monolith/temurin-25"
+          curl -sSL --retry 4 -o /tmp/jdk25.tar.gz "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse"
+          tar -xzf /tmp/jdk25.tar.gz -C "$HOME/.cache/monolith/temurin-25"
+          echo "MONO_JDK_HOME=$(echo "$HOME"/.cache/monolith/temurin-25/jdk-*)" >> "$GITHUB_ENV"
+
+      - name: Oyunu derle (ceviri, Rust, baglama)
+        run: |
+          python3 tools/mcbuild_rust.py "$MC_JAR" -o build/minecraft-26.3 --shards 32 --shard-jobs 2
+
+      - name: Oyunu sanal ekranda ac ve dogrula (120 sn)
+        run: |
+          sh tools/ci_game_boot.sh build/minecraft-26.3 --seconds 120 --out build/minecraft-26.3/boot
+
+      - name: Ekran goruntusu ve gunluk
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-boot-linux
+          path: build/minecraft-26.3/boot
+          if-no-files-found: warn
+          retention-days: 14
