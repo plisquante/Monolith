@@ -199,3 +199,9 @@ Kaynak: `MONO_GC_PHASES=1`, 150 sn headless oyun, 33 toplama.
 - Kural (`docs/GC_PLAN.md`, önceden kaydedildi): ısınma 30 dk, eğim 30–60. dakika, bütçe 1 MiB/dk.
 - Sonuç: eğim **+0,013 MiB/dk**, 43 ölçüm noktası, canlı heap son değer 224 MiB, en uzun duraklama 806 ms.
 - Sınır: tek koşu. Kapının "geçti" sayılması bu tekrarlanabilirliği kanıtlamaz; ikinci bir koşu ve farklı bir senaryo gerekir.
+
+## 12. SATB algoritma prototipi (kanıtlandı, gc.rs'e dokunulmadı)
+
+- `tests/rust/satb_proto.rs`: eşzamanlı işaretleme, mutatörler işaretleme sürerken referans değiştirir, her yazma bariyerden geçer.
+- Sonuç: 50 deneme geçti; aynı test bariyer kapalıyken ilk denemede canlı bir nesneyi kaçırıyor (`lost`). Yani bariyer gerekli ve bu
+  tasarım yeterli (bu model için). `gc.rs`'e entegrasyon ayrı, toplu bir yeniden derleme işi.
