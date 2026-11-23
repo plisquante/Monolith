@@ -68,6 +68,20 @@ jobs:
       - name: Istemci jar'i (resmi manifest, SHA-1 dogrulamali)
         run: python tools/fetch_client_jar.py --version 26.3 --out "$RUNNER_TEMP/client.jar"
 
+      - name: zlib ve libffi (vcpkg, statik, x64-windows-static)
+        shell: pwsh
+        run: |
+          vcpkg install zlib:x64-windows-static libffi:x64-windows-static
+          $lib = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows-static\lib"
+          $dst = Join-Path $env:RUNNER_TEMP "winlibs"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          # the runtime links -lz and -lffi; vcpkg names the files zlib.lib and ffi*.lib
+          Copy-Item (Join-Path $lib "zlib.lib") (Join-Path $dst "z.lib") -Force
+          $ffi = Get-ChildItem $lib -Filter "*ffi*.lib" | Select-Object -First 1
+          if (-not $ffi) { throw "libffi import library not found in $lib" }
+          Copy-Item $ffi.FullName (Join-Path $dst "ffi.lib") -Force
+          Add-Content -Path $env:GITHUB_ENV -Value "LIB=$dst;$lib;$env:LIB"
+
       - name: Oyunu derle (MSVC, JDK ve kutuphaneler otomatik)
         run: |
           python tools/mcbuild_rust.py "$RUNNER_TEMP/client.jar" -o build/minecraft-26.3 --shards 32 --shard-jobs 2
