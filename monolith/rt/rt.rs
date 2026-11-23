@@ -100,6 +100,8 @@ pub struct Class {
 pub struct ArrCache(pub std::sync::atomic::AtomicPtr<Class>);
 unsafe impl Sync for ArrCache {}
 impl ArrCache {
+    // a const, not a static: each use in a static initializer gets its own cell
+    #[allow(clippy::declare_interior_mutable_const)]
     pub const NEW: ArrCache = ArrCache(std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()));
 }
 pub struct SPtr(pub *mut u8);
@@ -175,6 +177,8 @@ impl Class {
 unsafe impl Sync for Class {}
 pub struct Mirror(pub std::sync::atomic::AtomicPtr<Obj>);
 impl Mirror {
+    // a const, not a static: each use in a static initializer gets its own cell
+    #[allow(clippy::declare_interior_mutable_const)]
     pub const NEW: Mirror = Mirror(std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()));
 }
 pub struct IEnt(pub u32, pub Fp);
