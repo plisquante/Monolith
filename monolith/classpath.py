@@ -263,19 +263,27 @@ def jdk_home() -> str:
     cands = [os.environ.get("MONO_JDK_HOME"), os.environ.get("JAVA_HOME")]
     # mcbuild installs Temurin under ~/.cache/monolith/temurin-<major>/jdk-*/ — look there first
     cache = os.path.join(os.path.expanduser("~"), ".cache", "monolith")
-    homes = [os.path.dirname(os.path.dirname(p)) for p in
-             _glob.glob(os.path.join(cache, "temurin-25", "**", "bin", "javac"), recursive=True)]
+    homes = [os.path.dirname(os.path.dirname(p)) for pat in ("javac", "javac.exe") for p in
+             _glob.glob(os.path.join(cache, "temurin-25", "**", "bin", pat), recursive=True)]
     cands += sorted(homes, reverse=True)
     cands += sorted(_glob.glob("/opt/jdk25/jdk-25*"), reverse=True)
     cands += ["/usr/lib/jvm/java-25-openjdk-amd64", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default-java"]
     for c in cands:
-        if c and os.path.isfile(os.path.join(c, "bin", "javac")):
+        if c and _has_javac(c):
             return c
     raise SystemExit("monolith: no JDK found (set MONO_JDK_HOME)")
 
 
+def _has_javac(home: str) -> bool:
+    """javac (javac.exe on Windows) in home/bin."""
+    return any(os.path.isfile(os.path.join(home, "bin", n)) for n in ("javac", "javac.exe"))
+
+
 def jdk_tool(name: str) -> str:
-    return os.path.join(jdk_home(), "bin", name)
+    """A JDK program by name; .exe is added on Windows."""
+    home = jdk_home()
+    exe = os.path.join(home, "bin", name + ".exe")
+    return exe if os.path.isfile(exe) else os.path.join(home, "bin", name)
 
 
 # JDK modules made available to applications (java.base first). Desktop/AWT is not needed by
