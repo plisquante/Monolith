@@ -23,7 +23,7 @@ const SIZE_CLASSES: [usize; NUM_CLASSES] = [
 #[inline(always)]
 fn size_class(sz: usize) -> Option<usize> {
     if sz <= 64 {
-        Some((sz.max(16) + 15) / 16 - 1)
+        Some(sz.max(16).div_ceil(16) - 1)
     } else if sz <= 2048 {
         for (i, &c) in SIZE_CLASSES.iter().enumerate().skip(4) {
             if sz <= c {
@@ -823,7 +823,7 @@ static CONC: Mutex<Option<ConcCycle>> = Mutex::new(None);
 /// Diagnostics (MONO_GC_POISON=1): freed slots are overwritten with 0xDD so a use-after-free is visible at once.
 fn poison_enabled() -> bool {
     static P: OnceLock<bool> = OnceLock::new();
-    *P.get_or_init(|| std::env::var_os("MONO_GC_POISON").map_or(false, |v| !v.is_empty() && v != "0"))
+    *P.get_or_init(|| std::env::var_os("MONO_GC_POISON").is_some_and(|v| !v.is_empty() && v != "0"))
 }
 
 fn concurrent_enabled() -> bool {

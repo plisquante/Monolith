@@ -11,7 +11,7 @@ use std::sync::OnceLock;
 /// patch, compares the raw bits and aborts on the first difference.
 pub fn verify() -> bool {
     static V: OnceLock<bool> = OnceLock::new();
-    *V.get_or_init(|| std::env::var_os("MONO_PATCH_VERIFY").map_or(false, |v| !v.is_empty() && v != "0"))
+    *V.get_or_init(|| std::env::var_os("MONO_PATCH_VERIFY").is_some_and(|v| !v.is_empty() && v != "0"))
 }
 
 pub fn mismatch(what: &str) -> ! {

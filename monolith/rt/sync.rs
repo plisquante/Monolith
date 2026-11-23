@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 static NEXT_TID: AtomicU64 = AtomicU64::new(1);
 thread_local! {
     static TID: u64 = NEXT_TID.fetch_add(1, Ordering::Relaxed);
-    static CUR: Cell<Ref> = Cell::new(Ref::NULL);
+    static CUR: Cell<Ref> = const { Cell::new(Ref::NULL) };
 }
 pub fn tid() -> u64 {
     TID.with(|t| *t)

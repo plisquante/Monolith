@@ -263,7 +263,7 @@ pub fn n_java_lang_Class__getConstantPool(this: Ref) -> Res<Ref> {
 // ------------------------------------------------------------------ jdk.internal.reflect.ConstantPool
 fn cp_entry(oop: Ref, idx: i32) -> Res<&'static CpEnt> {
     let c = rt::class_of_mirror(rt::nn_ref(oop)?);
-    let r = c.refl.ok_or_else(|| ())
+    let r = c.refl.ok_or(())
         .map_err(|_| crate::rt::Thrown { obj: (rt::hooks().throw_new)("java/lang/IllegalArgumentException", rt::new_str("Constant pool index out of bounds".to_string())) })?;
     if idx <= 0 || (idx as usize) >= r.cpool.len() {
         return rt::throw("java/lang/IllegalArgumentException", "Constant pool index out of bounds".to_string());

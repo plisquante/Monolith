@@ -191,7 +191,7 @@ fn err_msg(e: i32) -> String {
 }
 
 fn throw_net<T>(cls: &'static str, msg: String) -> Res<T> {
-    if let Some(_) = rt::find_class(cls) {
+    if rt::find_class(cls).is_some() {
         return rt::throw(cls, msg);
     }
     rt::throw("java/io/IOException", msg)

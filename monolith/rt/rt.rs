@@ -1134,7 +1134,7 @@ pub fn init_leave(st: &AtomicU64, ok: bool) {
 }
 
 // ------------------------------------------------------------------ caller class, program arguments, system properties
-thread_local! { static CALLER: std::cell::Cell<Option<&'static Class>> = std::cell::Cell::new(None); }
+thread_local! { static CALLER: std::cell::Cell<Option<&'static Class>> = const { std::cell::Cell::new(None) }; }
 pub fn set_caller(c: &'static Class) {
     CALLER.with(|x| x.set(Some(c)));
 }
