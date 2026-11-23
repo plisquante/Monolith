@@ -1378,6 +1378,8 @@ pub fn capture_backtrace() -> String {
         for t in frames
             .iter()
             .rev()
+            // hidden lambda proxy classes (`Owner$$Lambda$N`) do not appear in HotSpot traces
+            .filter(|t| !t.class.contains("$$Lambda$"))
             // any Throwable subclass may override fillInStackTrace (the JDK's NullPointerException does)
             .skip_while(|t| t.method == "<init>" || t.method == "fillInStackTrace")
         {
