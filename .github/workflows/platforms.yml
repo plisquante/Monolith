@@ -37,10 +37,12 @@ jobs:
 
       - name: Runtime type-check for this platform (rlib metadata)
         run: |
-          D=rt_deps/target/release/deps
-          C=$(ls $D/libcrc32fast-*.rlib | head -1)
+          # locate the crate's rlib wherever cargo put it (the target directory is not fixed on every runner)
+          C=$(find rt_deps/target -name 'libcrc32fast-*.rlib' | head -1)
+          if [ -z "$C" ]; then echo "crc32fast rlib not found under rt_deps/target"; find rt_deps/target -maxdepth 3 | head -20; exit 1; fi
+          D=$(dirname "$C")
           rustc --edition 2021 --crate-type lib --crate-name mono_rt --emit=metadata \
-            -L dependency="$PWD/$D" --extern crc32fast="$C" monolith/rt/lib.rs -o runtime.rmeta
+            -L dependency="$PWD/$D" --extern crc32fast="$PWD/$C" monolith/rt/lib.rs -o runtime.rmeta
 
       - name: Audio mixer and device layer unit tests
         run: |

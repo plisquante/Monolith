@@ -1,0 +1,2 @@
+# Vendored crates must stay byte-identical on every checkout (cargo verifies checksums; Windows autocrlf would change them)
+rt_deps/vendor/** binary
