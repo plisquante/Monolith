@@ -35,7 +35,7 @@ jobs:
 
       - name: Oyunu derle (JDK ve kutuphaneler otomatik)
         run: |
-          python3 tools/mcbuild_rust.py "$RUNNER_TEMP/client.jar" -o build/minecraft-26.3 --shards 32 --shard-jobs 2
+          python3 tools/mcbuild_rust.py "$RUNNER_TEMP/client.jar" -o build/minecraft-26.3 --shards 32 --shard-jobs 1
 
       - name: Oyunu sanal ekranda ac ve dogrula (120 sn)
         run: sh tools/ci_game_boot.sh build/minecraft-26.3 --seconds 120 --out build/minecraft-26.3/boot
@@ -89,7 +89,7 @@ jobs:
 
       - name: Oyunu derle (MSVC, JDK ve kutuphaneler otomatik)
         run: |
-          python tools/mcbuild_rust.py "$RUNNER_TEMP/client.jar" -o build/minecraft-26.3 --shards 32 --shard-jobs 2
+          python tools/mcbuild_rust.py "$RUNNER_TEMP/client.jar" -o build/minecraft-26.3 --shards 32 --shard-jobs 1
 
       - name: OpenGL 3.3 yazilim surucusu (Mesa 26.3.1, pal1000/mesa-dist-win)
         # GitHub Windows koşucusunda donanım sürücüsü yok ve GDI yalnızca OpenGL 1.1 verir; oyun 3.3 core ister.
@@ -143,7 +143,7 @@ jobs:
 
       - name: Oyunu derle (Apple clang, JDK ve kutuphaneler otomatik)
         run: |
-          python3 tools/mcbuild_rust.py "$RUNNER_TEMP/client.jar" -o build/minecraft-26.3 --shards 32 --shard-jobs 2
+          python3 tools/mcbuild_rust.py "$RUNNER_TEMP/client.jar" -o build/minecraft-26.3 --shards 32 --shard-jobs 1
 
       - name: Oyunu ac ve dogrula (120 sn)
         run: sh tools/ci_game_boot.sh build/minecraft-26.3 --seconds 120 --out build/minecraft-26.3/boot
