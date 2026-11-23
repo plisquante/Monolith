@@ -25,7 +25,6 @@ import re
 import shlex
 import subprocess
 import sys
-import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ARTIFACT_RE = re.compile(
