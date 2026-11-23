@@ -4,5 +4,6 @@ pub mod arena;
 pub mod cull;
 pub mod instancing;
 pub mod pool;
+pub mod rhi;
 pub mod thread_pool;
 pub mod world;
