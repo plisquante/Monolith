@@ -33,6 +33,10 @@ about 12 GB of RAM for the three-shard build, and about an hour for the build.
     python3 tools/mcbuild_rust.py client.jar -o build/minecraft-26.3
     build/minecraft-26.3/run.sh      (Windows: build\minecraft-26.3\run.bat)
 
+To run the same steps as the CI game job on your own machine (POSIX shells), with a log per step:
+
+    sh tools/ci_local.sh --out build/ci-local        # fetch, build, 120 s boot, concurrent-GC boot on Linux
+
 The first start needs a world: create one in Singleplayer. Options for the build: `--opt`, `--shards`, `--shard-jobs`
 (use 1 on a machine with little memory).
 
