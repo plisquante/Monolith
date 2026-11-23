@@ -1111,14 +1111,14 @@ public final class LauncherActivity extends Activity {
                     });
                     runOnUiThread(new Runnable() {
                         @Override public void run() {
-                            dlg.dismiss();
+                            dismissSafely(dlg);
                             startActivity(new Intent(LauncherActivity.this, GameActivity.class));
                         }
                     });
                 } catch (final Throwable t) {
                     runOnUiThread(new Runnable() {
                         @Override public void run() {
-                            dlg.dismiss();
+                            dismissSafely(dlg);
                             new AlertDialog.Builder(LauncherActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                                     .setTitle("Oyun baslatilamadi")
                                     .setMessage(String.valueOf(t.getMessage()))
@@ -1129,6 +1129,17 @@ public final class LauncherActivity extends Activity {
                 }
             }
         }).start();
+    }
+
+    /** Closes a dialog only while it is still attached: the system may already have removed it (activity recreated or
+     *  destroyed during a download), and dismissing a detached dialog throws IllegalArgumentException. */
+    private static void dismissSafely(android.app.Dialog d) {
+        if (d == null) return;
+        try {
+            if (d.isShowing()) d.dismiss();
+        } catch (IllegalArgumentException ignored) {
+            // window already gone
+        }
     }
 
     private void downloadMojangVersion(final MojangDownloader.VersionEntry ver) {
@@ -1152,7 +1163,8 @@ public final class LauncherActivity extends Activity {
                             });
                     runOnUiThread(new Runnable() {
                         @Override public void run() {
-                            progDlg.dismiss();
+                            if (isFinishing() || isDestroyed()) return;
+                            dismissSafely(progDlg);
                             config.selectedVersion = ver.id;
                             config.clientJarPath = jar.getAbsolutePath();
                             config.save();
@@ -1169,7 +1181,7 @@ public final class LauncherActivity extends Activity {
                 } catch (final Throwable t) {
                     runOnUiThread(new Runnable() {
                         @Override public void run() {
-                            progDlg.dismiss();
+                            dismissSafely(progDlg);
                             Toast.makeText(LauncherActivity.this,
                                     "İndirme hatası: " + t.getMessage(), Toast.LENGTH_LONG).show();
                         }
