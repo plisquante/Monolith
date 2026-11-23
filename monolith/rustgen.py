@@ -2421,15 +2421,17 @@ def rt_deps_key(target: str = "") -> str:
         return "none"
 
 
-def build_runtime_rlib(target: str, dest: str) -> None:
+def build_runtime_rlib(target: str, dest: str, opt: str = "3") -> None:
     """Builds monolith/rt as an rlib through cargo: rt_deps/check is a package whose library is the runtime. Cargo
     resolves the runtime's dependencies itself, and the shared target directory (rt_deps/target) makes it reuse the
     same crc32fast and cfg-if artifacts that rt_deps_flags passes to rustc (E0460 cannot arise)."""
     tgt = ["--target", target] if target else []
     # cwd is rt_deps: cargo reads the vendored-source configuration (rt_deps/.cargo) from the working directory
-    r = subprocess.run(["cargo", "build", "--release", "--offline", "--lib", "--manifest-path", "check/Cargo.toml",
-                        "--target-dir", "target", "--message-format=json", *tgt], cwd=RT_DEPS,
-                       capture_output=True, text=True)
+    # the runtime must have the optimisation level of the generated code: with share-generics (opt-level 0/1) the
+    # shards reference generic instances that only an rlib built at the same level exports
+    r = subprocess.run(["cargo", "rustc", "--release", "--offline", "--lib", "--manifest-path", "check/Cargo.toml",
+                        "--target-dir", "target", "--message-format=json", *tgt, "--", "-C", f"opt-level={opt}"],
+                       cwd=RT_DEPS, capture_output=True, text=True)
     if r.returncode:
         raise SystemExit("monolith: runtime build failed (cargo build in rt_deps/check)\n" + r.stderr[-6000:])
     import json
@@ -2468,7 +2470,7 @@ def _host_build(a, files, rt_dir) -> int:
     if os.path.exists(cached_rlib):
         shutil.copy(cached_rlib, rlib)
     else:
-        build_runtime_rlib(target, rlib)
+        build_runtime_rlib(target, rlib, str(a.opt))
         shutil.copy(rlib, cached_rlib)
     # Probe the runtime rlib before the shards: a crate that rustc cannot load is reported here with the rlib's
     # facts, not as an E0463 on every shard.
