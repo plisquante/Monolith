@@ -68,7 +68,10 @@ def main() -> int:
         source = "Mojang manifest"
 
     print(f"downloading {a.version} client from the {source}")
-    tmp_fd, tmp = tempfile.mkstemp(prefix="client_", suffix=".jar")
+    # the temporary file sits next to the target: os.replace cannot move files between drives (Windows C: to D:)
+    out_dir = os.path.dirname(os.path.abspath(a.out))
+    os.makedirs(out_dir, exist_ok=True)
+    tmp_fd, tmp = tempfile.mkstemp(prefix="client_", suffix=".jar", dir=out_dir)
     os.close(tmp_fd)
     try:
         with urllib.request.urlopen(url, timeout=600) as r, open(tmp, "wb") as f:

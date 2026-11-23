@@ -229,15 +229,28 @@ def version_metadata(vid: str, mc_dir: str | None) -> dict:
     raise SystemExit(f"[mcbuild] version {vid} is not in Mojang's manifest; pass --mc-dir with a local copy")
 
 
+def _jdk_home_under(root: str):
+    """The JDK home below `root`: the directory whose bin/ holds javac (javac.exe on Windows). macOS archives keep
+    it at <jdk>/Contents/Home, so the search goes a few levels deep."""
+    if not os.path.isdir(root):
+        return None
+    base_depth = root.rstrip(os.sep).count(os.sep)
+    for dirpath, dirnames, filenames in os.walk(root):
+        if os.path.basename(dirpath) == "bin" and ("javac" in filenames or "javac.exe" in filenames):
+            return os.path.dirname(dirpath)
+        if dirpath.count(os.sep) - base_depth >= 4:
+            dirnames[:] = []
+    return None
+
+
 def ensure_jdk(java_version: int) -> str:
     env = os.environ.get("MONO_JDK_HOME")
-    if env and os.path.isfile(os.path.join(env, "bin", "javac")):
+    if env and _jdk_home_under(env) == os.path.abspath(env):
         return env
     root = os.path.join(CACHE, f"temurin-{java_version}")
-    if os.path.isdir(root):
-        for d in os.listdir(root):
-            if os.path.isfile(os.path.join(root, d, "bin", "javac")):
-                return os.path.join(root, d)
+    found = _jdk_home_under(root)
+    if found:
+        return found
     osn = {"linux": "linux", "osx": "mac", "windows": "windows"}[mojang_os()]
     arch = "aarch64" if mojang_arch() == "arm64" else "x64"
     url = f"https://api.adoptium.net/v3/binary/latest/{java_version}/ga/{osn}/{arch}/jdk/hotspot/normal/eclipse"
@@ -265,10 +278,10 @@ def ensure_jdk(java_version: int) -> str:
         with tarfile.open(archive) as t:
             _safe_extract_tar(t, root)
     os.remove(archive)
-    for d in os.listdir(root):
-        if os.path.isfile(os.path.join(root, d, "bin", "javac")):
-            return os.path.join(root, d)
-    raise SystemExit(f"[mcbuild] JDK extracted but bin/javac not found under {root}; "
+    found = _jdk_home_under(root)
+    if found:
+        return found
+    raise SystemExit(f"[mcbuild] JDK extracted but javac not found under {root}; "
                      f"pass MONO_JDK_HOME pointing at a local JDK {java_version}")
 
 
