@@ -1,0 +1,67 @@
+# Cross-platform verification of the Rust runtime: every OS builds the runtime's type-checked rlib and runs the unit
+# tests of the platform-independent parts. Linking and the game itself run only where the platform's libraries and
+# a display or audio device exist; see docs/RELEASE.md for what each platform still needs.
+name: platforms
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Vendored dependencies, offline build (rt_deps)
+        run: |
+          cd rt_deps
+          cargo build --release --offline
+
+      - name: Runtime type-check for this platform (rlib metadata)
+        run: |
+          D=rt_deps/target/release/deps
+          C=$(ls $D/libcrc32fast-*.rlib | head -1)
+          rustc --edition 2021 --crate-type lib --crate-name mono_rt --emit=metadata \
+            -L dependency="$PWD/$D" --extern crc32fast="$C" monolith/rt/lib.rs -o runtime.rmeta
+
+      - name: Audio mixer and device layer unit tests
+        run: |
+          rustc --edition 2021 --test tests/rust/audio_main.rs -o audio_tests
+          ./audio_tests
+
+  translator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Lint (pyflakes)
+        run: |
+          python -m pip install pyflakes
+          python -m pyflakes monolith tools tests
+      - name: Release tooling self-check (packaging on a stub build)
+        run: |
+          mkdir -p /tmp/stub/rust /tmp/stub/resources
+          printf '#!/bin/sh\necho stub\n' > /tmp/stub/rust/prog && chmod +x /tmp/stub/rust/prog
+          printf '#!/bin/sh\n' > /tmp/stub/run.sh
+          python tools/make_release.py /tmp/stub --out /tmp/dist --name Stub --version 0.0.0 --dry-run

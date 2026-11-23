@@ -8,119 +8,127 @@
 //! thread changes the context through the natives; a short lock per block is the only synchronisation.
 
 use crate::audio::{Context, Sink, MIX_RATE};
-use std::ffi::{c_char, c_int, c_long, c_uint, c_void, CStr, CString};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 const BLOCK_FRAMES: usize = 1024;
 
-// ----- ALSA (libasound.so.2), the few calls needed for interleaved S16 playback
-const SND_PCM_STREAM_PLAYBACK: c_int = 0;
-const SND_PCM_FORMAT_S16_LE: c_int = 2;
-const SND_PCM_ACCESS_RW_INTERLEAVED: c_int = 3;
+#[cfg(target_os = "linux")]
+mod alsa {
+    use super::*;
+    use std::ffi::{c_char, c_int, c_long, c_uint, c_void, CStr, CString};
 
-extern "C" {
-    fn dlopen(file: *const c_char, flags: c_int) -> *mut c_void;
-    fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
-}
-const RTLD_NOW: c_int = 2;
+    // ----- ALSA (libasound.so.2), the few calls needed for interleaved S16 playback
+    const SND_PCM_STREAM_PLAYBACK: c_int = 0;
+    const SND_PCM_FORMAT_S16_LE: c_int = 2;
+    const SND_PCM_ACCESS_RW_INTERLEAVED: c_int = 3;
 
-struct Alsa {
-    open: unsafe extern "C" fn(*mut *mut c_void, *const c_char, c_int, c_int) -> c_int,
-    set_params: unsafe extern "C" fn(*mut c_void, c_int, c_int, c_uint, c_uint, c_int, c_uint) -> c_int,
-    writei: unsafe extern "C" fn(*mut c_void, *const c_void, c_long) -> c_long,
-    recover: unsafe extern "C" fn(*mut c_void, c_int, c_int) -> c_int,
-    close: unsafe extern "C" fn(*mut c_void) -> c_int,
-    strerror: unsafe extern "C" fn(c_int) -> *const c_char,
-}
+    extern "C" {
+        fn dlopen(file: *const c_char, flags: c_int) -> *mut c_void;
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+    }
+    const RTLD_NOW: c_int = 2;
 
-fn alsa() -> Option<&'static Alsa> {
-    static A: OnceLock<Option<Alsa>> = OnceLock::new();
-    A.get_or_init(|| unsafe {
-        let h = dlopen(c"libasound.so.2".as_ptr(), RTLD_NOW);
-        if h.is_null() {
-            return None;
-        }
-        let sym = |n: &CStr| {
-            let p = dlsym(h, n.as_ptr());
-            if p.is_null() { None } else { Some(p) }
-        };
-        Some(Alsa {
-            open: std::mem::transmute(sym(c"snd_pcm_open")?),
-            set_params: std::mem::transmute(sym(c"snd_pcm_set_params")?),
-            writei: std::mem::transmute(sym(c"snd_pcm_writei")?),
-            recover: std::mem::transmute(sym(c"snd_pcm_recover")?),
-            close: std::mem::transmute(sym(c"snd_pcm_close")?),
-            strerror: std::mem::transmute(sym(c"snd_strerror")?),
+    pub(super) struct Alsa {
+        open: unsafe extern "C" fn(*mut *mut c_void, *const c_char, c_int, c_int) -> c_int,
+        set_params: unsafe extern "C" fn(*mut c_void, c_int, c_int, c_uint, c_uint, c_int, c_uint) -> c_int,
+        writei: unsafe extern "C" fn(*mut c_void, *const c_void, c_long) -> c_long,
+        recover: unsafe extern "C" fn(*mut c_void, c_int, c_int) -> c_int,
+        close: unsafe extern "C" fn(*mut c_void) -> c_int,
+        strerror: unsafe extern "C" fn(c_int) -> *const c_char,
+    }
+
+    pub(super) fn alsa() -> Option<&'static Alsa> {
+        static A: OnceLock<Option<Alsa>> = OnceLock::new();
+        A.get_or_init(|| unsafe {
+            let h = dlopen(c"libasound.so.2".as_ptr(), RTLD_NOW);
+            if h.is_null() {
+                return None;
+            }
+            let sym = |n: &CStr| {
+                let p = dlsym(h, n.as_ptr());
+                if p.is_null() { None } else { Some(p) }
+            };
+            Some(Alsa {
+                open: std::mem::transmute(sym(c"snd_pcm_open")?),
+                set_params: std::mem::transmute(sym(c"snd_pcm_set_params")?),
+                writei: std::mem::transmute(sym(c"snd_pcm_writei")?),
+                recover: std::mem::transmute(sym(c"snd_pcm_recover")?),
+                close: std::mem::transmute(sym(c"snd_pcm_close")?),
+                strerror: std::mem::transmute(sym(c"snd_strerror")?),
+            })
         })
-    })
-    .as_ref()
-}
-
-pub struct AlsaSink {
-    api: &'static Alsa,
-    pcm: *mut c_void,
-    pub device: String,
-}
-
-// the handle is used by the mixer thread only
-unsafe impl Send for AlsaSink {}
-
-impl AlsaSink {
-    pub fn open(device: &str) -> Result<AlsaSink, String> {
-        let api = alsa().ok_or("libasound.so.2 not found")?;
-        let name = CString::new(device).map_err(|_| "device name contains NUL")?;
-        let mut pcm: *mut c_void = std::ptr::null_mut();
-        unsafe {
-            let r = (api.open)(&mut pcm, name.as_ptr(), SND_PCM_STREAM_PLAYBACK, 0);
-            if r < 0 {
-                return Err(format!("open {device}: {}", strerror(api, r)));
-            }
-            // soft resampling on, 50 ms latency
-            let r = (api.set_params)(pcm, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, 2, MIX_RATE, 1, 50_000);
-            if r < 0 {
-                (api.close)(pcm);
-                return Err(format!("set params on {device}: {}", strerror(api, r)));
-            }
-        }
-        Ok(AlsaSink { api, pcm, device: device.to_string() })
+        .as_ref()
     }
-}
 
-fn strerror(api: &Alsa, code: c_int) -> String {
-    unsafe { CStr::from_ptr((api.strerror)(code)).to_string_lossy().into_owned() }
-}
+    pub struct AlsaSink {
+        api: &'static Alsa,
+        pcm: *mut c_void,
+        pub device: String,
+    }
 
-impl Sink for AlsaSink {
-    fn write(&mut self, interleaved: &[f32]) {
-        let mut pcm16: Vec<i16> = Vec::with_capacity(interleaved.len());
-        for &v in interleaved {
-            pcm16.push((v.clamp(-1.0, 1.0) * 32767.0) as i16);
-        }
-        let mut done = 0usize; // frames
-        let total = pcm16.len() / 2;
-        while done < total {
-            let n = unsafe { (self.api.writei)(self.pcm, pcm16[done * 2..].as_ptr() as *const c_void, (total - done) as c_long) };
-            if n < 0 {
-                // underrun (-EPIPE) or suspend: recover and retry; anything else is dropped after one recover
-                let r = unsafe { (self.api.recover)(self.pcm, n as c_int, 1) };
+    // the handle is used by the mixer thread only
+    unsafe impl Send for AlsaSink {}
+
+    impl AlsaSink {
+        pub fn open(device: &str) -> Result<AlsaSink, String> {
+            let api = alsa().ok_or("libasound.so.2 not found")?;
+            let name = CString::new(device).map_err(|_| "device name contains NUL")?;
+            let mut pcm: *mut c_void = std::ptr::null_mut();
+            unsafe {
+                let r = (api.open)(&mut pcm, name.as_ptr(), SND_PCM_STREAM_PLAYBACK, 0);
                 if r < 0 {
-                    eprintln!("audio: write failed on {}: {}", self.device, strerror(self.api, r));
-                    return;
+                    return Err(format!("open {device}: {}", strerror(api, r)));
                 }
-                continue;
+                // soft resampling on, 50 ms latency
+                let r = (api.set_params)(pcm, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, 2, MIX_RATE, 1, 50_000);
+                if r < 0 {
+                    (api.close)(pcm);
+                    return Err(format!("set params on {device}: {}", strerror(api, r)));
+                }
             }
-            done += n as usize;
+            Ok(AlsaSink { api, pcm, device: device.to_string() })
+        }
+    }
+
+    fn strerror(api: &Alsa, code: c_int) -> String {
+        unsafe { CStr::from_ptr((api.strerror)(code)).to_string_lossy().into_owned() }
+    }
+
+    impl Sink for AlsaSink {
+        fn write(&mut self, interleaved: &[f32]) {
+            let mut pcm16: Vec<i16> = Vec::with_capacity(interleaved.len());
+            for &v in interleaved {
+                pcm16.push((v.clamp(-1.0, 1.0) * 32767.0) as i16);
+            }
+            let mut done = 0usize; // frames
+            let total = pcm16.len() / 2;
+            while done < total {
+                let n = unsafe { (self.api.writei)(self.pcm, pcm16[done * 2..].as_ptr() as *const c_void, (total - done) as c_long) };
+                if n < 0 {
+                    // underrun (-EPIPE) or suspend: recover and retry; anything else is dropped after one recover
+                    let r = unsafe { (self.api.recover)(self.pcm, n as c_int, 1) };
+                    if r < 0 {
+                        eprintln!("audio: write failed on {}: {}", self.device, strerror(self.api, r));
+                        return;
+                    }
+                    continue;
+                }
+                done += n as usize;
+            }
+        }
+    }
+
+    impl Drop for AlsaSink {
+        fn drop(&mut self) {
+            unsafe { (self.api.close)(self.pcm) };
         }
     }
 }
 
-impl Drop for AlsaSink {
-    fn drop(&mut self) {
-        unsafe { (self.api.close)(self.pcm) };
-    }
-}
+#[cfg(target_os = "linux")]
+use alsa::AlsaSink;
 
 /// Silent output that waits in real time, so the mixer thread keeps the same pace as a device.
 pub struct PacedSilence;
@@ -139,12 +147,20 @@ pub fn open_device() -> (Box<dyn Sink + Send>, String) {
     if std::env::var_os("MONO_AUDIO_SILENT").is_some() {
         return (Box::new(PacedSilence), "audio: silent output (MONO_AUDIO_SILENT)".to_string());
     }
-    match AlsaSink::open(&want) {
-        Ok(s) => {
-            let msg = format!("audio: ALSA device {}", s.device);
-            (Box::new(s), msg)
+    #[cfg(target_os = "linux")]
+    {
+        match AlsaSink::open(&want) {
+            Ok(s) => {
+                let msg = format!("audio: ALSA device {}", s.device);
+                (Box::new(s), msg)
+            }
+            Err(e) => (Box::new(PacedSilence), format!("audio: no output device ({e}); playing silently")),
         }
-        Err(e) => (Box::new(PacedSilence), format!("audio: no output device ({e}); playing silently")),
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = want;
+        (Box::new(PacedSilence), "audio: this platform has no output device yet (Windows WASAPI and macOS CoreAudio are not written); playing silently".to_string())
     }
 }
 
@@ -198,10 +214,11 @@ pub fn stop() {
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn alsa_null_device_accepts_frames() {
         // the "null" PCM exists in every alsa-lib install; a missing libasound skips the test
-        if alsa().is_none() {
+        if alsa::alsa().is_none() {
             return;
         }
         let mut s = AlsaSink::open("null").expect("null pcm");
