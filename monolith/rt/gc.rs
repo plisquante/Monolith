@@ -866,6 +866,8 @@ pub fn collect_explicit() {
 }
 
 #[inline(always)]
+// hot path: the heap bounds are passed by value so the marker keeps them in registers
+#[allow(clippy::too_many_arguments)]
 fn try_push(
     addr: usize,
     slabs_snap: &[usize],
