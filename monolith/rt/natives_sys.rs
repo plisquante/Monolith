@@ -259,9 +259,9 @@ pub fn n_java_lang_ProcessImpl__forkAndExec(
 
     let mut fa = [0u64; 16]; // >= 80 bytes for posix_spawn_file_actions_t
     unsafe { posix_spawn_file_actions_init(fa.as_mut_ptr() as *mut c_void) };
-    for i in 0..3usize {
-        if child_fd[i] != -2 {
-            unsafe { posix_spawn_file_actions_adddup2(fa.as_mut_ptr() as *mut c_void, child_fd[i], i as c_int) };
+    for (i, &fd) in child_fd.iter().enumerate() {
+        if fd != -2 {
+            unsafe { posix_spawn_file_actions_adddup2(fa.as_mut_ptr() as *mut c_void, fd, i as c_int) };
         }
     }
     if child_fd[2] == -2 {

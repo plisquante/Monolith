@@ -1541,9 +1541,8 @@ pub fn n_jdk_internal_misc_Unsafe__getLoadAverage0(_this: Ref, loadavg: Ref, nel
     let rc = unsafe { getloadavg(vals.as_mut_ptr(), n as c_int) };
     if rc > 0 {
         let dst = unsafe { std::slice::from_raw_parts_mut((loadavg.0 as *mut u8).add(24) as *mut f64, a.len as usize) };
-        for i in 0..(rc as usize).min(dst.len()) {
-            dst[i] = vals[i];
-        }
+        let n = (rc as usize).min(dst.len());
+        dst[..n].copy_from_slice(&vals[..n]);
     }
     Ok(rc)
 }
