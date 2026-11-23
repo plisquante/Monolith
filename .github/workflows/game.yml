@@ -72,13 +72,18 @@ jobs:
         shell: pwsh
         run: |
           vcpkg install zlib:x64-windows-static libffi:x64-windows-static
-          $lib = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows-static\lib"
+          $root = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows-static"
+          $lib = Join-Path $root "lib"
+          # vcpkg output names are not pinned here: list what was installed, then pick the release archives
+          Get-ChildItem $root -Recurse -Filter "*.lib" | ForEach-Object { Write-Host "vcpkg lib: $($_.FullName)" }
           $dst = Join-Path $env:RUNNER_TEMP "winlibs"
           New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          # the runtime links -lz and -lffi; vcpkg names the files zlib.lib and ffi*.lib
-          Copy-Item (Join-Path $lib "zlib.lib") (Join-Path $dst "z.lib") -Force
-          $ffi = Get-ChildItem $lib -Filter "*ffi*.lib" | Select-Object -First 1
-          if (-not $ffi) { throw "libffi import library not found in $lib" }
+          # the runtime links -lz and -lffi (z.lib, ffi.lib); debug variants are skipped
+          $z = Get-ChildItem $root -Recurse -Filter "*.lib" | Where-Object { $_.Name -in @("zlib.lib", "zs.lib", "libz.lib") -and $_.FullName -notmatch "debug" } | Select-Object -First 1
+          if (-not $z) { throw "zlib static library not found under $root" }
+          Copy-Item $z.FullName (Join-Path $dst "z.lib") -Force
+          $ffi = Get-ChildItem $root -Recurse -Filter "*ffi*.lib" | Where-Object { $_.FullName -notmatch "debug" } | Select-Object -First 1
+          if (-not $ffi) { throw "libffi import library not found under $root" }
           Copy-Item $ffi.FullName (Join-Path $dst "ffi.lib") -Force
           Add-Content -Path $env:GITHUB_ENV -Value "LIB=$dst;$lib;$env:LIB"
 
