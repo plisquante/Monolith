@@ -13,7 +13,7 @@
 //! * `MONO_ALLOC_SAMPLE=<bytes>`   one allocation site sample per this many allocated bytes per thread (default 65536)
 //! * `MONO_ALLOC_DUMP_SECS=<n>`    dump period
 //! * `MONO_ALLOC_SNAPSHOTS=1`      also keep every periodic dump as <file>.<elapsed seconds>, so two of them can be subtracted
-//!                                 (`alloc_report.py --base`): start-up versus steady state
+//!   (`alloc_report.py --base`): start-up versus steady state
 use crate::rt::{self, Class, Obj};
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -402,7 +402,7 @@ pub fn dump() {
     {
         let sites = st.sites.lock().unwrap();
         let mut v: Vec<(&(u32, [usize; DEPTH]), &(u64, u64))> = sites.iter().collect();
-        v.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+        v.sort_by_key(|e| std::cmp::Reverse(e.1 .0));
         j.push_str(&format!("\"dropped_sites\":{},\"sites\":[", st.dropped_sites.load(Ordering::Relaxed)));
         for (i, (k, w)) in v.iter().take(8000).enumerate() {
             if i > 0 { j.push(','); }

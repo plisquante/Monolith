@@ -301,9 +301,7 @@ pub fn n_java_lang_ProcessImpl__forkAndExec(
         let msg = unsafe { CStr::from_ptr(strerror(rc)).to_string_lossy().into_owned() };
         return rt::throw("java/io/IOException", format!("error={}, {}", rc, msg));
     }
-    for i in 0..3usize {
-        fd_arr[i] = parent_fd[i];
-    }
+    fd_arr.copy_from_slice(&parent_fd);
     Ok(pid)
 }
 
