@@ -157,4 +157,5 @@ Etiket: **[H]** = sınırları net, küçük modelle yapılabilir; **[S]** = der
   eklemek gibi değişikliklerde ve bilinçli olarak kullanılır.
 - **Önceki ses doğrulamaları** `--reuse-objs` ile derlendi; tam yeniden derleme sonrası yeniden doğrulanacak.
 - **JNA `initIDs`:** `natives_jni.rs` içinde FFI tip alanlarını dolduran gövde yazıldı; narrator hatasının kapanması
-  tam derlemeden sonra doğrulanacak.
+  tam derlemeden sonra doğrulandı: `initIDs` çalışıyor, FFI/narrator/ses hatası 0 (20 sn headless). Kalan üç ERROR
+  satırı dış ağa çıkamayan ortamdan geliyor (Realms, kullanıcı özellikleri).
