@@ -25,18 +25,15 @@ jobs:
           python -m py_compile monolith/*.py tools/*.py tests/*.py .claude/hooks/guard.py
           python -m pyflakes monolith/*.py tools/*.py tests/*.py .claude/hooks/guard.py
 
-      - name: Zig install and ast-check
+      - name: Rust runtime type-check and clippy (warnings are errors)
         run: |
-          python -m pip install ziglang==0.15.1
-          ZIG=$(python -c "import ziglang,os;print(os.path.join(os.path.dirname(ziglang.__file__),'zig'))")
-          sudo ln -sf "$ZIG" /usr/local/bin/zig
-          zig version
-          for f in runtime/*.zig patches/*.zig; do echo "== $f"; zig ast-check "$f"; done
+          python3 tools/rt_typecheck.py
+          cd rt_deps && cargo clippy --release --offline --lib --manifest-path check/Cargo.toml --target-dir target -- -D warnings
 
       - name: Shell syntax and JSON validity
         run: |
           bash -n build.sh
-          python -c "import json; [json.load(open(f)) for f in ['patches/manifest.json']]"
+          python -c "import json; [json.load(open(f)) for f in ['patches/rust/manifest.json']]"
 
       - name: Guard hook self-test
         run: python .claude/hooks/guard.py --self-test
@@ -59,12 +56,9 @@ jobs:
           echo "MONO_JDK_HOME=$(echo "$HOME"/.cache/monolith/temurin-25/jdk-*)" >> "$GITHUB_ENV"
           ls "$HOME"/.cache/monolith/temurin-25/jdk-*/bin/javac
 
-      - name: Zig unit tests (Client Core RHI)
-        run: zig test -lc runtime/rhi.zig
-
-      - name: Differential test Arith (Debug, native backend)
+      - name: Rust codegen stack tests (JDK 25 reference, rustc-compiled output)
         run: |
-          python tests/run_tests.py --min-avail-gib 0 Arith
+          python3 monolith/stack_tests.py
 
       - name: Build TouchCore APK (Android arm64-v8a via NDK/SDK)
         run: |

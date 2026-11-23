@@ -10,13 +10,13 @@ name: Build Minecraft Android SO (MONOLITH)
         default: "26.3"
 
       optimize:
-        description: "Zig Optimizasyon Modu"
+        description: "Rust optimizasyon seviyesi (rustc -C opt-level)"
         type: choice
         options:
-          - ReleaseFast
-          - ReleaseSmall
+          - "3"
+          - s
         required: true
-        default: ReleaseFast
+        default: "3"
 
       shards:
         description: "Shard Sayısı"
@@ -55,17 +55,16 @@ jobs:
       # BUILD CACHE
       # --------------------------------------------------
 
-      - name: Restore Zig and MONOLITH Cache
+      - name: Restore MONOLITH and Cargo cache
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/zig
             ~/.cache/monolith
-            .zig-cache
-            zig-cache
-          key: ${{ runner.os }}-monolith-zig0152-${{ hashFiles('**/*.zig', '**/*.py', '**/*.toml', '**/*.json') }}
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-monolith-rust-${{ hashFiles('**/*.rs', '**/*.py', '**/*.toml', '**/*.json') }}
           restore-keys: |
-            ${{ runner.os }}-monolith-zig0152-
+            ${{ runner.os }}-monolith-rust-
 
       - name: Cache Minecraft Client JAR
         id: mc-cache
@@ -75,7 +74,7 @@ jobs:
           key: minecraft-client-${{ inputs.mc_version }}
 
       # --------------------------------------------------
-      # JAVA & ZIG
+      # JAVA & RUST
       # --------------------------------------------------
 
       - name: Setup Java 25
@@ -84,10 +83,8 @@ jobs:
           distribution: temurin
           java-version: "25"
 
-      - name: Install Zig 0.15.2
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: "0.15.2"
+      - name: Install Rust stable
+        run: rustup toolchain install stable --profile minimal && rustup default stable
 
       # --------------------------------------------------
       # ANDROID NDK CROSS LINKER
@@ -290,13 +287,11 @@ jobs:
 
           START=$SECONDS
 
-          python3 -u tools/mcbuild.py build-lib client.jar \
-            --target aarch64-linux-android.26 \
-            --optimize "$MC_OPTIMIZE" \
+          python3 -u tools/mcbuild_rust.py client.jar --android \
+            --opt "$MC_OPTIMIZE" \
             --shards "$MC_SHARDS" \
             --shard-jobs "$MC_SHARD_JOBS" \
-            --skip-assets \
-            --out out_so
+            -o out_so
 
           DURATION=$((SECONDS - START))
 
