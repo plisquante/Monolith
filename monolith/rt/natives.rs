@@ -163,8 +163,8 @@ pub fn n_java_lang_Float__floatToRawIntBits(v: f32) -> Res<i32> {
 }
 
 // ------------------------------------------------------------------ Throwable / threads
-pub fn n_java_lang_Throwable__backtrace0(this: Ref) -> Res<Ref> {
-    Ok(Ref::NULL)
+pub fn n_java_lang_Throwable__backtrace0(_this: Ref) -> Res<Ref> {
+    Ok(rt::new_str(rt::capture_backtrace()))
 }
 pub fn n_java_lang_NullPointerException__getExtendedNPEMessage(this: Ref) -> Res<Ref> {
     Ok(Ref::NULL)

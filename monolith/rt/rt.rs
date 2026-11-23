@@ -1317,3 +1317,57 @@ pub fn init_failure(name: &str, r: Res<()>) -> Res<()> {
     set_ref(wrapped, "cause", t.obj);
     Err(Thrown { obj: wrapped })
 }
+
+// ---------------------------------------------------------------- shadow stack (Throwable backtraces)
+// Every generated method pushes a frame tag on entry and pops it when its guard drops (also on `?` returns).
+// `capture_backtrace` reads the tags, innermost first, for `Throwable.fillInStackTrace`.
+#[derive(Clone, Copy)]
+struct FrameTag {
+    class: &'static str,
+    method: &'static str,
+    file: &'static str,
+}
+
+thread_local! {
+    static FRAMES: std::cell::RefCell<Vec<FrameTag>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+pub struct FrameGuard;
+
+impl Drop for FrameGuard {
+    fn drop(&mut self) {
+        // during thread teardown the slot may already be gone: then there is nothing to pop
+        let _ = FRAMES.try_with(|f| {
+            if let Ok(mut v) = f.try_borrow_mut() {
+                v.pop();
+            }
+        });
+    }
+}
+
+#[inline(always)]
+pub fn enter_frame(class: &'static str, method: &'static str, file: &'static str) -> FrameGuard {
+    let _ = FRAMES.try_with(|f| {
+        if let Ok(mut v) = f.try_borrow_mut() {
+            v.push(FrameTag { class, method, file });
+        }
+    });
+    FrameGuard
+}
+
+/// One line per frame, innermost first: class (dotted), method, source file (may be empty), line (-1 unknown),
+/// separated by tabs. Constructor frames and `fillInStackTrace` at the top are skipped, as HotSpot does.
+pub fn capture_backtrace() -> String {
+    FRAMES.with(|f| {
+        let frames = f.borrow();
+        let mut out = String::new();
+        for t in frames
+            .iter()
+            .rev()
+            .skip_while(|t| t.method == "<init>" || (t.class == "java/lang/Throwable" && t.method == "fillInStackTrace"))
+        {
+            out.push_str(&format!("{}\t{}\t{}\t-1\n", t.class.replace('/', "."), t.method, t.file));
+        }
+        out.trim_end_matches('\n').to_string()
+    })
+}

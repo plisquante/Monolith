@@ -877,7 +877,8 @@ class MethodGen:
         rret = "()" if ret == "V" else RT[kind_of(ret)]
         if handlers:
             self.sname(0, "A")
-        body = ["    rt::stack_check()?;"]
+        body = ["    rt::stack_check()?;",
+                f"    let _frame = rt::enter_frame({rstr(self.ci.name)}, {rstr(m.name)}, {rstr(self.ci.cf.source_file or '')});"]
         for n, k in sorted(self.used_locals.items()):
             body.append(f"    let mut {n}: {RT[k]} = {DEFAULT[k]};")
         for n, k in sorted(self.used_stack.items()):
@@ -956,8 +957,8 @@ class MethodGen:
             if nt:
                 nt_body = []
                 for ln in body:
-                    if ln == "    rt::stack_check()?;":
-                        continue  # a method that cannot throw makes no calls, so it cannot recurse without bound
+                    if ln.startswith("    rt::stack_check()?;") or ln.startswith("    let _frame = rt::enter_frame("):
+                        continue  # a method that cannot throw makes no calls: no bound to check, no trace to record
                     s = ln.lstrip()
                     ind = ln[:len(ln) - len(s)]
                     if s == "return Ok(());":

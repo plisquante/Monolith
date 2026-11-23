@@ -131,7 +131,7 @@ public class Throwable implements java.io.Serializable {
         return this;
     }
 
-    /** Returns String[] with (class, method, file, line) quadruples, innermost first, skipping exception construction frames. */
+    /** Returns a String: one tab-separated (class, method, file, line) record per line, innermost first. */
     private native Object backtrace0();
 
     public StackTraceElement[] getStackTrace() {
@@ -141,12 +141,13 @@ public class Throwable implements java.io.Serializable {
     private synchronized StackTraceElement[] getOurStackTrace() {
         if (stackTrace == null) {
             if (backtrace == null) return EMPTY;
-            String[] bt = (String[]) backtrace;
-            StackTraceElement[] st = new StackTraceElement[bt.length / 4];
+            String text = (String) backtrace;
+            if (text.isEmpty()) { stackTrace = EMPTY; return stackTrace; }
+            String[] lines = text.split("\n");
+            StackTraceElement[] st = new StackTraceElement[lines.length];
             for (int i = 0; i < st.length; i++) {
-                String file = bt[4 * i + 2];
-                st[i] = new StackTraceElement(bt[4 * i], bt[4 * i + 1], file.isEmpty() ? null : file,
-                        Integer.parseInt(bt[4 * i + 3]));
+                String[] f = lines[i].split("\t", -1);
+                st[i] = new StackTraceElement(f[0], f[1], f[2].isEmpty() ? null : f[2], Integer.parseInt(f[3]));
             }
             stackTrace = st;
         }
