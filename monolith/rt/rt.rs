@@ -268,7 +268,7 @@ unsafe extern "C" {
     #[link_name = "write"]
     fn libc_write(fd: std::os::raw::c_int, buf: *const std::os::raw::c_void, count: usize) -> isize;
     fn sigaltstack(ss: *const StackT, old_ss: *mut StackT) -> std::os::raw::c_int;
-    fn sigaction(sig: std::os::raw::c_int, act: *const SigAction, oldact: *mut SigAction) -> std::os::raw::c_int;
+    fn sigaction(sig: std::os::raw::c_int, act: *const u8, oldact: *mut u8) -> std::os::raw::c_int;
 }
 pub fn init_hooks(h: Hooks) {
     unsafe { HOOKS = Some(h) }
@@ -284,7 +284,7 @@ pub fn init_hooks(h: Hooks) {
             sa_flags: 0x08000004u32 as i32, // SA_ONSTACK | SA_SIGINFO
             sa_restorer: 0,
         };
-        let _ = sigaction(11, &sa, std::ptr::null_mut());
+        let _ = sigaction(11, (&sa as *const SigAction).cast(), std::ptr::null_mut());
     }
 }
 #[inline(always)]
@@ -499,7 +499,6 @@ pub fn alloc(class: &'static Class) -> Ref {
     Ref(crate::gc::alloc_obj(class, class.size.max(16)))
 }
 
-#[inline(always)]
 /// An object kept in the frame of the function that creates it (the escape analysis proved it dies with that call or loop
 /// iteration). `p` is the function's slot for this allocation site; it is cleared and given the class header on every
 /// execution of the `new`. The collector ignores it (not a heap address) and finds what it references by scanning stacks.
@@ -822,7 +821,6 @@ pub fn astore<T: Copy>(a: Ref, i: i32, v: T) -> Res<()> {
     unsafe { *(d as *mut T).add(i as usize) = v };
     Ok(())
 }
-#[inline(always)]
 /// Referans yazma bariyeri; üretilen kod da bunu kullanır (rustgen: putfield/putstatic).
 #[inline(always)]
 pub fn satb_store(slot: *mut Ref, v: Ref) {

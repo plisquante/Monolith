@@ -170,6 +170,8 @@ pub fn take_text(out: &mut [i32], max: usize) -> i32 {
     n as i32
 }
 
+// `sym_fn!` carries its own `unsafe` (needed in safe callers such as `pump`); the block below is already unsafe.
+#[allow(unused_unsafe)]
 pub fn try_init(w: i32, h: i32) -> bool {
     if INIT_OK.load(Ordering::Acquire) {
         return true;

@@ -785,23 +785,21 @@ pub fn n_com_sun_jna_Native__initIDs() -> Res<()> {
     let Some(ptr_class) = rt::find_class("com.sun.jna.Pointer") else {
         return rt::throw("java/lang/Error", "JNA: Pointer class missing".to_string());
     };
-    let table: [(&str, usize); 13] = unsafe {
-        [
-            ("ffi_type_void", std::ptr::addr_of!(ffi_type_void) as usize),
-            ("ffi_type_float", std::ptr::addr_of!(ffi_type_float) as usize),
-            ("ffi_type_double", std::ptr::addr_of!(ffi_type_double) as usize),
-            ("ffi_type_longdouble", std::ptr::addr_of!(ffi_type_longdouble) as usize),
-            ("ffi_type_uint8", std::ptr::addr_of!(ffi_type_uint8) as usize),
-            ("ffi_type_sint8", std::ptr::addr_of!(ffi_type_sint8) as usize),
-            ("ffi_type_uint16", std::ptr::addr_of!(ffi_type_uint16) as usize),
-            ("ffi_type_sint16", std::ptr::addr_of!(ffi_type_sint16) as usize),
-            ("ffi_type_uint32", std::ptr::addr_of!(ffi_type_uint32) as usize),
-            ("ffi_type_sint32", std::ptr::addr_of!(ffi_type_sint32) as usize),
-            ("ffi_type_uint64", std::ptr::addr_of!(ffi_type_uint64) as usize),
-            ("ffi_type_sint64", std::ptr::addr_of!(ffi_type_sint64) as usize),
-            ("ffi_type_pointer", std::ptr::addr_of!(ffi_type_pointer) as usize),
-        ]
-    };
+    let table: [(&str, usize); 13] = [
+        ("ffi_type_void", std::ptr::addr_of!(ffi_type_void) as usize),
+        ("ffi_type_float", std::ptr::addr_of!(ffi_type_float) as usize),
+        ("ffi_type_double", std::ptr::addr_of!(ffi_type_double) as usize),
+        ("ffi_type_longdouble", std::ptr::addr_of!(ffi_type_longdouble) as usize),
+        ("ffi_type_uint8", std::ptr::addr_of!(ffi_type_uint8) as usize),
+        ("ffi_type_sint8", std::ptr::addr_of!(ffi_type_sint8) as usize),
+        ("ffi_type_uint16", std::ptr::addr_of!(ffi_type_uint16) as usize),
+        ("ffi_type_sint16", std::ptr::addr_of!(ffi_type_sint16) as usize),
+        ("ffi_type_uint32", std::ptr::addr_of!(ffi_type_uint32) as usize),
+        ("ffi_type_sint32", std::ptr::addr_of!(ffi_type_sint32) as usize),
+        ("ffi_type_uint64", std::ptr::addr_of!(ffi_type_uint64) as usize),
+        ("ffi_type_sint64", std::ptr::addr_of!(ffi_type_sint64) as usize),
+        ("ffi_type_pointer", std::ptr::addr_of!(ffi_type_pointer) as usize),
+    ];
     for (name, addr) in table {
         let Some(f) = ffi.fields.iter().find(|f| f.name == name && f.access & 0x0008 != 0) else {
             return rt::throw("java/lang/Error", format!("JNA: static field {name} missing"));

@@ -1234,7 +1234,7 @@ fn collect_impl(begin_only: bool) {
                     if check != 0 && in_arena(r.0 as usize) {
                         violations += 1;
                         if violations <= 20 {
-                            let tgt = unsafe { (*r.0).class.name };
+                            let tgt = (*r.0).class.name;
                             eprintln!("[mono:arena] escape violation: {} (field at +{}) holds an arena {}", c.name, off, tgt);
                         }
                     }
