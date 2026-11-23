@@ -183,6 +183,27 @@ fn satb_log(old: usize) {
     }
 }
 
+/// Bir bellek aralığının (eski) içeriğini, işaretleme açıksa, SATB günlüğüne alır. Her 8 baytlık sözcük bir referans
+/// olabilir: sözcük bir nesne adresi değilse işaretleyici onu yok sayar, yani bu konservatif ve güvenlidir.
+/// Yazma bariyeri olmayan toplu yazımlar (arraycopy, Unsafe kopyası, VarHandle) bunu çağırır.
+pub fn satb_log_range(p: *const u8, bytes: usize) {
+    if !SATB_ON.load(Ordering::Relaxed) {
+        return;
+    }
+    let mut v = Vec::new();
+    let mut off = 0usize;
+    while off + 8 <= bytes {
+        let w = unsafe { std::ptr::read_unaligned(p.add(off) as *const usize) };
+        if w != 0 {
+            v.push(w);
+        }
+        off += 8;
+    }
+    if !v.is_empty() {
+        SATB_LOG.lock().unwrap().extend(v);
+    }
+}
+
 /// İşaretleme sırasında kaydedilen eski değerleri alır (işaretleyici tüketir).
 pub fn satb_take() -> Vec<usize> {
     std::mem::take(&mut *SATB_LOG.lock().unwrap())

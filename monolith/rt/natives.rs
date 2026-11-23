@@ -101,6 +101,10 @@ pub fn n_java_lang_System__arraycopy(src: Ref, sp: i32, dst: Ref, dp: i32, n: i3
             }
         }
         let es = rt::elem_size(sc.elem);
+        if sc.elem == b'A' {
+            // reference array: the overwritten elements are snapshot values (SATB)
+            crate::gc::satb_log_range((arr_data(dst)).add(dp as usize * es), n as usize * es);
+        }
         std::ptr::copy((arr_data(src)).add(sp as usize * es), (arr_data(dst)).add(dp as usize * es), n as usize * es);
     }
     Ok(())
@@ -297,7 +301,7 @@ unsafe_put!(n_jdk_internal_misc_Unsafe__putFloat, f32, f32);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putDouble, f64, f64);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putIntVolatile, i32, i32);
 pub fn n_jdk_internal_misc_Unsafe__putReference(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
-    unsafe { (addr(o, off) as *mut Ref).write(v) };
+    crate::gc::satb_store(addr(o, off) as *mut Ref, v);
     Ok(())
 }
 pub fn n_jdk_internal_misc_Unsafe__putReferenceVolatile(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
@@ -333,6 +337,7 @@ pub fn n_jdk_internal_misc_Unsafe__fullFence(this: Ref) -> Res<()> {
     Ok(())
 }
 pub fn n_jdk_internal_misc_Unsafe__copyMemory0(this: Ref, so: Ref, soff: i64, d: Ref, doff: i64, n: i64) -> Res<()> {
+    crate::gc::satb_log_range(addr(d, doff) as *const u8, n as usize);
     unsafe { std::ptr::copy(addr(so, soff), addr(d, doff), n as usize) };
     Ok(())
 }

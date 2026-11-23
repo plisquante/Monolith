@@ -343,7 +343,7 @@ pub fn set_ref(o: Ref, name: &str, v: Ref) {
     let c = unsafe { (*o.0).class };
     if let Some((_, f)) = c.find_field(name, false) {
         if let FLoc::Off(off) = f.loc {
-            unsafe { *((o.0 as *mut u8).add(off as usize) as *mut Ref) = v; }
+            unsafe { satb_store((o.0 as *mut u8).add(off as usize) as *mut Ref, v); }
         }
     }
 }
