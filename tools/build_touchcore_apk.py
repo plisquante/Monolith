@@ -13,7 +13,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TOUCHCORE_DIR = REPO_ROOT / "android" / "touchcore"
-RUNTIME_DIR = REPO_ROOT / "runtime"
 BRAND_DIR = REPO_ROOT / "brand"
 DEFAULT_OUT_APK = REPO_ROOT / "releases" / "Monolith.apk"
 
@@ -163,71 +162,38 @@ def find_sdk_paths() -> tuple[Path, Path, Path | None]:
 
 
 def build_native_so(build_dir: Path, out_so: Path) -> None:
-    zig = find_tool("zig", [Path("/usr/local/bin/zig"), Path("/opt/zig-aarch64-linux-0.15.1/zig")])
+    """Builds libtouchcore_mono.so: the Rust core (android/touchcore/native, staticlib) plus the JNI bridge (C)."""
+    cargo = find_tool("cargo", [Path.home() / ".cargo" / "bin" / "cargo"])
     use_termux = (TERMUX_USR / "include").is_dir() and (TERMUX_USR / "bin" / "clang").is_file()
     ndk_pre = None if use_termux else find_ndk_prebuilt()
     if use_termux:
         clang = find_tool("clang", [TERMUX_USR / "bin" / "clang"])
-        ld_lld = find_tool("ld.lld", [TERMUX_USR / "bin" / "ld.lld"])
         inc_dir = TERMUX_USR / "include"
         arch_inc = inc_dir / "aarch64-linux-android"
-        crt_dir = TERMUX_USR / "lib"
         sys_lib_dir = Path("/system/lib64")
     elif ndk_pre is not None:
         clang = find_tool("aarch64-linux-android26-clang", [ndk_pre / "bin" / "aarch64-linux-android26-clang"])
-        ld_lld = find_tool("ld.lld", [ndk_pre / "bin" / "ld.lld"])
         inc_dir = ndk_pre / "sysroot" / "usr" / "include"
         arch_inc = inc_dir / "aarch64-linux-android"
-        crt_dir = ndk_pre / "sysroot" / "usr" / "lib" / "aarch64-linux-android" / "26"
-        sys_lib_dir = crt_dir
+        sys_lib_dir = ndk_pre / "sysroot" / "usr" / "lib" / "aarch64-linux-android" / "26"
     else:
         raise FileNotFoundError("Neither Termux clang nor Android NDK LLVM toolchain found")
 
-    zig_src = build_dir / "zig_src"
-    if zig_src.exists():
-        shutil.rmtree(zig_src)
-    zig_src.mkdir(parents=True, exist_ok=True)
-
-    for zf in RUNTIME_DIR.glob("*.zig"):
-        shutil.copy2(zf, zig_src / zf.name)
-    shutil.copy2(TOUCHCORE_DIR / "jni" / "touchcore_core.zig", zig_src / "touchcore_core.zig")
-
-    libc_txt = build_dir / "libc.txt"
-    libc_txt.write_text(
-        "\n".join([
-            f"include_dir={inc_dir}",
-            f"sys_include_dir={inc_dir}",
-            f"crt_dir={crt_dir}",
-            "msvc_lib_dir=",
-            "kernel32_lib_dir=",
-            "gcc_dir=",
-            "",
-        ]),
-        encoding="utf-8",
+    # The Rust core. The NDK clang is the linker, so the compiler runtime builtins come with it.
+    rust_target = "aarch64-linux-android"
+    cargo_env = dict(os.environ)
+    cargo_env[f"CARGO_TARGET_{rust_target.upper().replace('-', '_')}_LINKER"] = str(clang)
+    core_dir = TOUCHCORE_DIR / "native"
+    run_step(
+        "Building the Rust client core (aarch64-linux-android, release)",
+        [cargo, "build", "--release", "--offline", "--target", rust_target, "--manifest-path", str(core_dir / "Cargo.toml")],
+        env=cargo_env,
     )
+    core_lib = core_dir / "target" / rust_target / "release" / "libtouchcore_native.a"
+    if not core_lib.is_file():
+        raise FileNotFoundError(f"cargo produced no {core_lib}")
 
-    zig_obj = build_dir / "touchcore_core.o"
     c_obj = build_dir / "touchcore_android.o"
-
-    zig_cmd = [
-        zig,
-        "build-obj",
-        "-O",
-        "ReleaseFast",
-        "-lc",
-        "--libc",
-        str(libc_txt),
-    ]
-    if arch_inc.is_dir():
-        zig_cmd.extend(["-I", str(arch_inc)])
-    zig_cmd.extend([
-        "-target",
-        "aarch64-linux-android.26",
-        f"-femit-bin={zig_obj}",
-        str(zig_src / "touchcore_core.zig"),
-    ])
-    run_step("Compiling Zig Client Core (aarch64-linux-android.26)", zig_cmd)
-
     c_cmd = [
         clang,
         "--target=aarch64-linux-android26",
@@ -248,23 +214,18 @@ def build_native_so(build_dir: Path, out_so: Path) -> None:
         "-o",
         str(c_obj),
     ])
-    run_step("Compiling Android JNI + RHI Shim (clang arm64-v8a)", c_cmd)
+    run_step("Compiling Android JNI bridge (clang arm64-v8a)", c_cmd)
 
     out_so.parent.mkdir(parents=True, exist_ok=True)
-    rt_root = TERMUX_USR if use_termux else ndk_pre
-    builtins = sorted((rt_root / "lib" / "clang").glob("*/lib/linux/libclang_rt.builtins-aarch64-android.a"))
     link_cmd = [
-        ld_lld,
+        clang,
+        "--target=aarch64-linux-android26",
         "-shared",
-        "--sysroot=/",
-        "-z",
-        "max-page-size=16384",
-        "--gc-sections",
-        "-soname",
-        "libtouchcore_mono.so",
-        str(zig_obj),
+        "-Wl,-z,max-page-size=16384",
+        "-Wl,--gc-sections",
+        "-Wl,-soname,libtouchcore_mono.so",
         str(c_obj),
-        *(str(b) for b in builtins[:1]),
+        str(core_lib),
         str(sys_lib_dir / "libandroid.so"),
         str(sys_lib_dir / "liblog.so"),
         str(sys_lib_dir / "libc.so"),

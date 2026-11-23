@@ -139,7 +139,7 @@ typedef void (*PFN_glVertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsi
 typedef void (*PFN_glDrawArrays)(GLenum, GLint, GLsizei);
 typedef void (*PFN_glLineWidth)(GLfloat);
 
-/* Zig core bridge from touchcore_core.zig */
+/* Native core bridge (android/touchcore/native, Rust) */
 typedef struct {
     uint64_t frame_epoch;
     uint64_t arena_bytes;
@@ -155,13 +155,13 @@ typedef struct {
     int32_t rhi_active_backend;
 } TcTelemetry;
 
-extern int32_t tc_zig_init(int32_t backend_pref, int32_t power_profile, int32_t worker_count);
-extern void tc_zig_tick_frame(
+extern int32_t tc_init(int32_t backend_pref, int32_t power_profile, int32_t worker_count);
+extern void tc_tick_frame(
     float cam_x, float cam_y, float cam_z,
     float look_x, float look_y, float look_z,
     float fov_deg, uint32_t vw, uint32_t vh,
     uint32_t entity_count, TcTelemetry *out_tel);
-extern void tc_zig_shutdown(void);
+extern void tc_shutdown(void);
 
 /* GLFW key subset mapped cleanly for TouchCore + external MONOLITH lib */
 #define KEY_SPACE 32
@@ -818,7 +818,7 @@ static void *render_loop(void *arg) {
         return NULL;
     }
 
-    int32_t bk = tc_zig_init(g_backend_pref, g_power_profile, 2);
+    int32_t bk = tc_init(g_backend_pref, g_power_profile, 2);
     char msg[256];
     snprintf(msg, sizeof(msg), "TouchCore RHI initialized (native backend id=%d, user=%s)", bk, g_username);
     set_log(msg);
@@ -881,7 +881,7 @@ static void *render_loop(void *arg) {
 
         TcTelemetry tel = {0};
         float fov = g_tc_input.fov_deg > 30.0f ? g_tc_input.fov_deg : 75.0f;
-        tc_zig_tick_frame(cam_x, cam_y, cam_z, cam_x + fx * 16.0f, cam_y + fy * 16.0f, cam_z + fz * 16.0f,
+        tc_tick_frame(cam_x, cam_y, cam_z, cam_x + fx * 16.0f, cam_y + fy * 16.0f, cam_z + fz * 16.0f,
                           fov, (uint32_t)w, (uint32_t)h, 48, &tel);
 
         gl.glViewport(0, 0, w, h);
@@ -967,7 +967,7 @@ static void *render_loop(void *arg) {
     }
     pthread_mutex_unlock(&g_lock);
     destroy_egl(&gl);
-    tc_zig_shutdown();
+    tc_shutdown();
     return NULL;
 }
 

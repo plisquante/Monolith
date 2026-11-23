@@ -84,7 +84,7 @@ jobs:
           java-version: "25"
 
       - name: Install Rust stable
-        run: rustup toolchain install stable --profile minimal && rustup default stable
+        run: rustup toolchain install stable --profile minimal && rustup default stable && rustup target add aarch64-linux-android
 
       # --------------------------------------------------
       # ANDROID NDK CROSS LINKER
