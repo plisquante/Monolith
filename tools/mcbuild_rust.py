@@ -84,7 +84,8 @@ def main() -> int:
             import jdk_runtime_data
             fh.write("\n".join(sorted(set(mb.reflection_metadata(jars)) | set(jdk_runtime_data.provider_classes(os.environ["MONO_JDK_HOME"])))))
         gen = [sys.executable, "-m", "monolith.rustgen", "--cp", os.pathsep.join(jars), "--reflect-class", "@" + reflect,
-               "--main", mb.MAIN_CLASS, "--no-lwjgl", "--shards", str(a.shards), "-o", rust] + (["--android"] if a.android else [])
+               "--main", mb.MAIN_CLASS, "--no-lwjgl", "--shards", str(a.shards), "-o", rust] + (
+                   ["--android", "--api", str(a.api)] + (["--ndk", a.ndk] if a.ndk else []) if a.android else [])
         if subprocess.run(gen, cwd=ROOT).returncode:
             return 1
     comp = common + ["--cp", "-", "--main", "-", "--resume"] + ([] if a.android else ["--compile"])
