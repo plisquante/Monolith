@@ -2385,33 +2385,29 @@ RT_DEPS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 
 def rt_deps_flags(target: str = "") -> list:
-    """Third-party crates of the runtime (rt_deps/, pinned by Cargo.lock, vendored). Built offline once per lock state;
-    rustc gets them with -L/--extern. A failed build stops the generation (no silent fallback)."""
+    """Third-party crates of the runtime, built offline by cargo in rt_deps (pinned by Cargo.lock, vendored). The
+    runtime currently has none, so the list is empty; every rlib cargo builds for rt_deps would be passed by name.
+    A failed build stops the generation (no silent fallback)."""
     tgt = ["--target", target] if target else []
     r = subprocess.run(["cargo", "build", "--release", "--offline", "--message-format=json", *tgt], cwd=RT_DEPS,
                        capture_output=True, text=True)
     if r.returncode:
         raise SystemExit("monolith: rt_deps build failed (cargo build --release --offline in rt_deps)\n" + r.stderr[-3000:])
-    # The rlib is taken from cargo's own artifact messages: the directory layout of target/ changed between cargo
-    # releases, and build-script output directories hold other copies of the same crate.
     import json
-    # Every rlib cargo built is passed by name. Passing only crc32fast is not enough: its own dependency cfg_if
-    # would then come from the toolchain's sysroot, which was built with another hash (E0460).
     libs = {}
     for line in r.stdout.splitlines():
         try:
             msg = json.loads(line)
         except ValueError:
             continue
-        if msg.get("reason") != "compiler-artifact":
+        if msg.get("reason") != "compiler-artifact" or msg["target"]["name"] == "mono_rt_deps":
             continue
         for f in msg.get("filenames", []):
             if f.endswith(".rlib"):
                 libs[msg["target"]["name"].replace("-", "_")] = f
-    if "crc32fast" not in libs:
-        raise SystemExit("monolith: rt_deps: cargo built no crc32fast rlib (see the cargo output)")
-    deps = os.path.dirname(libs["crc32fast"])
-    flags = ["-L", "dependency=" + deps]
+    if not libs:
+        return []
+    flags = ["-L", "dependency=" + os.path.dirname(next(iter(libs.values())))]
     for name in sorted(libs):
         flags += ["--extern", f"{name}={libs[name]}"]
     return flags

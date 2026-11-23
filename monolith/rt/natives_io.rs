@@ -682,11 +682,26 @@ pub fn n_java_io_UnixFileSystem__getNameMax0(_this: Ref, path: Ref) -> Res<i64> 
 }
 
 // ------------------------------------------------------------------ java.util.zip CRC32 / Adler32
-/// CRC-32 continued from `crc` (the value Java's CRC32 holds): same result as zlib's `crc32(crc, buf, len)`.
+/// CRC-32 (IEEE 802.3, reflected polynomial 0xEDB88320), table driven. Continues from `crc` (the value Java's CRC32
+/// holds): same result as zlib's `crc32(crc, buf, len)`.
 fn crc32_continue(crc: u32, data: &[u8]) -> u32 {
-    let mut h = crc32fast::Hasher::new_with_initial(crc);
-    h.update(data);
-    h.finalize()
+    static TABLE: std::sync::OnceLock<[u32; 256]> = std::sync::OnceLock::new();
+    let t = TABLE.get_or_init(|| {
+        let mut t = [0u32; 256];
+        for (i, e) in t.iter_mut().enumerate() {
+            let mut c = i as u32;
+            for _ in 0..8 {
+                c = if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            }
+            *e = c;
+        }
+        t
+    });
+    let mut c = !crc;
+    for &b in data {
+        c = t[((c ^ b as u32) & 0xFF) as usize] ^ (c >> 8);
+    }
+    !c
 }
 
 pub fn n_java_util_zip_CRC32__update(crc_val: i32, b: i32) -> Res<i32> {

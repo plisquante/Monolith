@@ -11,4 +11,3 @@ name = "mono_rt"
 path = "../../monolith/rt/lib.rs"
 
 [dependencies]
-crc32fast = "=1.4.2"
