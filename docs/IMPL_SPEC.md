@@ -205,3 +205,13 @@ Kaynak: `MONO_GC_PHASES=1`, 150 sn headless oyun, 33 toplama.
 - `tests/rust/satb_proto.rs`: eşzamanlı işaretleme, mutatörler işaretleme sürerken referans değiştirir, her yazma bariyerden geçer.
 - Sonuç: 50 deneme geçti; aynı test bariyer kapalıyken ilk denemede canlı bir nesneyi kaçırıyor (`lost`). Yani bariyer gerekli ve bu
   tasarım yeterli (bu model için). `gc.rs`'e entegrasyon ayrı, toplu bir yeniden derleme işi.
+
+## 13. Eşzamanlı işaretleme (MONO_GC_CONCURRENT=1), ilk ölçümler
+
+- Uygulama: `gc.rs` (kök anlık görüntüsü STW, işaretleyici thread, SATB günlüğü, son toplama işaretleyici tarafından STW).
+  Varsayılan kapalı; kapalıyken davranış değişmedi. Yeni nesneler döngü sırasında siyah doğar.
+- `tests/GcConcurrentStress.java` (4 thread, 2500 tur, liste ters çevirme): düz ve eşzamanlı modda toplam 2261257500000 = HotSpot;
+  panic yok; işaretleyici thread 62 örneğin 10'unda görüldü (döngüler gerçekten çalıştı).
+- Son toplama duraklaması (küçük stres yığını, yalnız STW kısmı): eşzamanlı maks 7,4 ms / ort 2,2 ms; düz maks 9,0 ms / ort 5,1 ms.
+  Bu bir küçük yığın ölçümü; 500 MB'lık oyun yığınında kazanç henüz ölçülmedi. Başlangıç (kök) duraklaması ölçülmedi.
+- Sınır: bu, gerçek oyun ikilisinde (tam yeniden derleme + sızıntı kapısı benzeri soak) doğrulanmadı.
