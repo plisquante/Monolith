@@ -451,7 +451,7 @@ pub fn n_mono_rhi_NativeRhi__pollOsInput0(btns_ref: Ref, axes_ref: Ref) -> Res<(
         let a = btns_ref.0 as *mut Arr;
         if unsafe { (*a).len } >= 22 {
             let dst = unsafe { std::slice::from_raw_parts_mut((a as *mut u8).add(24) as *mut i32, 22) };
-            for i in 0..19 { dst[i] = snap.keys[i] as i32; }
+            for (d, &k) in dst[..19].iter_mut().zip(&snap.keys[..19]) { *d = k as i32; }
             dst[19] = snap.hotbar_slot;
             dst[20] = snap.width;
             dst[21] = snap.height;
