@@ -1312,8 +1312,12 @@ pub fn recycle(r: Ref) {
             if RECYCLE_CLASSES[slot].load(Ordering::Relaxed) == cp {
                 let list = &mut (*reg).recycled[slot];
                 if list.len() < RECYCLE_KEEP && (*r.0).gc & GC_HEAP != 0 {
-                    // keep the header, drop what the object held so the collector does not follow stale references
-                    std::ptr::write_bytes((r.0 as *mut u8).add(16), 0, class.size.max(16) - 16);
+                    // keep the header, drop what the object held so the collector does not follow stale references.
+                    // The fields it held are overwritten without a barrier, so their old values go to the SATB log
+                    // first: a cycle that marks from its snapshot must still reach them.
+                    let body = class.size.max(16) - 16;
+                    satb_log_range((r.0 as *const u8).add(16), body);
+                    std::ptr::write_bytes((r.0 as *mut u8).add(16), 0, body);
                     list.push(r.0);
                 }
                 return;
