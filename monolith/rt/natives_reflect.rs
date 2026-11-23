@@ -372,11 +372,11 @@ fn find_target(decl: &'static Class, slot: usize, recv: Ref, dispatch: bool) -> 
             let mut best_m: Option<&'static rt::MInfo> = None;
             for ic in rc.ifaces {
                 for km in ic.methods {
-                    if !km.fp.0.is_null() && (km.access & 0x040A) == 0 && km.name == m.name && km.desc == m.desc {
-                        if best_iface.is_none_or(|bi| rt::is_subclass(ic, bi)) {
-                            best_iface = Some(ic);
-                            best_m = Some(km);
-                        }
+                    if !km.fp.0.is_null() && (km.access & 0x040A) == 0 && km.name == m.name && km.desc == m.desc
+                        && best_iface.is_none_or(|bi| rt::is_subclass(ic, bi))
+                    {
+                        best_iface = Some(ic);
+                        best_m = Some(km);
                     }
                 }
             }

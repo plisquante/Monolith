@@ -689,10 +689,8 @@ fn source_gains(listener: &[f32; 3], fwd: &[f32; 3], s: &Source, listener_gain: 
                 let span = s.max_distance - r;
                 if span > 0.0 { 1.0 - rolloff * (d - r) / span } else { 1.0 }
             }
-            AL_EXPONENT_DISTANCE | AL_EXPONENT_DISTANCE_CLAMPED => {
-                if r > 0.0 { (d / r).powf(-rolloff) } else { 1.0 }
-            }
-            _ => 1.0, // AL_NONE
+            AL_EXPONENT_DISTANCE | AL_EXPONENT_DISTANCE_CLAMPED if r > 0.0 => (d / r).powf(-rolloff),
+            _ => 1.0, // AL_NONE and the exponent model at r <= 0
         };
         let pan = if dist > 1e-6 { dot([dx, dy, dz], right) / dist } else { 0.0 };
         (a.clamp(0.0, 1.0), pan.clamp(-1.0, 1.0))

@@ -22,6 +22,8 @@ use std::sync::{Mutex, OnceLock};
 
 /// Allocation-site table: (class, stack) key to (count, bytes).
 type SiteTable = HashMap<(u32, [usize; DEPTH]), (u64, u64)>;
+/// One entry of `SiteTable` borrowed for sorting.
+type SiteEntry<'a> = (&'a (u32, [usize; DEPTH]), &'a (u64, u64));
 use std::time::Instant;
 
 pub static ON: AtomicBool = AtomicBool::new(false);
@@ -404,7 +406,7 @@ pub fn dump() {
     // sites: the heaviest by sampled bytes
     {
         let sites = st.sites.lock().unwrap();
-        let mut v: Vec<(&(u32, [usize; DEPTH]), &(u64, u64))> = sites.iter().collect();
+        let mut v: Vec<SiteEntry> = sites.iter().collect();
         v.sort_by_key(|e| std::cmp::Reverse(e.1 .0));
         j.push_str(&format!("\"dropped_sites\":{},\"sites\":[", st.dropped_sites.load(Ordering::Relaxed)));
         for (i, (k, w)) in v.iter().take(8000).enumerate() {
