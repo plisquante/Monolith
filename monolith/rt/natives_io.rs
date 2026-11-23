@@ -25,12 +25,27 @@ extern "C" {
     fn utimes(filename: *const c_char, times: *const TimeVal) -> c_int;
     fn getloadavg(loadavg: *mut f64, nelem: c_int) -> c_int;
     fn localtime_r(timep: *const i64, result: *mut Tm) -> *mut Tm;
-    #[cfg(not(windows))]
+}
+
+#[cfg(not(windows))]
+extern "C" {
     static environ: *const *const c_char;
-    // UCRT keeps the environment block in _environ
-    #[cfg(windows)]
-    #[link_name = "_environ"]
-    static environ: *const *const c_char;
+}
+#[cfg(windows)]
+extern "C" {
+    fn __p__environ() -> *mut *const *const c_char;
+}
+
+/// The process environment block: a NULL-terminated array of "K=V" strings.
+#[cfg(not(windows))]
+pub unsafe fn environ_ptr() -> *const *const c_char {
+    environ
+}
+
+/// UCRT exposes the block through __p__environ() (it has no `_environ` data symbol to link against).
+#[cfg(windows)]
+pub unsafe fn environ_ptr() -> *const *const c_char {
+    *__p__environ()
 }
 
 #[cfg_attr(unix, link(name = "dl"))]
@@ -1212,7 +1227,7 @@ pub fn n_java_io_ObjectStreamClass__hasStaticInitializer(c_mirror: Ref) -> Res<i
 pub fn n_java_lang_System__env0() -> Res<Ref> {
     let mut pairs = Vec::new();
     unsafe {
-        let mut p = environ;
+        let mut p = environ_ptr();
         while !p.is_null() && !(*p).is_null() {
             let s = CStr::from_ptr(*p).to_string_lossy();
             if let Some((k, v)) = s.split_once('=') {

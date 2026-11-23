@@ -53,12 +53,6 @@ extern "C" {
     fn posix_spawn_file_actions_adddup2(fa: *mut c_void, fd: c_int, newfd: c_int) -> c_int;
     fn posix_spawn_file_actions_addclose(fa: *mut c_void, fd: c_int) -> c_int;
     fn posix_spawn_file_actions_addchdir_np(fa: *mut c_void, path: *const c_char) -> c_int;
-    #[cfg(not(windows))]
-    static environ: *const *const c_char;
-    // UCRT keeps the environment block in _environ
-    #[cfg(windows)]
-    #[link_name = "_environ"]
-    static environ: *const *const c_char;
 }
 
 #[cfg_attr(unix, link(name = "dl"))]
@@ -127,7 +121,7 @@ pub fn n_java_lang_Module__addExportsToAllUnnamed0(_a: Ref, _pkg: Ref) -> Res<()
 pub fn n_java_lang_ProcessEnvironment__environ() -> Res<Ref> {
     let mut pairs: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
     unsafe {
-        let mut p = environ;
+        let mut p = crate::natives_io::environ_ptr();
         while !p.is_null() && !(*p).is_null() {
             let s = CStr::from_ptr(*p).to_bytes();
             if let Some(eq) = s.iter().position(|&b| b == b'=') {
@@ -223,7 +217,7 @@ pub fn n_java_lang_ProcessImpl__forkAndExec(
     let _env_store: Vec<CString>;
     let mut env_ptrs: Vec<*const c_char> = Vec::new();
     let envp = if envb.is_null() {
-        unsafe { environ }
+        unsafe { crate::natives_io::environ_ptr() }
     } else {
         _env_store = split_nul(unsafe { rt::byte_slice(envb)? }, envc.max(0) as usize);
         for e in &_env_store {
