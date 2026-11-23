@@ -85,6 +85,11 @@ impl Slab {
         self.alloc_bits[bit_idx >> 6] &= !(1u64 << (bit_idx & 63));
     }
     #[inline(always)]
+    /// True when the slab has a free slot (a freed one, or one never used yet).
+    fn has_free(&self) -> bool {
+        self.free_head >= 0 || self.next_bump < self.n_slots
+    }
+
     unsafe fn alloc_slot(&mut self) -> Option<*mut Obj> {
         if self.free_head >= 0 {
             let idx = self.free_head as u16;
@@ -300,7 +305,8 @@ pub fn unregister_thread() {
     unsafe {
         let b = Box::from_raw(reg);
         for s in b.active {
-            if !s.is_null() {
+            // only slabs that still have room: a full one in the partial list is what made the allocator panic
+            if !s.is_null() && (*s).has_free() {
                 h.partial[(*s).sc as usize].push(s);
             }
         }
@@ -473,22 +479,30 @@ fn alloc_small_slow(reg: *mut ThreadReg, sc: usize, class: &'static Class) -> *m
         if !old.is_null() {
             unsafe { (*reg).active[sc] = std::ptr::null_mut() };
         }
-        let found = h.partial[sc].pop().unwrap_or_else(|| {
-            if let Some(es) = h.empty.pop() {
-                unsafe {
-                    Slab::init_at(es, sc);
-                    std::ptr::write_bytes((es as *mut u8).add(SLAB_HDR), 0, SLAB_SIZE - SLAB_HDR);
+        // a slab from the partial list is used only if it really has a free slot; a full one is dropped here
+        // (the sweep puts it back on the list when space appears)
+        let found = loop {
+            match h.partial[sc].pop() {
+                Some(s) if unsafe { (*s).has_free() } => break s,
+                Some(_) => continue,
+                None => {
+                    break if let Some(es) = h.empty.pop() {
+                        unsafe {
+                            Slab::init_at(es, sc);
+                            std::ptr::write_bytes((es as *mut u8).add(SLAB_HDR), 0, SLAB_SIZE - SLAB_HDR);
+                        }
+                        es
+                    } else {
+                        if BYTES_SINCE_GC.load(Ordering::Relaxed) >= h.gc_threshold {
+                            need_gc = true;
+                        }
+                        let s = Slab::new(sc);
+                        h.note_slab(s);
+                        s
+                    };
                 }
-                es
-            } else {
-                if BYTES_SINCE_GC.load(Ordering::Relaxed) >= h.gc_threshold {
-                    need_gc = true;
-                }
-                let s = Slab::new(sc);
-                h.note_slab(s);
-                s
             }
-        });
+        };
         unsafe { (*reg).active[sc] = found };
         found
     };
@@ -498,7 +512,14 @@ fn alloc_small_slow(reg: *mut ThreadReg, sc: usize, class: &'static Class) -> *m
         return alloc_obj_inner(class, SIZE_CLASSES[sc]);
     }
     unsafe {
-        let o = (*slab).alloc_slot().expect("fresh slab has slot");
+        // a slab chosen above has a free slot; if not (never expected), go round the allocator again
+        let o = match (*slab).alloc_slot() {
+            Some(o) => o,
+            None => {
+                (*reg).active[sc] = std::ptr::null_mut();
+                return alloc_small_slow(reg, sc, class);
+            }
+        };
         (*o).class = class;
         (*o).gc = GC_HEAP;
         (*reg).alloc_acc += SIZE_CLASSES[sc];
