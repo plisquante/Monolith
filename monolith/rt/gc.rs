@@ -743,6 +743,12 @@ struct ConcCycle {
 }
 static CONC: Mutex<Option<ConcCycle>> = Mutex::new(None);
 
+/// Diagnostics (MONO_GC_POISON=1): freed slots are overwritten with 0xDD so a use-after-free is visible at once.
+fn poison_enabled() -> bool {
+    static P: OnceLock<bool> = OnceLock::new();
+    *P.get_or_init(|| std::env::var_os("MONO_GC_POISON").map_or(false, |v| !v.is_empty() && v != "0"))
+}
+
 fn concurrent_enabled() -> bool {
     static C: OnceLock<bool> = OnceLock::new();
     *C.get_or_init(|| std::env::var_os("MONO_GC_CONCURRENT").is_some())
@@ -1168,6 +1174,10 @@ fn collect_impl(begin_only: bool) {
                 } else {
                     if let Some(c) = census.as_mut() { c.dead(o, sz); }
                     s.clear_bit(bit);
+                    if poison_enabled() {
+                        // diagnostics: a stale read of a freed object now yields 0xDDDD... instead of plausible data
+                        std::ptr::write_bytes((base + off) as *mut u8, 0xDD, sz);
+                    }
                     let p = (base + off) as *mut i32;
                     *p = s.free_head;
                     s.free_head = idx as i32;
