@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory() as work:
     java = subprocess.run([f"{JDK}/bin/java", "-cp", cdir, "Stack1"], capture_output=True, text=True, env=ENV)
     for label, flags in (("escape", ["--escape"]), ("escape + inline", ["--escape", "--inline"])):
         out = os.path.join(work, "out_" + label.replace(" ", "").replace("+", ""))
-        g = subprocess.run([sys.executable, "-m", "monolith.rustgen", "--cp", cdir, "--main", "Stack1", "-o", out, "--shards", "2", "--shard-jobs", "2",
+        g = subprocess.run([sys.executable, "-m", "monolith.rustgen", "--cp", cdir, "--main", "Stack1", "-o", out, "--shards", str(min(4, os.cpu_count() or 1)), "--shard-jobs", str(os.cpu_count() or 1),
                             "--opt", "2", "--compile"] + flags, cwd=ROOT, capture_output=True, text=True, env=ENV)
         if g.returncode:
             sys.exit(f"build ({label}) failed:\n" + g.stderr[-1500:])

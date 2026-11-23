@@ -68,7 +68,7 @@ def run_java(jdk: str, classes: str, name: str, env: dict[str, str], timeout: fl
 def build_rust(work: str, classes: str, name: str, opt: str, shards: int, env: dict[str, str]) -> tuple[str, str]:
     out = os.path.join(work, "out")
     cmd = [sys.executable, "-m", "monolith.rustgen", "--cp", classes, "--main", name, "-o", out,
-           "--shards", str(shards), "--shard-jobs", "2", "--opt", opt, "--compile"]
+           "--shards", str(shards), "--shard-jobs", str(max(1, os.cpu_count() or 1)), "--opt", opt, "--compile"]
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env)
     return (os.path.join(out, "prog"), r.stderr[-1500:]) if r.returncode == 0 else ("", r.stderr[-1500:])
 
@@ -102,7 +102,8 @@ def run_one(name: str, jdk: str, args: argparse.Namespace, env: dict[str, str]) 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("-O", "--opt", default="2", help="rustc opt-level (0, 1, 2, 3, s, z)")
-    ap.add_argument("--shards", type=int, default=2)
+    ap.add_argument("--shards", type=int, default=min(4, os.cpu_count() or 1),
+                    help="rustc object shards per program (parallel codegen units)")
     ap.add_argument("--min-avail-gib", type=float,
                     default=float(os.environ.get("MONO_TEST_MIN_AVAIL_GIB", "0.5")))
     ap.add_argument("--timeout", type=float, default=300.0)
