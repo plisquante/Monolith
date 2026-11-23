@@ -2429,10 +2429,10 @@ def build_runtime_rlib(target: str, dest: str) -> None:
     """Builds monolith/rt as an rlib through cargo: rt_deps/check is a package whose library is the runtime. Cargo
     resolves the runtime's dependencies itself, and the shared target directory (rt_deps/target) makes it reuse the
     same crc32fast and cfg-if artifacts that rt_deps_flags passes to rustc (E0460 cannot arise)."""
-    check = os.path.join(RT_DEPS, "check", "Cargo.toml")
     tgt = ["--target", target] if target else []
-    r = subprocess.run(["cargo", "build", "--release", "--offline", "--lib", "--manifest-path", check,
-                        "--target-dir", os.path.join(RT_DEPS, "target"), "--message-format=json", *tgt],
+    # cwd is rt_deps: cargo reads the vendored-source configuration (rt_deps/.cargo) from the working directory
+    r = subprocess.run(["cargo", "build", "--release", "--offline", "--lib", "--manifest-path", "check/Cargo.toml",
+                        "--target-dir", "target", "--message-format=json", *tgt], cwd=RT_DEPS,
                        capture_output=True, text=True)
     if r.returncode:
         raise SystemExit("monolith: runtime build failed (cargo build in rt_deps/check)\n" + r.stderr[-6000:])

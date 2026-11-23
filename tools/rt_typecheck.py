@@ -19,9 +19,9 @@ def main() -> int:
     from monolith.rustgen import rt_deps_flags
 
     rt_deps_flags()  # builds rt_deps (crc32fast, cfg-if) offline first; the check below reuses those artifacts
-    check = os.path.join(ROOT, "rt_deps", "check", "Cargo.toml")
-    r = subprocess.run(["cargo", "check", "--release", "--offline", "--lib", "--manifest-path", check,
-                        "--target-dir", os.path.join(ROOT, "rt_deps", "target")], capture_output=True, text=True)
+    # cwd is rt_deps: cargo reads the vendored-source configuration (rt_deps/.cargo) from the working directory
+    r = subprocess.run(["cargo", "check", "--release", "--offline", "--lib", "--manifest-path", "check/Cargo.toml",
+                        "--target-dir", "target"], cwd=os.path.join(ROOT, "rt_deps"), capture_output=True, text=True)
     if r.returncode != 0:
         sys.stderr.write(r.stderr)
         print("FAIL: runtime type-check (cargo check of monolith/rt)")
