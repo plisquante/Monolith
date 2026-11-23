@@ -159,3 +159,20 @@ Etiket: **[H]** = sınırları net, küçük modelle yapılabilir; **[S]** = der
 - **JNA `initIDs`:** `natives_jni.rs` içinde FFI tip alanlarını dolduran gövde yazıldı; narrator hatasının kapanması
   tam derlemeden sonra doğrulandı: `initIDs` çalışıyor, FFI/narrator/ses hatası 0 (20 sn headless). Kalan üç ERROR
   satırı dış ağa çıkamayan ortamdan geliyor (Realms, kullanıcı özellikleri).
+
+
+## 8. GC ölçümleri (bu oturum, temiz çalışma, profil kapalı)
+
+Kaynak: `MONO_GC_PHASES=1`, 150 sn headless oyun, 33 toplama.
+
+| canlı heap | bekleme | kök | işaretleme | süpürme | toplam duraklama |
+|---|---|---|---|---|---|
+| 10 MB | 1 µs | 1,5 ms | 11 ms | 5 ms | 18 ms |
+| 63 MB | 3 µs | 2,6 ms | 117 ms | 36 ms | 155 ms |
+| 145 MB | 10 ms | 4,9 ms | 268 ms | 54 ms | 337 ms |
+| 495 MB | 3 µs | 6,4 ms | 869 ms | 254 ms | **1 130 ms** |
+
+- Duraklama canlı heap ile doğrusal büyür: işaretleme ~1,8 ms/MB, süpürme ~0,5 ms/MB. Kök taraması ihmal edilebilir.
+- En uzun toplam duraklama 1,14 sn. Önceki "profil kaynaklı" iddiası YANLIŞTI; 1,3–1,8 sn rakamları gerçekti, ağır heap'te ortaya çıkıyor.
+- Canlı heap 150 sn içinde 10 MB'dan 495 MB'a çıktı. Bu, oyun içinde yükleme (chunk) dışında bir büyüme olabilir: sızıntı bütçesi aracı ile ayrılmalı (A1).
+- Bariyer mikro ölçümü (`bench.rs`, bu oturumda): bariyer kapalıyken yazma 1,46 ns, açıkken (tampona itme dahil) 5,63 ns; yani işaretleme penceresinde ~3,9×. Pencere kısa olduğu sürece ortalama maliyet düşük, ama oyunda ölçülmeden %3 hedefi doğrulanmış sayılmaz.
