@@ -156,7 +156,13 @@ pub fn register_lib_handle(handle: *mut c_void) {
 fn last_os_err() -> (i32, String) {
     let e = std::io::Error::last_os_error();
     let code = e.raw_os_error().unwrap_or(0);
-    (code, e.to_string())
+    // Rust appends " (os error N)"; the JDK messages carry only the strerror text
+    let text = e.to_string();
+    let msg = match text.rfind(" (os error") {
+        Some(i) => text[..i].to_string(),
+        None => text,
+    };
+    (code, msg)
 }
 
 fn stream_fd(this: Ref) -> Res<i32> {
