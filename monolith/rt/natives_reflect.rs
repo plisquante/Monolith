@@ -373,7 +373,7 @@ fn find_target(decl: &'static Class, slot: usize, recv: Ref, dispatch: bool) -> 
             for ic in rc.ifaces {
                 for km in ic.methods {
                     if !km.fp.0.is_null() && (km.access & 0x040A) == 0 && km.name == m.name && km.desc == m.desc {
-                        if best_iface.map_or(true, |bi| rt::is_subclass(ic, bi)) {
+                        if best_iface.is_none_or(|bi| rt::is_subclass(ic, bi)) {
                             best_iface = Some(ic);
                             best_m = Some(km);
                         }
