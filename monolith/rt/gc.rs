@@ -10,6 +10,40 @@ pub const GC_HEAP: u32 = 1;
 pub const GC_MARK: u32 = 2;
 pub const GC_ARENA: u32 = 4;
 
+/// Collector state shared by every thread. One value, `G`; each field is the variable it replaced.
+struct Globals {
+    /// Eşzamanlı işaretleme (SATB) açık mı. Şimdilik hiçbir yer açmıyor; açıldığında yazmalar eski değeri kaydeder.
+    satb_on: AtomicBool,
+    satb_log: Mutex<Vec<usize>>,
+    /// Weak references found by the current cycle's marking (live or not yet known to be live).
+    weak_seen: Mutex<Vec<usize>>,
+    gc_stopping: AtomicU32,
+    bytes_since_gc: AtomicUsize,
+    /// A concurrent cycle is running (between its start and its final collection). The marker asks for the final collection (only that collection may run during a cycle).
+    cycle: AtomicBool,
+    finishing: AtomicBool,
+    conc: Mutex<Option<ConcCycle>>,
+    recycle_classes: [AtomicUsize; RECYCLE_SLOTS],
+}
+
+impl Globals {
+    const fn new() -> Globals {
+        Globals {
+        satb_on: AtomicBool::new(false),
+        satb_log: Mutex::new(Vec::new()),
+        weak_seen: Mutex::new(Vec::new()),
+        gc_stopping: AtomicU32::new(0),
+        bytes_since_gc: AtomicUsize::new(0),
+        cycle: AtomicBool::new(false),
+        finishing: AtomicBool::new(false),
+        conc: Mutex::new(None),
+        recycle_classes: [const { AtomicUsize::new(0) }; RECYCLE_SLOTS],
+        }
+    }
+}
+
+static G: Globals = Globals::new();
+
 const SLAB_SIZE: usize = 65536;
 const SLAB_MASK: usize = !(SLAB_SIZE - 1);
 const SLAB_HDR: usize = 1024;
@@ -160,9 +194,6 @@ fn cur_reg() -> *mut ThreadReg {
     TLS_REG.with(|c| unsafe { *c.0.get() })
 }
 
-/// Eşzamanlı işaretleme (SATB) açık mı. Şimdilik hiçbir yer açmıyor; açıldığında yazmalar eski değeri kaydeder.
-pub static SATB_ON: AtomicBool = AtomicBool::new(false);
-static SATB_LOG: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 
 /// Referans yazma bariyeri (snapshot-at-the-beginning): işaretleme açıksa yazılacak yerin eski değerini kaydeder.
 #[inline(always)]
@@ -170,7 +201,7 @@ static SATB_LOG: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 /// `slot` must be a valid, aligned pointer to a `Ref` field or array element. `v` must be a valid reference or null.
 pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
     unsafe {
-        if SATB_ON.load(Ordering::Relaxed) {
+        if G.satb_on.load(Ordering::Relaxed) {
             satb_log((*slot).0 as usize);
         }
         *slot = v;
@@ -199,8 +230,6 @@ fn weak_info() -> (usize, u32) {
     })
 }
 
-/// Weak references found by the current cycle's marking (live or not yet known to be live).
-static WEAK_SEEN: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 
 /// True for an instance of WeakReference (or a subclass) whose referent must not be traced.
 #[inline(always)]
@@ -225,7 +254,7 @@ fn clear_dead_referents() {
     if wc == 0 {
         return;
     }
-    let seen = std::mem::take(&mut *WEAK_SEEN.lock().unwrap());
+    let seen = std::mem::take(&mut *G.weak_seen.lock().unwrap());
     for o in seen {
         unsafe {
             let obj = o as *mut Obj;
@@ -251,7 +280,7 @@ fn clear_dead_referents() {
 /// # Safety
 /// `slot` must be a valid, aligned pointer to a reference-sized field that is about to be overwritten.
 pub unsafe fn satb_overwrite(slot: *mut *mut Obj) {
-    if SATB_ON.load(Ordering::Relaxed) {
+    if G.satb_on.load(Ordering::Relaxed) {
         satb_log(unsafe { *slot } as usize);
     }
 }
@@ -260,7 +289,7 @@ pub unsafe fn satb_overwrite(slot: *mut *mut Obj) {
 #[inline(never)]
 fn satb_log(old: usize) {
     if old != 0 {
-        SATB_LOG.lock().unwrap().push(old);
+        G.satb_log.lock().unwrap().push(old);
     }
 }
 
@@ -270,7 +299,7 @@ fn satb_log(old: usize) {
 /// # Safety
 /// `p..p + bytes` must be readable memory.
 pub unsafe fn satb_log_range(p: *const u8, bytes: usize) {
-    if !SATB_ON.load(Ordering::Relaxed) {
+    if !G.satb_on.load(Ordering::Relaxed) {
         return;
     }
     let mut v = Vec::new();
@@ -283,17 +312,15 @@ pub unsafe fn satb_log_range(p: *const u8, bytes: usize) {
         off += 8;
     }
     if !v.is_empty() {
-        SATB_LOG.lock().unwrap().extend(v);
+        G.satb_log.lock().unwrap().extend(v);
     }
 }
 
 /// İşaretleme sırasında kaydedilen eski değerleri alır (işaretleyici tüketir).
 pub fn satb_take() -> Vec<usize> {
-    std::mem::take(&mut *SATB_LOG.lock().unwrap())
+    std::mem::take(&mut *G.satb_log.lock().unwrap())
 }
 
-pub static GC_STOPPING: AtomicU32 = AtomicU32::new(0);
-static BYTES_SINCE_GC: AtomicUsize = AtomicUsize::new(0);
 
 struct HeapState {
     threads: Vec<*mut ThreadReg>,
@@ -481,7 +508,7 @@ impl ScopedBlock {
                 (*reg).stack_bot.store(sp, Ordering::Release);
                 (*reg).blocked.fetch_add(1, Ordering::SeqCst);
             }
-            if GC_STOPPING.load(Ordering::Relaxed) != 0 {
+            if G.gc_stopping.load(Ordering::Relaxed) != 0 {
                 let (_, cv) = heap_sync();
                 cv.notify_all();
             }
@@ -498,7 +525,7 @@ impl Drop for ScopedBlock {
             unsafe {
                 (*reg).blocked.fetch_sub(1, Ordering::SeqCst);
             }
-            if GC_STOPPING.load(Ordering::Acquire) != 0 {
+            if G.gc_stopping.load(Ordering::Acquire) != 0 {
                 safepoint_slow();
             }
         }
@@ -507,7 +534,7 @@ impl Drop for ScopedBlock {
 
 #[inline(always)]
 pub fn safepoint() {
-    if GC_STOPPING.load(Ordering::Relaxed) != 0 {
+    if G.gc_stopping.load(Ordering::Relaxed) != 0 {
         safepoint_slow();
     }
 }
@@ -523,10 +550,10 @@ pub fn safepoint_slow() {
     unsafe { (*reg).stack_bot.store(sp, Ordering::Release) };
     let (m, cv) = heap_sync();
     let mut h = m.lock().unwrap();
-    if GC_STOPPING.load(Ordering::Acquire) != 0 {
+    if G.gc_stopping.load(Ordering::Acquire) != 0 {
         unsafe { (*reg).paused.store(true, Ordering::SeqCst) };
         cv.notify_all();
-        while GC_STOPPING.load(Ordering::Acquire) != 0 {
+        while G.gc_stopping.load(Ordering::Acquire) != 0 {
             h = cv.wait(h).unwrap();
         }
         unsafe { (*reg).paused.store(false, Ordering::SeqCst) };
@@ -595,7 +622,7 @@ fn flush_alloc_acc(reg: *mut ThreadReg) {
         (*reg).alloc_acc = 0;
         v
     };
-    let prev = BYTES_SINCE_GC.fetch_add(add, Ordering::Relaxed);
+    let prev = G.bytes_since_gc.fetch_add(add, Ordering::Relaxed);
     if prev + add >= 32 * 1024 * 1024 {
         let thresh = {
             let (m, _) = heap_sync();
@@ -632,7 +659,7 @@ fn alloc_small_slow(reg: *mut ThreadReg, sc: usize, class: &'static Class) -> *m
                         }
                         es
                     } else {
-                        if BYTES_SINCE_GC.load(Ordering::Relaxed) >= h.gc_threshold {
+                        if G.bytes_since_gc.load(Ordering::Relaxed) >= h.gc_threshold {
                             need_gc = true;
                         }
                         let s = Slab::new(sc);
@@ -674,7 +701,7 @@ fn alloc_large(reg: *mut ThreadReg, class: &'static Class, aligned: usize) -> *m
             let (m, _) = heap_sync();
             m.lock().unwrap().gc_threshold
         };
-        let total = BYTES_SINCE_GC.fetch_add(aligned, Ordering::Relaxed) + aligned;
+        let total = G.bytes_since_gc.fetch_add(aligned, Ordering::Relaxed) + aligned;
         if total >= thresh {
             collect();
         }
@@ -827,10 +854,6 @@ fn alloc_arena_bump(class: &'static Class, size: usize) -> Ref {
 // Objects allocated during a cycle are born marked, so the sweep keeps them. Requests to collect during a cycle
 // are ignored: the cycle finishes itself. Without the variable nothing here runs and the collector is unchanged.
 
-/// A concurrent cycle is running (between its start and its final collection).
-static CYCLE: AtomicBool = AtomicBool::new(false);
-/// The marker asks for the final collection (only that collection may run during a cycle).
-static FINISHING: AtomicBool = AtomicBool::new(false);
 
 /// Data the marker thread takes over at the start of a cycle.
 struct ConcCycle {
@@ -842,7 +865,6 @@ struct ConcCycle {
     large_min: usize,
     large_max: usize,
 }
-static CONC: Mutex<Option<ConcCycle>> = Mutex::new(None);
 
 fn poison_enabled() -> bool {
     knobs().poison
@@ -855,14 +877,14 @@ fn concurrent_enabled() -> bool {
 /// GC bits of a newly allocated object: black during a cycle (it survives that cycle's sweep).
 #[inline(always)]
 fn new_obj_bits() -> u32 {
-    if SATB_ON.load(Ordering::Relaxed) { GC_HEAP | GC_MARK } else { GC_HEAP }
+    if G.satb_on.load(Ordering::Relaxed) { GC_HEAP | GC_MARK } else { GC_HEAP }
 }
 
 pub fn collect() {
-    if CYCLE.load(Ordering::Acquire) && !FINISHING.load(Ordering::Acquire) {
+    if G.cycle.load(Ordering::Acquire) && !G.finishing.load(Ordering::Acquire) {
         return; // a cycle is running and finishes itself
     }
-    let begin = concurrent_enabled() && !FINISHING.load(Ordering::Acquire);
+    let begin = concurrent_enabled() && !G.finishing.load(Ordering::Acquire);
     collect_impl(begin);
 }
 
@@ -870,7 +892,7 @@ pub fn collect() {
 /// by the time the caller continues. A running concurrent cycle is waited for first; the wait stays at safepoints
 /// because that cycle's final collection has to stop this thread.
 pub fn collect_explicit() {
-    while CYCLE.load(Ordering::Acquire) {
+    while G.cycle.load(Ordering::Acquire) {
         safepoint();
         std::thread::sleep(std::time::Duration::from_micros(200));
     }
@@ -942,7 +964,7 @@ fn marker_scan(obj: *mut Obj, cyc: &ConcCycle, work: &mut Vec<*mut Obj>) {
         } else {
             let weak = weak_object(c);
             let skip = if weak {
-                WEAK_SEEN.lock().unwrap().push(obj as usize);
+                G.weak_seen.lock().unwrap().push(obj as usize);
                 weak_info().1
             } else {
                 u32::MAX
@@ -960,7 +982,7 @@ fn marker_scan(obj: *mut Obj, cyc: &ConcCycle, work: &mut Vec<*mut Obj>) {
 
 /// The marker thread: marks from the snapshot, takes the SATB log, and when nothing is left runs the final collection.
 fn marker_main() {
-    let cyc = match CONC.lock().unwrap().take() {
+    let cyc = match G.conc.lock().unwrap().take() {
         Some(c) => c,
         None => return,
     };
@@ -978,15 +1000,15 @@ fn marker_main() {
         }
     }
     drop(cyc);
-    FINISHING.store(true, Ordering::Release);
+    G.finishing.store(true, Ordering::Release);
     collect_impl(false);
-    FINISHING.store(false, Ordering::Release);
+    G.finishing.store(false, Ordering::Release);
 }
 
 #[inline(never)]
 fn collect_impl(begin_only: bool) {
-    if !FINISHING.load(Ordering::Acquire) {
-        WEAK_SEEN.lock().unwrap().clear(); // a new marking starts: the weak references it finds are its own
+    if !G.finishing.load(Ordering::Acquire) {
+        G.weak_seen.lock().unwrap().clear(); // a new marking starts: the weak references it finds are its own
     }
     let t_entry = std::time::Instant::now();
     let _regs = std::hint::black_box(capture_regs());
@@ -1015,7 +1037,7 @@ fn collect_impl(begin_only: bool) {
         eprintln!("[mono:gc_stw] start\n{}", std::backtrace::Backtrace::force_capture());
     }
     h.collecting = true;
-    GC_STOPPING.store(1, Ordering::SeqCst);
+    G.gc_stopping.store(1, Ordering::SeqCst);
 
     // Wait for all other active threads to park at a safepoint or be inside ScopedBlock
     loop {
@@ -1170,18 +1192,18 @@ fn collect_impl(begin_only: bool) {
         if phases_on {
             eprintln!("[mono:gc_phases] begin gc={} roots={}us", h.gc_count, t_roots.as_micros());
         }
-        *CONC.lock().unwrap() = Some(cyc);
-        SATB_ON.store(true, Ordering::Release);
-        CYCLE.store(true, Ordering::Release);
+        *G.conc.lock().unwrap() = Some(cyc);
+        G.satb_on.store(true, Ordering::Release);
+        G.cycle.store(true, Ordering::Release);
         h.collecting = false;
-        GC_STOPPING.store(0, Ordering::Release);
+        G.gc_stopping.store(0, Ordering::Release);
         cv.notify_all();
         drop(h);
         if std::thread::Builder::new().name("mono-gc-mark".into()).spawn(marker_main).is_err() {
             // no marker thread: finish the cycle now, on this thread (stop-the-world, as without concurrency)
-            FINISHING.store(true, Ordering::Release);
+            G.finishing.store(true, Ordering::Release);
             collect_impl(false);
-            FINISHING.store(false, Ordering::Release);
+            G.finishing.store(false, Ordering::Release);
         }
         std::hint::black_box(&_regs);
         return;
@@ -1244,7 +1266,7 @@ fn collect_impl(begin_only: bool) {
             } else {
                 let weak = weak_object(c);
                 let skip = if weak {
-                    WEAK_SEEN.lock().unwrap().push(obj as usize);
+                    G.weak_seen.lock().unwrap().push(obj as usize);
                     weak_info().1
                 } else {
                     u32::MAX
@@ -1274,7 +1296,7 @@ fn collect_impl(begin_only: bool) {
     clear_dead_referents();
     let t_mark = t_start.elapsed() - t_roots;
     // 5. Sweep slabs
-    let since_gc = BYTES_SINCE_GC.load(Ordering::Relaxed);
+    let since_gc = G.bytes_since_gc.load(Ordering::Relaxed);
     let mut census = crate::prof::sweep_begin();
     for sc in 0..NUM_CLASSES {
         h.partial[sc].clear();
@@ -1375,20 +1397,20 @@ fn collect_impl(begin_only: bool) {
     }
     h.live_bytes = new_live;
     h.gc_threshold = (new_live * 2).max(16 * 1024 * 1024);
-    BYTES_SINCE_GC.store(0, Ordering::Relaxed);
+    G.bytes_since_gc.store(0, Ordering::Relaxed);
     if std::env::var_os("MONO_TRACE_PARK").is_some() {
         eprintln!("[mono:gc_stw] done gc={} threads={} slabs={} large={} live={}B", h.gc_count, h.threads.len(), h.slabs.len(), h.large.len(), new_live);
         for (i, &tp) in h.threads.iter().enumerate() {
             unsafe { eprintln!("  t{}: bot={:#x} top={:#x} len={}", i, (*tp).stack_bot.load(Ordering::Relaxed), (*tp).stack_top, (*tp).stack_top.saturating_sub((*tp).stack_bot.load(Ordering::Relaxed))); }
         }
     }
-    if CYCLE.load(Ordering::Acquire) {
+    if G.cycle.load(Ordering::Acquire) {
         // the final collection of a concurrent cycle: the barrier goes off before the program runs again
-        SATB_ON.store(false, Ordering::Release);
-        CYCLE.store(false, Ordering::Release);
+        G.satb_on.store(false, Ordering::Release);
+        G.cycle.store(false, Ordering::Release);
     }
     h.collecting = false;
-    GC_STOPPING.store(0, Ordering::Release);
+    G.gc_stopping.store(0, Ordering::Release);
     cv.notify_all();
     std::hint::black_box(&_regs);
 }
@@ -1412,7 +1434,6 @@ pub fn heap_bytes() -> usize {
 pub const RECYCLE_SLOTS: usize = 32;
 const RECYCLE_KEEP: usize = 16;
 
-static RECYCLE_CLASSES: [AtomicUsize; RECYCLE_SLOTS] = [const { AtomicUsize::new(0) }; RECYCLE_SLOTS];
 
 fn recycle_enabled() -> bool {
     knobs().recycle
@@ -1421,7 +1442,7 @@ fn recycle_enabled() -> bool {
 /// `new` of a recyclable class: a recycled object of that class when the thread has one, else a fresh heap object.
 pub fn alloc_recyclable(class: &'static Class, slot: usize) -> Ref {
     if recycle_enabled() {
-        RECYCLE_CLASSES[slot].store(class as *const Class as usize, Ordering::Relaxed);
+        G.recycle_classes[slot].store(class as *const Class as usize, Ordering::Relaxed);
         let reg = cur_reg();
         if !reg.is_null() {
             if let Some(o) = unsafe { (*reg).recycled[slot].pop() } {
@@ -1446,7 +1467,7 @@ pub fn recycle(r: Ref) {
     unsafe {
         let class = (*r.0).class;
         let cp = class as *const Class as usize;
-        for (slot, owner) in RECYCLE_CLASSES.iter().enumerate().take(RECYCLE_SLOTS) {
+        for (slot, owner) in G.recycle_classes.iter().enumerate().take(RECYCLE_SLOTS) {
             if owner.load(Ordering::Relaxed) == cp {
                 let list = &mut (*reg).recycled[slot];
                 if list.len() < RECYCLE_KEEP && (*r.0).gc & GC_HEAP != 0 {
