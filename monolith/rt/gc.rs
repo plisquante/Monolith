@@ -764,6 +764,9 @@ pub fn collect() {
         };
     }
 
+    // Fazların süreleri (MONO_GC_PHASES): kökler, işaretleme, arena denetimi, süpürme.
+    let phases_on = std::env::var_os("MONO_GC_PHASES").is_some();
+    let t_start = std::time::Instant::now();
     // 1. Thread stacks + thread arenas + Java Thread object roots
     for &tp in &h.threads {
         unsafe {
@@ -842,6 +845,7 @@ pub fn collect() {
         push_ref!(r);
     }
 
+    let t_roots = t_start.elapsed();
     // 4. Precise heap graph mark
     let check = arena_check_mode();
     let mut arena_ranges: Vec<(usize, usize)> = Vec::new();
@@ -913,6 +917,7 @@ pub fn collect() {
         eprintln!("[mono:arena] {} escape violation(s) at collection {}", violations, h.gc_count);
         if check == 2 { rt::abort("arena escape violation"); }
     }
+    let t_mark = t_start.elapsed() - t_roots;
     // 5. Sweep slabs
     let since_gc = BYTES_SINCE_GC.load(Ordering::Relaxed);
     let mut census = crate::prof::sweep_begin();
@@ -1002,6 +1007,10 @@ pub fn collect() {
         unsafe { dealloc(addr as *mut u8, Layout::from_size_align(sz, 16).unwrap()) };
     }
 
+    if phases_on {
+        let t_sweep = t_start.elapsed() - t_roots - t_mark;
+        eprintln!("[mono:gc_phases] gc={} roots={}us mark={}us sweep={}us live={}B", h.gc_count, t_roots.as_micros(), t_mark.as_micros(), t_sweep.as_micros(), new_live);
+    }
     if let Some(c) = census.take() {
         c.finish(h.gc_count as u64, new_live, h.heap_bytes, since_gc, stw_start);
     }
