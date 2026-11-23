@@ -818,7 +818,6 @@ unsupported! {
     fn getrlimit(res: c_int, rlim: *mut c_void) -> c_int;
     fn getloadavg(loadavg: *mut f64, n: c_int) -> c_int;
     fn sigaltstack(ss: *const c_void, old: *mut c_void) -> c_int;
-    fn pthread_kill(t: usize, sig: c_int) -> c_int;
     fn kill(pid: c_int, sig: c_int) -> c_int;
     fn madvise(addr: *mut c_void, len: usize, advice: c_int) -> c_int;
     fn mincore(addr: *mut c_void, len: usize, vec: *mut u8) -> c_int;
@@ -833,6 +832,12 @@ unsupported! {
     fn endmntent(f: *mut c_void) -> c_int;
     fn backtrace(buf: *mut *mut c_void, size: c_int) -> c_int;
     fn syscall(number: i64, a: i64, b: i64, c: i64) -> i64;
+}
+
+// The GNU target gets pthread_kill from libmingw32 (thread.obj); exporting our own copy there is a duplicate symbol.
+#[cfg(not(target_env = "gnu"))]
+unsupported! {
+    fn pthread_kill(t: usize, sig: c_int) -> c_int;
 }
 
 /// Pointer-returning functions without a Windows equivalent: NULL with errno ENOSYS.
