@@ -470,7 +470,7 @@ fn alloc_obj_inner(class: &'static Class, size: usize) -> *mut Obj {
                 if !s.is_null() {
                     if let Some(o) = (*s).alloc_slot() {
                         (*o).class = class;
-                        (*o).gc = GC_HEAP;
+                        (*o).gc = new_obj_bits();
                         (*reg).alloc_acc += SIZE_CLASSES[sc];
                         if (*reg).alloc_acc >= 65536 {
                             flush_alloc_acc(reg);
@@ -557,7 +557,7 @@ fn alloc_small_slow(reg: *mut ThreadReg, sc: usize, class: &'static Class) -> *m
             }
         };
         (*o).class = class;
-        (*o).gc = GC_HEAP;
+        (*o).gc = new_obj_bits();
         (*reg).alloc_acc += SIZE_CLASSES[sc];
         o
     }
@@ -580,7 +580,7 @@ fn alloc_large(reg: *mut ThreadReg, class: &'static Class, aligned: usize) -> *m
     let p = unsafe { alloc_zeroed(layout) } as *mut Obj;
     unsafe {
         (*p).class = class;
-        (*p).gc = GC_HEAP;
+        (*p).gc = new_obj_bits();
     }
     let (m, _) = heap_sync();
     let mut h = m.lock().unwrap();
@@ -698,7 +698,141 @@ fn alloc_arena_bump(class: &'static Class, size: usize) -> Ref {
 }
 
 // ------------------------------------------------------------------ Mark & Sweep Collector
+//
+// Concurrent marking (MONO_GC_CONCURRENT=1). A cycle starts with a short stop-the-world root snapshot; the marking runs
+// on a marker thread while the program runs (the SATB barrier, `satb_store`, logs every overwritten reference); the
+// last collection (stop-the-world: roots again, the SATB log, sweep) is run by the marker when no work is left.
+// Objects allocated during a cycle are born marked, so the sweep keeps them. Requests to collect during a cycle
+// are ignored: the cycle finishes itself. Without the variable nothing here runs and the collector is unchanged.
+
+/// A concurrent cycle is running (between its start and its final collection).
+static CYCLE: AtomicBool = AtomicBool::new(false);
+/// The marker asks for the final collection (only that collection may run during a cycle).
+static FINISHING: AtomicBool = AtomicBool::new(false);
+
+/// Data the marker thread takes over at the start of a cycle.
+struct ConcCycle {
+    work: Vec<usize>,
+    slabs: Vec<usize>,
+    slab_min: usize,
+    slab_max: usize,
+    large: HashMap<usize, usize>,
+    large_min: usize,
+    large_max: usize,
+}
+static CONC: Mutex<Option<ConcCycle>> = Mutex::new(None);
+
+fn concurrent_enabled() -> bool {
+    static C: OnceLock<bool> = OnceLock::new();
+    *C.get_or_init(|| std::env::var_os("MONO_GC_CONCURRENT").is_some())
+}
+
+/// GC bits of a newly allocated object: black during a cycle (it survives that cycle's sweep).
+#[inline(always)]
+fn new_obj_bits() -> u32 {
+    if SATB_ON.load(Ordering::Relaxed) { GC_HEAP | GC_MARK } else { GC_HEAP }
+}
+
 pub fn collect() {
+    if CYCLE.load(Ordering::Acquire) && !FINISHING.load(Ordering::Acquire) {
+        return; // a cycle is running and finishes itself
+    }
+    let begin = concurrent_enabled() && !FINISHING.load(Ordering::Acquire);
+    collect_impl(begin);
+}
+
+#[inline(always)]
+fn try_push(
+    addr: usize,
+    slabs_snap: &[usize],
+    slab_min: usize,
+    slab_max: usize,
+    large_map: &HashMap<usize, usize>,
+    large_min: usize,
+    large_max: usize,
+    work: &mut Vec<*mut Obj>,
+) {
+    if addr == 0 || (addr & 0xF) != 0 {
+        return;
+    }
+    if addr >= slab_min && addr < slab_max {
+        let base = addr & SLAB_MASK;
+        let off = addr - base;
+        if off >= SLAB_HDR && slabs_snap.binary_search(&base).is_ok() {
+            unsafe {
+                let s = &*(base as *const Slab);
+                if s.magic == SLAB_MAGIC && s.alloc_bit(off >> 4) {
+                    let o = addr as *mut Obj;
+                    if ((*o).gc & (GC_HEAP | GC_MARK)) == GC_HEAP {
+                        (*o).gc |= GC_MARK;
+                        work.push(o);
+                    }
+                }
+            }
+            return;
+        }
+    }
+    if addr >= large_min && addr < large_max && large_map.contains_key(&addr) {
+        unsafe {
+            let o = addr as *mut Obj;
+            if ((*o).gc & (GC_HEAP | GC_MARK)) == GC_HEAP {
+                (*o).gc |= GC_MARK;
+                work.push(o);
+            }
+        }
+    }
+}
+
+/// Scans one object for the marker: pushes what it references (the same work as the stop-the-world drain).
+fn marker_scan(obj: *mut Obj, cyc: &ConcCycle, work: &mut Vec<*mut Obj>) {
+    unsafe {
+        let c = (*obj).class;
+        let mp = c.mirror.0.load(Ordering::Relaxed);
+        if !mp.is_null() {
+            try_push(mp as usize, &cyc.slabs, cyc.slab_min, cyc.slab_max, &cyc.large, cyc.large_min, cyc.large_max, work);
+        }
+        if c.elem == b'A' {
+            let n = (*(obj as *const Arr)).len.max(0) as usize;
+            let data = (obj as *const u8).add(24) as *const Ref;
+            for i in 0..n {
+                try_push((*data.add(i)).0 as usize, &cyc.slabs, cyc.slab_min, cyc.slab_max, &cyc.large, cyc.large_min, cyc.large_max, work);
+            }
+        } else {
+            for &off in c.ref_offsets {
+                let r = *((obj as *const u8).add(off as usize) as *const Ref);
+                try_push(r.0 as usize, &cyc.slabs, cyc.slab_min, cyc.slab_max, &cyc.large, cyc.large_min, cyc.large_max, work);
+            }
+        }
+    }
+}
+
+/// The marker thread: marks from the snapshot, takes the SATB log, and when nothing is left runs the final collection.
+fn marker_main() {
+    let cyc = match CONC.lock().unwrap().take() {
+        Some(c) => c,
+        None => return,
+    };
+    let mut work: Vec<*mut Obj> = cyc.work.iter().map(|&a| a as *mut Obj).collect();
+    loop {
+        while let Some(obj) = work.pop() {
+            marker_scan(obj, &cyc, &mut work);
+        }
+        let log = satb_take();
+        if log.is_empty() {
+            break;
+        }
+        for v in log {
+            try_push(v, &cyc.slabs, cyc.slab_min, cyc.slab_max, &cyc.large, cyc.large_min, cyc.large_max, &mut work);
+        }
+    }
+    drop(cyc);
+    FINISHING.store(true, Ordering::Release);
+    collect_impl(false);
+    FINISHING.store(false, Ordering::Release);
+}
+
+#[inline(never)]
+fn collect_impl(begin_only: bool) {
     let t_entry = std::time::Instant::now();
     let _regs = std::hint::black_box(capture_regs());
     let my_sp = flush_regs_and_sp();
@@ -776,47 +910,6 @@ pub fn collect() {
 
     let mut work: Vec<*mut Obj> = Vec::with_capacity(4096);
 
-    #[inline(always)]
-    fn try_push(
-        addr: usize,
-        slabs_snap: &[usize],
-        slab_min: usize,
-        slab_max: usize,
-        large_map: &HashMap<usize, usize>,
-        large_min: usize,
-        large_max: usize,
-        work: &mut Vec<*mut Obj>,
-    ) {
-        if addr == 0 || (addr & 0xF) != 0 {
-            return;
-        }
-        if addr >= slab_min && addr < slab_max {
-            let base = addr & SLAB_MASK;
-            let off = addr - base;
-            if off >= SLAB_HDR && slabs_snap.binary_search(&base).is_ok() {
-                unsafe {
-                    let s = &*(base as *const Slab);
-                    if s.magic == SLAB_MAGIC && s.alloc_bit(off >> 4) {
-                        let o = addr as *mut Obj;
-                        if ((*o).gc & (GC_HEAP | GC_MARK)) == GC_HEAP {
-                            (*o).gc |= GC_MARK;
-                            work.push(o);
-                        }
-                    }
-                }
-                return;
-            }
-        }
-        if addr >= large_min && addr < large_max && large_map.contains_key(&addr) {
-            unsafe {
-                let o = addr as *mut Obj;
-                if ((*o).gc & (GC_HEAP | GC_MARK)) == GC_HEAP {
-                    (*o).gc |= GC_MARK;
-                    work.push(o);
-                }
-            }
-        }
-    }
 
     macro_rules! push_ref {
         ($r:expr) => {
@@ -906,6 +999,35 @@ pub fn collect() {
     }
 
     let t_roots = t_start.elapsed();
+    if begin_only {
+        // Start of a concurrent cycle: the roots are the snapshot. The marker takes over, the program goes on.
+        let mut slabs = h.slabs.clone();
+        slabs.sort_unstable();
+        let cyc = ConcCycle {
+            work: work.iter().map(|&o| o as usize).collect(),
+            slabs,
+            slab_min,
+            slab_max,
+            large: large_map.clone(),
+            large_min,
+            large_max,
+        };
+        *CONC.lock().unwrap() = Some(cyc);
+        SATB_ON.store(true, Ordering::Release);
+        CYCLE.store(true, Ordering::Release);
+        h.collecting = false;
+        GC_STOPPING.store(0, Ordering::Release);
+        cv.notify_all();
+        drop(h);
+        if std::thread::Builder::new().name("mono-gc-mark".into()).spawn(marker_main).is_err() {
+            // no marker thread: finish the cycle now, on this thread (stop-the-world, as without concurrency)
+            FINISHING.store(true, Ordering::Release);
+            collect_impl(false);
+            FINISHING.store(false, Ordering::Release);
+        }
+        std::hint::black_box(&_regs);
+        return;
+    }
     // 4. Precise heap graph mark
     let check = arena_check_mode();
     let mut arena_ranges: Vec<(usize, usize)> = Vec::new();
@@ -939,6 +1061,10 @@ pub fn collect() {
                 }
             }
         }
+    }
+    // the references that mutators overwrote during a concurrent cycle (their old values are live at the snapshot)
+    for v in satb_take() {
+        try_push(v, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut work);
     }
     while let Some(obj) = work.pop() {
         unsafe {
@@ -1083,6 +1209,11 @@ pub fn collect() {
             unsafe { eprintln!("  t{}: bot={:#x} top={:#x} len={}", i, (*tp).stack_bot.load(Ordering::Relaxed), (*tp).stack_top, (*tp).stack_top.saturating_sub((*tp).stack_bot.load(Ordering::Relaxed))); }
         }
     }
+    if CYCLE.load(Ordering::Acquire) {
+        // the final collection of a concurrent cycle: the barrier goes off before the program runs again
+        SATB_ON.store(false, Ordering::Release);
+        CYCLE.store(false, Ordering::Release);
+    }
     h.collecting = false;
     GC_STOPPING.store(0, Ordering::Release);
     cv.notify_all();
@@ -1123,7 +1254,7 @@ pub fn alloc_recyclable(class: &'static Class, slot: usize) -> Ref {
         if !reg.is_null() {
             if let Some(o) = unsafe { (*reg).recycled[slot].pop() } {
                 crate::prof::on_alloc(class, class.size, true);
-                unsafe { (*o).gc = GC_HEAP; }
+                unsafe { (*o).gc = new_obj_bits(); }
                 return Ref(o);
             }
         }
