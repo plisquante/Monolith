@@ -32,6 +32,7 @@
         "completed": "java/util/concurrent/CompletableFuture.completedFuture(Ljava/lang/Object;)Ljava/util/concurrent/CompletableFuture;"
       }
     },
+    "macos_util.rs": {},
     "tick_chunk.rs": {
       "fields": {
         "level_random": "net/minecraft/world/level/Level.random",
@@ -141,6 +142,15 @@
       "desc": "(Lnet/minecraft/world/level/chunk/LevelChunk;I)V",
       "file": "tick_chunk.rs",
       "fn": "tick_chunk"
+    },
+    {
+      "class": "com/mojang/blaze3d/platform/MacosUtil",
+      "method": "disableCloseWindowMenuItem",
+      "desc": "()V",
+      "file": "macos_util.rs",
+      "fn": "disable_close_window_menu_item",
+      "orig": true,
+      "verify": false
     }
   ]
 }
