@@ -721,6 +721,12 @@ pub struct WavSink {
     pub data: Vec<u8>,
 }
 
+impl Default for WavSink {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WavSink {
     pub fn new() -> WavSink {
         WavSink { data: Vec::new() }
