@@ -175,6 +175,15 @@ pub fn satb_store(slot: *mut Ref, v: Ref) {
     }
 }
 
+/// Write barrier for a reference slot that is about to be overwritten by an atomic operation (Unsafe CAS/put,
+/// VarHandle store/CAS): the value it holds now goes to the SATB log while marking is on.
+#[inline(always)]
+pub fn satb_overwrite(slot: *mut *mut Obj) {
+    if SATB_ON.load(Ordering::Relaxed) {
+        satb_log(unsafe { *slot } as usize);
+    }
+}
+
 #[cold]
 #[inline(never)]
 fn satb_log(old: usize) {

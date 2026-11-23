@@ -307,7 +307,10 @@ pub fn n_jdk_internal_misc_Unsafe__putReference(this: Ref, o: Ref, off: i64, v: 
     Ok(())
 }
 pub fn n_jdk_internal_misc_Unsafe__putReferenceVolatile(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
-    unsafe { std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).store(v.0, std::sync::atomic::Ordering::SeqCst) };
+    unsafe {
+        crate::gc::satb_overwrite(addr(o, off) as *mut *mut Obj);
+        std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).store(v.0, std::sync::atomic::Ordering::SeqCst)
+    };
     Ok(())
 }
 pub fn n_jdk_internal_misc_Unsafe__getReference(this: Ref, o: Ref, off: i64) -> Res<Ref> {
@@ -329,10 +332,16 @@ pub fn n_jdk_internal_misc_Unsafe__compareAndExchangeLong(this: Ref, o: Ref, off
     Ok(unsafe { match std::sync::atomic::AtomicI64::from_ptr(addr(o, off) as *mut i64).compare_exchange(e, n, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst) { Ok(v) => v, Err(v) => v } })
 }
 pub fn n_jdk_internal_misc_Unsafe__compareAndSetReference(this: Ref, o: Ref, off: i64, e: Ref, n: Ref) -> Res<i32> {
-    Ok(unsafe { std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).compare_exchange(e.0, n.0, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst).is_ok() } as i32)
+    Ok(unsafe {
+        crate::gc::satb_overwrite(addr(o, off) as *mut *mut Obj);
+        std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).compare_exchange(e.0, n.0, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst).is_ok()
+    } as i32)
 }
 pub fn n_jdk_internal_misc_Unsafe__compareAndExchangeReference(this: Ref, o: Ref, off: i64, e: Ref, n: Ref) -> Res<Ref> {
-    Ok(unsafe { match std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).compare_exchange(e.0, n.0, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst) { Ok(v) => Ref(v), Err(v) => Ref(v) } })
+    Ok(unsafe {
+        crate::gc::satb_overwrite(addr(o, off) as *mut *mut Obj);
+        match std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).compare_exchange(e.0, n.0, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst) { Ok(v) => Ref(v), Err(v) => Ref(v) }
+    })
 }
 pub fn n_jdk_internal_misc_Unsafe__fullFence(this: Ref) -> Res<()> {
     std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
