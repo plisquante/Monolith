@@ -14,6 +14,7 @@ Usage: python3 -m monolith.rustgen --cp <classes dir> --main <Class> -o <out dir
 """
 from __future__ import annotations
 
+import tempfile
 import argparse
 import hashlib
 import os
@@ -2282,6 +2283,24 @@ def _android_libffi(clang: str, cache: str) -> str:
     return os.path.join(prefix, "lib")
 
 
+def _rt_sources(rt_dir: str) -> list:
+    """Every .rs file of the runtime, including subdirectories (monolith/rt/desk/), as '/'-separated paths
+    relative to rt_dir, sorted. The runtime hash and the copies into the build directory both use this list."""
+    out = []
+    for dirpath, _, names in os.walk(rt_dir):
+        for n in names:
+            if n.endswith(".rs"):
+                out.append(os.path.relpath(os.path.join(dirpath, n), rt_dir).replace(os.sep, "/"))
+    return sorted(out)
+
+
+def _copy_rt_sources(rt_dir: str, dest: str) -> None:
+    for rel in _rt_sources(rt_dir):
+        d = os.path.join(dest, rel)
+        os.makedirs(os.path.dirname(d), exist_ok=True)
+        shutil.copy(os.path.join(rt_dir, rel), d)
+
+
 def _android_build(a, files, rt_dir) -> int:
     """rustc pipeline: mono_rt.rlib + shard objects + mc_main.rlib + link stub -> cdylib."""
     from concurrent.futures import ThreadPoolExecutor
@@ -2290,9 +2309,9 @@ def _android_build(a, files, rt_dir) -> int:
     out = os.path.abspath(a.output)
     base = ["rustc", "--target", target, "--edition", "2021", "-C", "panic=abort", "-C", f"linker={clang}"]
     rt_hasher = hashlib.sha256()
-    for f in sorted(os.listdir(rt_dir)):
-        if f.endswith(".rs"):
-            rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
+    for f in _rt_sources(rt_dir):
+        rt_hasher.update(f.encode())
+        rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
     rt_hasher.update(rt_deps_key().encode())
     rt_hash = rt_hasher.hexdigest()[:16]
     cache = os.path.join("/tmp", "monolith_shard_cache", "android")
@@ -2365,10 +2384,11 @@ def _android_build(a, files, rt_dir) -> int:
 RT_DEPS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rt_deps")
 
 
-def rt_deps_flags() -> list:
+def rt_deps_flags(target: str = "") -> list:
     """Third-party crates of the runtime (rt_deps/, pinned by Cargo.lock, vendored). Built offline once per lock state;
     rustc gets them with -L/--extern. A failed build stops the generation (no silent fallback)."""
-    r = subprocess.run(["cargo", "build", "--release", "--offline", "--message-format=json"], cwd=RT_DEPS,
+    tgt = ["--target", target] if target else []
+    r = subprocess.run(["cargo", "build", "--release", "--offline", "--message-format=json", *tgt], cwd=RT_DEPS,
                        capture_output=True, text=True)
     if r.returncode:
         raise SystemExit("monolith: rt_deps build failed (cargo build --release --offline in rt_deps)\n" + r.stderr[-3000:])
@@ -2397,10 +2417,10 @@ def rt_deps_flags() -> list:
     return flags
 
 
-def rt_deps_key() -> str:
+def rt_deps_key(target: str = "") -> str:
     """Part of the runtime hash: a changed lock means other objects."""
     try:
-        return hashlib.sha256(open(os.path.join(RT_DEPS, "Cargo.lock"), "rb").read()).hexdigest()[:8]
+        return hashlib.sha256(open(os.path.join(RT_DEPS, "Cargo.lock"), "rb").read() + target.encode()).hexdigest()[:8]
     except OSError:
         return "none"
 
@@ -2408,20 +2428,26 @@ def rt_deps_key() -> str:
 def _host_build(a, files, rt_dir) -> int:
     """rustc pipeline for the host: mono_rt.rlib + shard objects + main.rs -> executable `prog`."""
     rlib = os.path.join(a.output, "libmono_rt.rlib")
-    DEPS = rt_deps_flags()
+    target = getattr(a, "target", "") or ""
+    # --target and --linker go to every rustc call of this build (runtime, shards, main)
+    TGT = ["--target", target] if target else []
+    LNK = ["-C", f"linker={a.linker}"] if getattr(a, "linker", "") else []
+    is_windows = ("windows" in target) if target else sys.platform == "win32"
+    DEPS = rt_deps_flags(target)
     rt_hasher = hashlib.sha256()
-    for f in sorted(os.listdir(rt_dir)):
-        if f.endswith(".rs"):
-            rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
-    rt_hasher.update(rt_deps_key().encode())
+    for f in _rt_sources(rt_dir):
+        rt_hasher.update(f.encode())
+        rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
+    rt_hasher.update(rt_deps_key(target).encode())
+    rt_hasher.update(target.encode())
     rt_hash = rt_hasher.hexdigest()[:16]
-    cache_dir = os.path.join("/tmp", "monolith_shard_cache")
+    cache_dir = os.path.join(tempfile.gettempdir(), "monolith_shard_cache")
     os.makedirs(cache_dir, exist_ok=True)
     cached_rlib = os.path.join(cache_dir, f"libmono_rt_{a.opt}_{rt_hash}.rlib")
     if os.path.exists(cached_rlib):
         shutil.copy(cached_rlib, rlib)
     else:
-        r = subprocess.run(["rustc", "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
+        r = subprocess.run(["rustc", *TGT, *LNK, "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
                             *DEPS, "--crate-type", "rlib", "--crate-name", "mono_rt",
                             os.path.join(a.output, "lib.rs"), "-o", rlib], capture_output=True, text=True)
         if r.returncode:
@@ -2446,7 +2472,7 @@ def _host_build(a, files, rt_dir) -> int:
             if os.path.exists(cached_obj):
                 shutil.copy(cached_obj, obj)
                 return fn, obj, subprocess.CompletedProcess([], 0, "", "")
-            res = subprocess.run(["rustc", "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
+            res = subprocess.run(["rustc", *TGT, *LNK, "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
                                   "--crate-type", "lib", "--crate-name", name, "--emit=obj",
                                   *DEPS, "--extern", f"mono_rt={rlib}",
                                   os.path.join(a.output, fn), "-o", obj], capture_output=True, text=True)
@@ -2459,11 +2485,12 @@ def _host_build(a, files, rt_dir) -> int:
                     sys.stderr.write(f"shard {fn} failed:\n" + res.stderr[-6000:])
                     return res.returncode
                 link_args.extend(["-C", f"link-arg={obj}"])
-    exe = os.path.join(a.output, "prog")
+    exe = os.path.join(a.output, "prog.exe" if is_windows else "prog")
     main_opt = 0 if len(shard_files) >= 16 else a.opt
     cgu_args = ["-C", "codegen-units=1"] if len(shard_files) >= 16 else []
-    lld_args = ["-C", "link-arg=-fuse-ld=lld"] if shutil.which("ld.lld") else []
-    r = subprocess.run(["rustc", "-C", f"opt-level={main_opt}", *cgu_args, "--edition", "2021", "-C", "panic=abort",
+    # ld.lld only on a Linux host (Mach-O and PE are linked by the platform's own linker)
+    lld_args = ["-C", "link-arg=-fuse-ld=lld"] if (not target and sys.platform.startswith("linux") and shutil.which("ld.lld")) else []
+    r = subprocess.run(["rustc", *TGT, *LNK, "-C", f"opt-level={main_opt}", *cgu_args, "--edition", "2021", "-C", "panic=abort",
                         *DEPS, "--extern", f"mono_rt={rlib}", *lld_args, *link_args,
                         os.path.join(a.output, "main.rs"), "-o", exe], capture_output=True, text=True)
     if r.returncode:
@@ -2499,6 +2526,9 @@ def main() -> int:
     ap.add_argument("--ndk", default=os.environ.get("ANDROID_NDK_HOME", ""), help="Android NDK root (default: $ANDROID_NDK_HOME or $ANDROID_HOME/ndk/*)")
     ap.add_argument("--api", type=int, default=24, help="Android API level of the NDK linker")
     ap.add_argument("--lib-name", default="libminecraft_mono.so")
+    ap.add_argument("--target", default="",
+                    help="Rust target triple of the executable (default: the host). Windows targets get prog.exe")
+    ap.add_argument("--linker", default="", help="linker program passed to rustc as -C linker=... (cross builds)")
     ap.add_argument("--reuse-objs", action="store_true",
                     help="with --resume: reuse the cached object of every shard whose source is unchanged even when the runtime "
                          "changed (only for runtime changes that leave existing code valid, e.g. a new function or module)")
@@ -2524,9 +2554,7 @@ def main() -> int:
                  for fn in sorted(os.listdir(a.output)) if fn.startswith("shard_") and fn.endswith(".rs")}
         if not files:
             raise SystemExit(f"monolith: no shard_*.rs in {a.output}; generate first")
-        for f in os.listdir(rt_dir):  # pick up runtime fixes without regenerating
-            if f.endswith(".rs"):
-                shutil.copy(os.path.join(rt_dir, f), os.path.join(a.output, f))
+        _copy_rt_sources(rt_dir, a.output)  # pick up runtime fixes without regenerating
         if a.android:
             return _android_build(a, files, rt_dir)
         files["main.rs"] = open(os.path.join(a.output, "main.rs"), encoding="utf-8").read()
@@ -2539,9 +2567,7 @@ def main() -> int:
     for fn, src in files.items():
         with open(os.path.join(a.output, fn), "w", encoding="utf-8") as fh:
             fh.write(src)
-    for f in os.listdir(rt_dir):
-        if f.endswith(".rs"):
-            shutil.copy(os.path.join(rt_dir, f), os.path.join(a.output, f))
+    _copy_rt_sources(rt_dir, a.output)
     from .classpath import jdk_home
     jh = jdk_home()
     tz = os.path.join(jh, "lib", "tzdb.dat")

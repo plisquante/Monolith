@@ -17,6 +17,17 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import mcbuild as mb  # noqa: E402
 
+RUN_BAT = """@echo off
+rem Starts Minecraft {vid} built by Monolith (Windows).
+set "HERE=%~dp0"
+set "MONO_RESOURCES=%HERE%resources"
+if "%MC_GAME_DIR%"=="" set "MC_GAME_DIR=%HERE%game"
+if not exist "%MC_GAME_DIR%" mkdir "%MC_GAME_DIR%"
+if "%MC_GRAPHICS%"=="" set "MC_GRAPHICS=opengl"
+if "%MC_USERNAME%"=="" set "MC_USERNAME=Player"
+"%HERE%rust\\prog.exe" -Djavax.net.ssl.trustStore="%HERE%resources\\cacerts" -Djavax.net.ssl.trustStoreType=JKS -Dmono.graphics.backend=%MC_GRAPHICS% --version {vid} --gameDir "%MC_GAME_DIR%" --assetsDir "%HERE%assets" --assetIndex {idx} --username %MC_USERNAME% --accessToken 0 --userType legacy %*
+"""
+
 RUN_SH = """#!/bin/sh
 # Starts Minecraft {vid} built by Monolith.
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -39,6 +50,9 @@ def main() -> int:
     ap.add_argument("--api", type=int, default=24)
     ap.add_argument("--ndk", default="")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--target", default="",
+                    help="Rust target triple (default: the host): x86_64-pc-windows-msvc, aarch64-apple-darwin, ...")
+    ap.add_argument("--linker", default="", help="linker for a cross build (passed to rustc as -C linker=...)")
     a = ap.parse_args()
 
     jar = os.path.abspath(a.jar)
@@ -58,6 +72,11 @@ def main() -> int:
               "--shard-jobs", str(a.shard_jobs), "--opt", a.opt, "-o", rust]
     if a.android:
         common += ["--android", "--api", str(a.api)] + (["--ndk", a.ndk] if a.ndk else [])
+    if a.target:
+        common += ["--target", a.target]
+    if a.linker:
+        common += ["--linker", a.linker]
+    windows = ("windows" in a.target) if a.target else (sys.platform == "win32")
     if not a.resume:
         reflect = os.path.join(out, "reflect-classes.txt")
         with open(reflect, "w") as fh:
@@ -82,10 +101,15 @@ def main() -> int:
     shutil.copy(os.path.join(jdk, "lib", "security", "cacerts"), os.path.join(out, "resources", "cacerts"))
     mb.download_assets(meta, os.path.join(out, "assets"))
     mb.apply_branding(os.path.join(out, "resources"), os.path.join(out, "assets"))
-    run = os.path.join(out, "run.sh")
-    with open(run, "w", newline="\n") as fh:
-        fh.write(RUN_SH.format(vid=vid, idx=meta["assetIndex"]["id"]))
-    os.chmod(run, 0o755)
+    if windows:
+        run = os.path.join(out, "run.bat")
+        with open(run, "w", newline="\r\n") as fh:
+            fh.write(RUN_BAT.format(vid=vid, idx=meta["assetIndex"]["id"]))
+    else:
+        run = os.path.join(out, "run.sh")
+        with open(run, "w", newline="\n") as fh:
+            fh.write(RUN_SH.format(vid=vid, idx=meta["assetIndex"]["id"]))
+        os.chmod(run, 0o755)
     print(f"done: {run}")
     return 0
 
