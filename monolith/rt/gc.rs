@@ -295,12 +295,20 @@ pub fn unregister_thread() {
     if reg.is_null() {
         return;
     }
+    // Like a safepoint: record the stack and registers, and say "paused" while waiting for a collection. Without the
+    // flag the collector waits for this thread forever (deadlock seen in a stress run: collector and thread both waiting).
+    let _regs = std::hint::black_box(capture_regs());
+    let sp = flush_regs_and_sp();
+    unsafe { (*reg).stack_bot.store(sp, Ordering::Release) };
     TLS_REG.with(|c| unsafe { *c.0.get() = std::ptr::null_mut() });
     let (m, cv) = heap_sync();
     let mut h = m.lock().unwrap();
     while h.collecting {
+        unsafe { (*reg).paused.store(true, Ordering::SeqCst) };
+        cv.notify_all();
         h = cv.wait(h).unwrap();
     }
+    unsafe { (*reg).paused.store(true, Ordering::SeqCst) };
     h.threads.retain(|&p| p != reg);
     unsafe {
         let b = Box::from_raw(reg);
