@@ -87,6 +87,8 @@ pub fn n_java_lang_System__arraycopy(src: Ref, sp: i32, dst: Ref, dp: i32, n: i3
                 if !rt::is_subclass(se, de) {
                     let sptr = arr_data(src) as *const Ref;
                     let dptr = arr_data(dst) as *mut Ref;
+                    // the overwritten elements are snapshot values (SATB)
+                    crate::gc::satb_log_range(dptr.add(dp as usize) as *const u8, n as usize * std::mem::size_of::<Ref>());
                     let same = src.0 == dst.0;
                     for k in 0..n as usize {
                         let i = if same && sp < dp { n as usize - 1 - k } else { k };

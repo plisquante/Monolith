@@ -42,7 +42,10 @@ pub unsafe fn get<T: Copy>(o: Ref, off: usize) -> T {
 /// heap conservatively.
 #[inline(always)]
 pub unsafe fn set<T>(o: Ref, off: usize, v: T) {
-    *((o.0 as *mut u8).add(off) as *mut T) = v;
+    let p = (o.0 as *mut u8).add(off);
+    // a patch may store a reference: the overwritten bytes are logged for the SATB marker (cheap when no cycle runs)
+    crate::gc::satb_log_range(p as *const u8, std::mem::size_of::<T>());
+    *(p as *mut T) = v;
 }
 
 /// The class pointer of an object, for identity checks against a `class_<name>()` binding.

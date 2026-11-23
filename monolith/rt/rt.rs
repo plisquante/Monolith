@@ -787,7 +787,7 @@ pub fn new_multi(elem_c: Option<&'static Class>, leaf: u8, depth: usize, dims: &
         let outer = new_obj_array(comp_class(elem_c, leaf, depth - 1), dims[0])?;
         for i in 0..dims[0] as usize {
             let inner = go(elem_c, leaf, depth - 1, &dims[1..])?;
-            unsafe { *(data(outer) as *mut Ref).add(i) = inner };
+            unsafe { satb_store((data(outer) as *mut Ref).add(i), inner) };
         }
         Ok(outer)
     }
