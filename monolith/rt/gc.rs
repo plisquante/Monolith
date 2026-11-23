@@ -1431,8 +1431,8 @@ pub fn recycle(r: Ref) {
     unsafe {
         let class = (*r.0).class;
         let cp = class as *const Class as usize;
-        for slot in 0..RECYCLE_SLOTS {
-            if RECYCLE_CLASSES[slot].load(Ordering::Relaxed) == cp {
+        for (slot, owner) in RECYCLE_CLASSES.iter().enumerate().take(RECYCLE_SLOTS) {
+            if owner.load(Ordering::Relaxed) == cp {
                 let list = &mut (*reg).recycled[slot];
                 if list.len() < RECYCLE_KEEP && (*r.0).gc & GC_HEAP != 0 {
                     // keep the header, drop what the object held so the collector does not follow stale references.
