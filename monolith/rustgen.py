@@ -2368,14 +2368,25 @@ RT_DEPS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 def rt_deps_flags() -> list:
     """Third-party crates of the runtime (rt_deps/, pinned by Cargo.lock, vendored). Built offline once per lock state;
     rustc gets them with -L/--extern. A failed build stops the generation (no silent fallback)."""
-    r = subprocess.run(["cargo", "build", "--release", "--offline", "--quiet"], cwd=RT_DEPS, capture_output=True, text=True)
+    r = subprocess.run(["cargo", "build", "--release", "--offline", "--message-format=json"], cwd=RT_DEPS,
+                       capture_output=True, text=True)
     if r.returncode:
         raise SystemExit("monolith: rt_deps build failed (cargo build --release --offline in rt_deps)\n" + r.stderr[-3000:])
-    import glob
-    deps = os.path.join(RT_DEPS, "target", "release", "deps")
-    found = glob.glob(os.path.join(deps, "libcrc32fast-*.rlib"))
+    # The rlib is taken from cargo's own artifact messages: the directory layout of target/ changed between cargo
+    # releases, and build-script output directories hold other copies of the same crate.
+    import json
+    found = []
+    for line in r.stdout.splitlines():
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        if msg.get("reason") == "compiler-artifact" and msg.get("target", {}).get("name") == "crc32fast":
+            found += [f for f in msg.get("filenames", []) if f.endswith(".rlib")]
+    found = sorted(set(found))
     if len(found) != 1:
-        raise SystemExit(f"monolith: rt_deps: expected one libcrc32fast rlib in {deps}, found {len(found)}")
+        raise SystemExit(f"monolith: rt_deps: expected one crc32fast rlib in cargo's output, found {found}")
+    deps = os.path.dirname(found[0])
     # the full path: rustc does not resolve a hashed rlib by name through -L alone
     return ["-L", "dependency=" + deps, "--extern", "crc32fast=" + found[0]]
 
