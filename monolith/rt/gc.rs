@@ -748,19 +748,38 @@ pub fn alloc_arena(class: &'static Class, size: usize) -> Ref {
     alloc_arena_bump(class, size)
 }
 
-fn arena_enabled() -> bool {
-    static V: OnceLock<bool> = OnceLock::new();
-    *V.get_or_init(|| std::env::var("MONO_ARENA").map_or(true, |v| v != "0"))
+/// Environment switches, read once on first use (diagnostics and A/B toggles).
+struct Knobs {
+    arena: bool,
+    /// 0 off, 1 report, 2 abort on the first violation.
+    arena_check: u8,
+    /// MONO_GC_POISON=1: freed slots are overwritten with 0xDD so a use-after-free is visible at once.
+    poison: bool,
+    concurrent: bool,
+    recycle: bool,
 }
 
-/// 0 off, 1 report, 2 abort on the first violation.
-fn arena_check_mode() -> u8 {
-    static V: OnceLock<u8> = OnceLock::new();
-    *V.get_or_init(|| match std::env::var("MONO_ARENA_CHECK").as_deref() {
-        Ok("abort") => 2,
-        Ok(v) if !v.is_empty() && v != "0" => 1,
-        _ => 0,
+fn knobs() -> &'static Knobs {
+    static K: OnceLock<Knobs> = OnceLock::new();
+    K.get_or_init(|| Knobs {
+        arena: std::env::var("MONO_ARENA").map_or(true, |v| v != "0"),
+        arena_check: match std::env::var("MONO_ARENA_CHECK").as_deref() {
+            Ok("abort") => 2,
+            Ok(v) if !v.is_empty() && v != "0" => 1,
+            _ => 0,
+        },
+        poison: std::env::var_os("MONO_GC_POISON").is_some_and(|v| !v.is_empty() && v != "0"),
+        concurrent: std::env::var_os("MONO_GC_CONCURRENT").is_some(),
+        recycle: std::env::var("MONO_RECYCLE").map_or(true, |v| v != "0"),
     })
+}
+
+fn arena_enabled() -> bool {
+    knobs().arena
+}
+
+fn arena_check_mode() -> u8 {
+    knobs().arena_check
 }
 
 fn alloc_arena_bump(class: &'static Class, size: usize) -> Ref {
@@ -825,15 +844,12 @@ struct ConcCycle {
 }
 static CONC: Mutex<Option<ConcCycle>> = Mutex::new(None);
 
-/// Diagnostics (MONO_GC_POISON=1): freed slots are overwritten with 0xDD so a use-after-free is visible at once.
 fn poison_enabled() -> bool {
-    static P: OnceLock<bool> = OnceLock::new();
-    *P.get_or_init(|| std::env::var_os("MONO_GC_POISON").is_some_and(|v| !v.is_empty() && v != "0"))
+    knobs().poison
 }
 
 fn concurrent_enabled() -> bool {
-    static C: OnceLock<bool> = OnceLock::new();
-    *C.get_or_init(|| std::env::var_os("MONO_GC_CONCURRENT").is_some())
+    knobs().concurrent
 }
 
 /// GC bits of a newly allocated object: black during a cycle (it survives that cycle's sweep).
@@ -1399,8 +1415,7 @@ const RECYCLE_KEEP: usize = 16;
 static RECYCLE_CLASSES: [AtomicUsize; RECYCLE_SLOTS] = [const { AtomicUsize::new(0) }; RECYCLE_SLOTS];
 
 fn recycle_enabled() -> bool {
-    static V: OnceLock<bool> = OnceLock::new();
-    *V.get_or_init(|| std::env::var("MONO_RECYCLE").map_or(true, |v| v != "0"))
+    knobs().recycle
 }
 
 /// `new` of a recyclable class: a recycled object of that class when the thread has one, else a fresh heap object.
