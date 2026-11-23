@@ -1725,12 +1725,12 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
                     shards: int = 1, use_escape: bool = False, use_patches: bool = True,
                     analyze_only: bool = False, escape_budget: int = 120, use_inline: bool = False) -> tuple[dict[str, str], Gen]:
     sys.path.insert(0, ROOT)
-    from . import __main__ as M
+    from .classlib import build_classlib
     from .classpath import ClassPath, builtin_classes, builtin_nolwjgl_classes, jdk_jmods
     from .program import Program, Report
     from .world import World
 
-    classlib = M.build_classlib(False)
+    classlib = build_classlib(False)
     builtin = builtin_classes()
     nolwjgl = builtin_nolwjgl_classes() if no_lwjgl else None
     pre = [x for x in (builtin, nolwjgl) if x]
