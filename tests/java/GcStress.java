@@ -20,6 +20,9 @@ public class GcStress {
     }
 
     public static void main(String[] args) throws Exception {
+        // The runtime's System.gc() is a no-op unless this property is set (Minecraft calls it every tick); this test
+        // checks a real collection, so it asks for one. HotSpot ignores the property.
+        System.setProperty("mono.explicit.gc", "1");
         long t = churn(20000, 1);
         System.out.println("single " + t);
         List<int[]> big = new ArrayList<>();

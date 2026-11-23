@@ -845,6 +845,21 @@ pub fn collect() {
     collect_impl(begin);
 }
 
+/// System.gc(): a complete collection before it returns (as HotSpot does), so weak references are cleared
+/// by the time the caller continues. A running concurrent cycle is waited for first; the wait stays at safepoints
+/// because that cycle's final collection has to stop this thread.
+pub fn collect_explicit() {
+    while CYCLE.load(Ordering::Acquire) {
+        safepoint();
+        std::thread::sleep(std::time::Duration::from_micros(200));
+    }
+    // the first call may only wait for a collection another thread is still finishing (collect_impl returns at once
+    // then); the second one is the collection this call asked for. An object born black during that cycle has its
+    // mark cleared by its sweep, so the second collection sees it as garbage if nothing refers to it.
+    collect_impl(false);
+    collect_impl(false);
+}
+
 #[inline(always)]
 fn try_push(
     addr: usize,

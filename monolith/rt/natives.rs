@@ -452,7 +452,7 @@ pub fn n_java_lang_Runtime__totalMemory(this: Ref) -> Res<i64> {
     Ok((crate::gc::heap_bytes().max(32 << 20)) as i64)
 }
 pub fn n_java_lang_Runtime__gc(this: Ref) -> Res<()> {
-    crate::gc::collect();
+    crate::gc::collect_explicit();
     Ok(())
 }
 pub fn n_java_security_SecureRandom__fill0(b: Ref) -> Res<()> {
