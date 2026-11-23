@@ -134,3 +134,10 @@ A full Minecraft regeneration is ~10 min of analysis plus ~55 min of compile (32
 * Owned release bugs corrupt memory: poisoning/quarantine mode and the reachability audit; ship owned types one at a time.
 * Fragmentation without compaction: slab occupancy metric; size-class tuning from the profile.
 * Android: marker thread priority and big.LITTLE scheduling need measuring on a device (phase 7).
+
+## Pre-registered leak gate (fixed before the measurement)
+
+- Scenario: open the saved world, stand still (no walking, no new chunks), 60 minutes (`tools/leak_soak.sh --minutes 60`).
+- Warm-up: the first 30 minutes are ignored (the world around the player settles in this window, measured in the first 60-minute soak).
+- Gate: least-squares slope of live managed bytes over minutes 30-60, from `tools/leak_budget.py --warmup-s 1800 --budget-mb-per-min 1`.
+- Pass: slope <= 1 MiB/min. Fail: anything above. The window is not changed after the run.
