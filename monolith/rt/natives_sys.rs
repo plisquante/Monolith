@@ -28,7 +28,7 @@ struct SysInfo {
     _f: [u8; 256],
 }
 
-#[link(name = "c")]
+#[cfg_attr(unix, link(name = "c"))]
 extern "C" {
     fn __errno_location() -> *mut c_int;
     fn strerror(errnum: c_int) -> *const c_char;
@@ -56,7 +56,7 @@ extern "C" {
     static environ: *const *const c_char;
 }
 
-#[link(name = "dl")]
+#[cfg_attr(unix, link(name = "dl"))]
 extern "C" {
     fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
     fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;

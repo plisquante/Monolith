@@ -145,7 +145,7 @@ struct SockUn {
     path: [u8; 108],
 }
 
-#[link(name = "c")]
+#[cfg_attr(unix, link(name = "c"))]
 extern "C" {
     fn __errno_location() -> *mut c_int;
     fn strerror(errnum: c_int) -> *const c_char;

@@ -90,7 +90,7 @@ struct ITimerSpec {
     it_value_nsec: i64,
 }
 
-#[link(name = "c")]
+#[cfg_attr(unix, link(name = "c"))]
 extern "C" {
     fn __errno_location() -> *mut c_int;
     fn strerror(errnum: c_int) -> *const c_char;
@@ -124,7 +124,7 @@ extern "C" {
     fn uname(buf: *mut UtsName) -> c_int;
 }
 
-#[link(name = "dl")]
+#[cfg_attr(unix, link(name = "dl"))]
 extern "C" {
     fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
     fn dlerror() -> *const c_char;

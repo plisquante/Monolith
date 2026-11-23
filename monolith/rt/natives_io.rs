@@ -8,7 +8,7 @@ use std::os::raw::{c_char, c_int, c_long, c_uint, c_ulong, c_void};
 use std::sync::atomic::{AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-#[link(name = "c")]
+#[cfg_attr(unix, link(name = "c"))]
 extern "C" {
     fn open(pathname: *const c_char, flags: c_int, ...) -> c_int;
     fn close(fd: c_int) -> c_int;
@@ -28,7 +28,7 @@ extern "C" {
     static environ: *const *const c_char;
 }
 
-#[link(name = "dl")]
+#[cfg_attr(unix, link(name = "dl"))]
 extern "C" {
     fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
     fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
