@@ -1,0 +1,14 @@
+# Tip denetimi paketi: monolith/rt çalışma zamanını cargo ile derler (bağımlılıkları cargo çözer).
+# Kullanım: cargo check --offline --manifest-path rt_deps/check/Cargo.toml  (tools/rt_typecheck.py)
+[package]
+name = "mono_rt_check"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "mono_rt"
+path = "../../monolith/rt/lib.rs"
+
+[dependencies]
+crc32fast = "=1.4.2"

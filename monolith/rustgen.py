@@ -2425,6 +2425,31 @@ def rt_deps_key(target: str = "") -> str:
         return "none"
 
 
+def build_runtime_rlib(target: str, dest: str) -> None:
+    """Builds monolith/rt as an rlib through cargo: rt_deps/check is a package whose library is the runtime. Cargo
+    resolves the runtime's dependencies itself, and the shared target directory (rt_deps/target) makes it reuse the
+    same crc32fast and cfg-if artifacts that rt_deps_flags passes to rustc (E0460 cannot arise)."""
+    check = os.path.join(RT_DEPS, "check", "Cargo.toml")
+    tgt = ["--target", target] if target else []
+    r = subprocess.run(["cargo", "build", "--release", "--offline", "--lib", "--manifest-path", check,
+                        "--target-dir", os.path.join(RT_DEPS, "target"), "--message-format=json", *tgt],
+                       capture_output=True, text=True)
+    if r.returncode:
+        raise SystemExit("monolith: runtime build failed (cargo build in rt_deps/check)\n" + r.stderr[-6000:])
+    import json
+    found = []
+    for line in r.stdout.splitlines():
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        if msg.get("reason") == "compiler-artifact" and msg.get("target", {}).get("name") == "mono_rt":
+            found += [f for f in msg.get("filenames", []) if f.endswith(".rlib")]
+    if len(found) != 1:
+        raise SystemExit(f"monolith: runtime build: expected one mono_rt rlib in cargo's output, found {found}")
+    shutil.copy(found[0], dest)
+
+
 def _host_build(a, files, rt_dir) -> int:
     """rustc pipeline for the host: mono_rt.rlib + shard objects + main.rs -> executable `prog`."""
     rlib = os.path.join(a.output, "libmono_rt.rlib")
@@ -2447,12 +2472,7 @@ def _host_build(a, files, rt_dir) -> int:
     if os.path.exists(cached_rlib):
         shutil.copy(cached_rlib, rlib)
     else:
-        r = subprocess.run(["rustc", *TGT, *LNK, "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
-                            *DEPS, "--crate-type", "rlib", "--crate-name", "mono_rt",
-                            os.path.join(a.output, "lib.rs"), "-o", rlib], capture_output=True, text=True)
-        if r.returncode:
-            sys.stderr.write(r.stderr[-6000:])
-            return r.returncode
+        build_runtime_rlib(target, rlib)
         shutil.copy(rlib, cached_rlib)
     link_args = []
     shard_files = sorted(fn for fn in files if fn.startswith("shard_"))

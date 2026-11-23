@@ -10,7 +10,6 @@ bu betiği çalıştırır; yerelde aynı komut aynı sonucu verir.
 import os
 import subprocess
 import sys
-import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -19,17 +18,15 @@ sys.path.insert(0, ROOT)
 def main() -> int:
     from monolith.rustgen import rt_deps_flags
 
-    flags = rt_deps_flags()
-    out = os.path.join(tempfile.mkdtemp(prefix="mono_rt_"), "mono_rt.rmeta")
-    cmd = ["rustc", "--edition", "2021", "--crate-type", "lib", "--crate-name", "mono_rt", "--emit=metadata",
-           *flags, os.path.join(ROOT, "monolith", "rt", "lib.rs"), "-o", out]
-    r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
-    errors = [l for l in r.stderr.splitlines() if l.startswith("error")]
+    rt_deps_flags()  # builds rt_deps (crc32fast, cfg-if) offline first; the check below reuses those artifacts
+    check = os.path.join(ROOT, "rt_deps", "check", "Cargo.toml")
+    r = subprocess.run(["cargo", "check", "--release", "--offline", "--lib", "--manifest-path", check,
+                        "--target-dir", os.path.join(ROOT, "rt_deps", "target")], capture_output=True, text=True)
     if r.returncode != 0:
-        sys.stderr.write(r.stderr[-6000:])
-        print(f"FAIL: runtime type-check ({len(errors)} errors)")
+        sys.stderr.write(r.stderr)
+        print("FAIL: runtime type-check (cargo check of monolith/rt)")
         return 1
-    print(f"PASS: runtime type-checks for this machine ({os.path.relpath(out, ROOT)})")
+    print("PASS: runtime type-checks for this machine (cargo check of monolith/rt)")
     return 0
 
 
