@@ -955,6 +955,8 @@ unsafe fn jna_ffi_call(fp: i64, args_arr: Ref, rtype: *mut c_void, ret_buf: *mut
     let mut arg_types: Vec<*mut c_void> = Vec::with_capacity(argc);
     let mut arg_vals: Vec<u64> = vec![0; argc];
     let mut cstrings: Vec<CString> = Vec::new();
+    // `i` is also the index into the Java array (aload), so the range loop stays
+    #[allow(clippy::needless_range_loop)]
     for i in 0..argc {
         let a = rt::aload::<Ref>(args_arr, i as i32)?;
         if a.is_null() {

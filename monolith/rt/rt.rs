@@ -318,7 +318,7 @@ pub fn throw_ref<T>(r: Ref) -> Res<T> {
         return throw("java/lang/NullPointerException", String::new());
     }
     if let Ok(v) = std::env::var("MONO_TRACE_EX") {
-        let cls = unsafe { (*(*r.0).class).name };
+        let cls = unsafe { (*r.0).class.name };
         if v != "err" || cls != "java/lang/ClassNotFoundException" {
             eprintln!("[mono:athrow] {}\n{}", cls, std::backtrace::Backtrace::force_capture());
         }
