@@ -642,6 +642,7 @@ fn alloc_arena_bump(class: &'static Class, size: usize) -> Ref {
 
 // ------------------------------------------------------------------ Mark & Sweep Collector
 pub fn collect() {
+    let t_entry = std::time::Instant::now();
     let _regs = std::hint::black_box(capture_regs());
     let my_sp = flush_regs_and_sp();
     let reg = cur_reg();
@@ -691,6 +692,8 @@ pub fn collect() {
     }
 
     let stw_start = std::time::Instant::now();
+    // güvenli nokta beklemesi: girişten, diğer thread'lerin durmasının tamamlanmasına kadar
+    let t_wait = stw_start.duration_since(t_entry);
     h.gc_count += 1;
     // Return thread-local active slabs to global pools so everything is swept cleanly
     for i in 0..h.threads.len() {
@@ -1009,7 +1012,7 @@ pub fn collect() {
 
     if phases_on {
         let t_sweep = t_start.elapsed() - t_roots - t_mark;
-        eprintln!("[mono:gc_phases] gc={} roots={}us mark={}us sweep={}us live={}B", h.gc_count, t_roots.as_micros(), t_mark.as_micros(), t_sweep.as_micros(), new_live);
+        eprintln!("[mono:gc_phases] gc={} wait={}us roots={}us mark={}us sweep={}us total={}us live={}B", h.gc_count, t_wait.as_micros(), t_roots.as_micros(), t_mark.as_micros(), t_sweep.as_micros(), t_entry.elapsed().as_micros(), new_live);
     }
     if let Some(c) = census.take() {
         c.finish(h.gc_count as u64, new_live, h.heap_bytes, since_gc, stw_start);
