@@ -195,6 +195,7 @@ fn split_nul(block: &[u8], count: usize) -> Vec<CString> {
     out
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_java_lang_ProcessImpl__forkAndExec(
     _this: Ref, _mode: i32, _helper: Ref, prog: Ref, args: Ref, argc: i32, envb: Ref, envc: i32,
     dir: Ref, fds: Ref, redirect: i32,
@@ -684,6 +685,7 @@ pub fn n_jdk_internal_foreign_abi_fallback_LibFallback__ffi_get_struct_offsets(
     Ok(unsafe { ffi_get_struct_offsets(abi, st as usize as *mut c_void, offsets as usize as *mut usize) })
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_jdk_internal_foreign_abi_fallback_LibFallback__doDowncall(
     cif: i64, fn_ptr: i64, rvalue: i64, avalues: i64, _capt_obj: Ref, _capt_off: i64, _capt_mask: i32, _args: Ref, _n: i32,
 ) -> Res<()> {

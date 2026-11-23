@@ -177,6 +177,7 @@ pub fn n_mono_rhi_NativeRhi__submitSectionSnapshot0(
     n_mono_rhi_NativeRhi__submitSectionSnapshotEx0(sx, sy, sz, has_geom, opaque, portals, 36, 0, 0)
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_mono_rhi_NativeRhi__submitSectionSnapshotEx0(
     sx: i32, sy: i32, sz: i32, has_geom: i32, opaque: i32, portals: i64,
     index_count: i32, first_index: i32, vertex_offset: i32,
@@ -201,6 +202,7 @@ pub fn n_mono_rhi_NativeRhi__submitSectionSnapshotEx0(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_mono_rhi_NativeRhi__cullWorld0(
     cam_x: f32, cam_y: f32, cam_z: f32, look_x: f32, look_y: f32, look_z: f32, fov_deg: f32, min_pixel_area: f32,
 ) -> Res<i32> {
@@ -288,6 +290,7 @@ pub fn n_mono_rhi_NativeRhi__registerMesh0(mesh_id: i32, index_count: i32, first
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_mono_rhi_NativeRhi__pushInstance0(
     kind: i32, mesh_id: i32, x: f32, y: f32, z: f32, scale: f32, radius: f32, billboard: i32, _uv: i32, _col: i32,
 ) -> Res<()> {
@@ -303,6 +306,7 @@ pub fn n_mono_rhi_NativeRhi__pushInstance0(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_mono_rhi_NativeRhi__flushInstances0(
     cam_x: f32, cam_y: f32, cam_z: f32, look_x: f32, look_y: f32, look_z: f32, fov_deg: f32, min_pixel_area: f32,
 ) -> Res<i32> {
@@ -816,6 +820,7 @@ pub fn n_mono_rhi_NativeRhi__glTexParameteri0(t: i32, p: i32, v: i32) -> Res<()>
     if let Some(f) = sym_fn!(&libs, "glTexParameteri", extern "C" fn(u32, u32, i32)) { f(t as u32, p as u32, v); }
     Ok(())
 }
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_mono_rhi_NativeRhi__glTexImage2D0(t: i32, lvl: i32, ifmt: i32, w: i32, h: i32, border: i32, fmt: i32, typ: i32, addr: i64) -> Res<()> {
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glTexImage2D", extern "C" fn(u32, i32, i32, i32, i32, i32, u32, u32, *const c_void)) {
@@ -823,6 +828,7 @@ pub fn n_mono_rhi_NativeRhi__glTexImage2D0(t: i32, lvl: i32, ifmt: i32, w: i32, 
     }
     Ok(())
 }
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_mono_rhi_NativeRhi__glTexSubImage2D0(t: i32, lvl: i32, xo: i32, yo: i32, w: i32, h: i32, fmt: i32, typ: i32, addr: i64) -> Res<()> {
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glTexSubImage2D", extern "C" fn(u32, i32, i32, i32, i32, i32, u32, u32, *const c_void)) {
@@ -895,6 +901,7 @@ pub fn n_mono_rhi_NativeRhi__glDrawElementsInstancedBaseVertex0(m: i32, count: i
     }
     Ok(())
 }
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_mono_rhi_NativeRhi__glBlitFramebuffer0(sx0: i32, sy0: i32, sx1: i32, sy1: i32, dx0: i32, dy0: i32, dx1: i32, dy1: i32, mask: i32, filter: i32) -> Res<()> {
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glBlitFramebuffer", extern "C" fn(i32, i32, i32, i32, i32, i32, i32, i32, u32, u32)) {

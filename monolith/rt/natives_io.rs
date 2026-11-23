@@ -842,6 +842,7 @@ unsafe fn run_inflate(
     Ok((consumed & 0x7fff_ffff) | ((produced & 0x7fff_ffff) << 31) | (finished << 62) | (need_dict << 63))
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_java_util_zip_Inflater__inflateBytesBytes(
     this: Ref, addr: i64, in_arr: Ref, in_off: i32, in_len: i32, out_arr: Ref, out_off: i32, out_len: i32,
 ) -> Res<i64> {
@@ -989,6 +990,7 @@ unsafe fn run_deflate(
     Ok((consumed & 0x7fff_ffff) | ((produced & 0x7fff_ffff) << 31) | (finished << 62))
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_java_util_zip_Deflater__deflateBytesBytes(
     _this: Ref, addr: i64, in_arr: Ref, in_off: i32, in_len: i32, out_arr: Ref, out_off: i32, out_len: i32, flush: i32, params: i32,
 ) -> Res<i64> {
@@ -1001,6 +1003,7 @@ pub fn n_java_util_zip_Deflater__deflateBytesBytes(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_java_util_zip_Deflater__deflateBufferBytes(
     _this: Ref, addr: i64, in_addr: i64, in_len: i32, out_arr: Ref, out_off: i32, out_len: i32, flush: i32, params: i32,
 ) -> Res<i64> {
@@ -1011,6 +1014,7 @@ pub fn n_java_util_zip_Deflater__deflateBufferBytes(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_java_util_zip_Deflater__deflateBytesBuffer(
     _this: Ref, addr: i64, in_arr: Ref, in_off: i32, in_len: i32, out_addr: i64, out_len: i32, flush: i32, params: i32,
 ) -> Res<i64> {
@@ -1021,6 +1025,7 @@ pub fn n_java_util_zip_Deflater__deflateBytesBuffer(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_java_util_zip_Deflater__deflateBufferBuffer(
     _this: Ref, addr: i64, in_addr: i64, in_len: i32, out_addr: i64, out_len: i32, flush: i32, params: i32,
 ) -> Res<i64> {

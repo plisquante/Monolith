@@ -415,16 +415,19 @@ pub fn n_io_netty_channel_unix_Socket__recvAddress(fd: i32, addr: i64, pos: i32,
     let n = unsafe { recv(fd, (addr as usize + pos as usize) as *mut c_void, (lim - pos).max(0) as usize, 0) };
     Ok(if n < 0 { -errno() } else { n as i32 })
 }
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_io_netty_channel_unix_Socket__sendTo(fd: i32, ipv6: i32, buf: Ref, pos: i32, lim: i32, addr: Ref, scope: i32, port: i32, _flags: i32) -> Res<i32> {
     let base = rt::get_i64(rt::nn_ref(buf)?, "address") as usize;
     n_io_netty_channel_unix_Socket__sendToAddress(fd, ipv6, base as i64, pos, lim, addr, scope, port, 0)
 }
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_io_netty_channel_unix_Socket__sendToAddress(fd: i32, ipv6: i32, mem: i64, pos: i32, lim: i32, addr: Ref, scope: i32, port: i32, _flags: i32) -> Res<i32> {
     let mut sa = [0u8; 128];
     let len = netty_sockaddr(ipv6 != 0, addr, scope, port, &mut sa)?;
     let n = unsafe { sendto(fd, (mem as usize + pos as usize) as *const c_void, (lim - pos).max(0) as usize, 0x4000, sa.as_ptr() as *const c_void, len) };
     Ok(if n < 0 { -errno() } else { n as i32 })
 }
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_io_netty_channel_unix_Socket__sendToAddresses(fd: i32, ipv6: i32, mem: i64, len_cnt: i32, addr: Ref, scope: i32, port: i32, _flags: i32) -> Res<i32> {
     if len_cnt <= 0 { return Ok(0); }
     let iov0 = unsafe { std::slice::from_raw_parts(mem as usize as *const usize, 2) };
@@ -1056,6 +1059,7 @@ pub fn n_com_sun_jna_Native__invokeStructure(_f: Ref, fp: i64, _flags: i32, args
 }
 pub fn n_com_sun_jna_Native__createNativeCallback(_cb: Ref, _m: Ref, _p: Ref, _r: Ref, _cc: i32, _f: i32, _enc: Ref) -> Res<i64> { Ok(0) }
 pub fn n_com_sun_jna_Native__freeNativeCallback(_a: i64) -> Res<()> { Ok(()) }
+#[allow(clippy::too_many_arguments)] // JNI/Java native ABI: arity fixed by the Java signature
 pub fn n_com_sun_jna_Native__registerMethod(
     _c: Ref, _nm: Ref, _sig: Ref, _at: Ref, _uc: Ref, _vc: Ref, _sz: i32, _h: i64, _fp: i64,
     _m: Ref, _fp2: i64, _cv: i32, _th: i32, _tn: Ref, _fn: Ref, _enc: Ref,
