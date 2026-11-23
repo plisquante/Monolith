@@ -1012,6 +1012,9 @@ fn collect_impl(begin_only: bool) {
             large_min,
             large_max,
         };
+        if phases_on {
+            eprintln!("[mono:gc_phases] begin gc={} roots={}us", h.gc_count, t_roots.as_micros());
+        }
         *CONC.lock().unwrap() = Some(cyc);
         SATB_ON.store(true, Ordering::Release);
         CYCLE.store(true, Ordering::Release);
