@@ -877,7 +877,7 @@ class MethodGen:
         rret = "()" if ret == "V" else RT[kind_of(ret)]
         if handlers:
             self.sname(0, "A")
-        body = []
+        body = ["    rt::stack_check()?;"]
         for n, k in sorted(self.used_locals.items()):
             body.append(f"    let mut {n}: {RT[k]} = {DEFAULT[k]};")
         for n, k in sorted(self.used_stack.items()):
@@ -956,6 +956,8 @@ class MethodGen:
             if nt:
                 nt_body = []
                 for ln in body:
+                    if ln == "    rt::stack_check()?;":
+                        continue  # a method that cannot throw makes no calls, so it cannot recurse without bound
                     s = ln.lstrip()
                     ind = ln[:len(ln) - len(s)]
                     if s == "return Ok(());":
@@ -1190,6 +1192,7 @@ RUNTIME_THROWN = [
     "java/lang/ArithmeticException", "java/lang/NullPointerException", "java/lang/ArrayIndexOutOfBoundsException",
     "java/lang/NegativeArraySizeException", "java/lang/ClassCastException", "java/lang/ArrayStoreException",
     "java/lang/OutOfMemoryError", "java/lang/StackOverflowError", "java/lang/IllegalMonitorStateException",
+    "java/lang/ExceptionInInitializerError",
     "java/lang/InternalError", "java/lang/UnsatisfiedLinkError", "java/lang/AbstractMethodError",
     "java/lang/NoClassDefFoundError", "java/lang/NoSuchFieldError", "java/lang/NoSuchMethodError",
     "java/lang/IncompatibleClassChangeError", "java/lang/InterruptedException",
@@ -1284,8 +1287,7 @@ class Gen:
             for ins in insns:
                 if ins.op in self._NO_THROW_OPS:
                     continue
-                if ins.op == "invokestatic" and ins.arg.owner == dc.name and ins.arg.name == m.name and ins.arg.desc == m.desc:
-                    continue
+                # a self-call is not exempt: unbounded recursion ends in StackOverflowError, which is a throw
                 ok = False
                 break
         self._nothrow_cache[k] = ok
@@ -1726,7 +1728,7 @@ class Gen:
             if clinit is not None:
                 self.need_method(ci, clinit)
                 body.append(f"            unsafe {{ {fname(ci.name, '<clinit>', '()V')}() }}.res()?;")
-            body += ["            Ok(())", "        })();", f"        rt::init_leave(&{st}, r.is_ok());", "        r", "    })())", "}"]
+            body += ["            Ok(())", "        })();", f"        let r = rt::init_failure({rstr(ci.name)}, r);", f"        rt::init_leave(&{st}, r.is_ok());", "        r", "    })())", "}"]
             out.append("\n".join(body))
         for m in ci.cf.methods:
             if (m.code is not None or m.is_native) and self.is_reachable(ci.name, m):

@@ -1127,7 +1127,7 @@ pub fn init_enter(st: &AtomicU64, name: &str) -> Res<bool> {
             ST_DONE => return Ok(false),
             ST_ERROR => {
                 drop(g);
-                return throw("java/lang/NoClassDefFoundError", format!("Could not initialize class {}", name.replace('/', ".")));
+                return Err(Thrown { obj: class_init_error(name) });
             }
             x if x == me => return Ok(false),
             _ => {
@@ -1201,4 +1201,119 @@ pub fn string_array(items: &[String]) -> Res<Ref> {
         aastore_ref(arr, i as i32, new_str(a.clone()))?;
     }
     Ok(arr)
+}
+
+// ---------------------------------------------------------------- stack depth
+// Java programs expect a StackOverflowError from unbounded recursion. Generated methods call `stack_check`
+// on entry; it compares the stack pointer with this thread's low-water mark, taken from the OS when the thread
+// first asks.
+thread_local! {
+    static STACK_LOW: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static IN_OVERFLOW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+unsafe extern "C" {
+    fn pthread_self() -> usize;
+    fn pthread_getattr_np(thread: usize, attr: *mut [u64; 16]) -> i32;
+    fn pthread_attr_getstack(attr: *const [u64; 16], addr: *mut *mut std::os::raw::c_void, size: *mut usize) -> i32;
+    fn pthread_attr_destroy(attr: *mut [u64; 16]) -> i32;
+}
+
+/// Lowest usable stack address of this thread, leaving a margin for the runtime's own frames.
+#[cold]
+#[inline(never)]
+fn stack_low_init() -> usize {
+    let mut attr = [0u64; 16];
+    // SAFETY: `attr` is large enough for pthread_attr_t on glibc and bionic; it is initialized by pthread_getattr_np
+    // and destroyed before returning.
+    unsafe {
+        if pthread_getattr_np(pthread_self(), &mut attr) != 0 {
+            return 0;
+        }
+        let mut addr: *mut std::os::raw::c_void = std::ptr::null_mut();
+        let mut size: usize = 0;
+        let ok = pthread_attr_getstack(&attr, &mut addr, &mut size) == 0;
+        pthread_attr_destroy(&mut attr);
+        if !ok || addr.is_null() {
+            return 0;
+        }
+        let margin = (256 * 1024).min(size / 4);
+        addr as usize + margin
+    }
+}
+
+/// Throws StackOverflowError when the current thread is nearly out of stack.
+#[inline(always)]
+pub fn stack_check() -> Res<()> {
+    let marker = 0u8;
+    let sp = std::ptr::addr_of!(marker) as usize;
+    let mut low = STACK_LOW.with(|c| c.get());
+    if low == 0 {
+        low = stack_low_init();
+        STACK_LOW.with(|c| c.set(low));
+        if low == 0 {
+            return Ok(()); // the OS would not tell the bounds: no check, as before
+        }
+    }
+    // while the error object is being built its constructors run on the margin: they must not throw again
+    if sp < low && !IN_OVERFLOW.with(|c| c.get()) {
+        IN_OVERFLOW.with(|c| c.set(true));
+        let e = stack_overflow();
+        IN_OVERFLOW.with(|c| c.set(false));
+        return e;
+    }
+    Ok(())
+}
+
+#[cold]
+#[inline(never)]
+fn stack_overflow<T>() -> Res<T> {
+    throw("java/lang/StackOverflowError", String::new())
+}
+
+/// Original exceptions of classes whose static initializer failed, by class name. Pinned: the collector must
+/// not free them, because later accesses report them.
+static INIT_FAILURES: std::sync::Mutex<Vec<(String, usize)>> = std::sync::Mutex::new(Vec::new());
+
+/// `Class.toString`-like text of a throwable: "java.lang.RuntimeException: message".
+fn throwable_text(obj: Ref) -> String {
+    let cls = unsafe { (*obj.0).class.name }.replace('/', ".");
+    let msg = get_ref(obj, "detailMessage");
+    if msg.is_null() {
+        cls
+    } else {
+        format!("{}: {}", cls, str_to_rust(msg))
+    }
+}
+
+/// The NoClassDefFoundError that every access after a failed initialization throws. HotSpot attaches an
+/// ExceptionInInitializerError describing the first failure as its cause.
+fn class_init_error(name: &str) -> Ref {
+    let dotted = name.replace('/', ".");
+    let first = INIT_FAILURES.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(n, _)| n == name).map(|(_, p)| *p);
+    let ncdfe = (hooks().throw_new)("java/lang/NoClassDefFoundError", new_str(format!("Could not initialize class {}", dotted)));
+    if let Some(p) = first {
+        let orig = Ref(p as *mut Obj);
+        let thread = std::thread::current().name().unwrap_or("main").to_string();
+        let text = format!("Exception {} [in thread \"{}\"]", throwable_text(orig), thread);
+        let cause = (hooks().throw_new)("java/lang/ExceptionInInitializerError", new_str(text));
+        set_ref(ncdfe, "cause", cause);
+    }
+    ncdfe
+}
+
+/// JLS 12.4.2: an exception that escapes a static initializer is wrapped in ExceptionInInitializerError (its
+/// cause is the original exception). An Error propagates unchanged, and the class is left unusable.
+pub fn init_failure(name: &str, r: Res<()>) -> Res<()> {
+    let Err(t) = r else { return Ok(()) };
+    if let Some(err) = find_class("java/lang/Error") {
+        if instance_of(t.obj, err) {
+            return Err(t);
+        }
+    }
+    crate::heap::pin_ref(t.obj);
+    INIT_FAILURES.lock().unwrap_or_else(|e| e.into_inner()).push((name.to_string(), t.obj.0 as usize));
+    let wrapped = (hooks().throw_new)("java/lang/ExceptionInInitializerError", Ref::NULL);
+    set_ref(wrapped, "cause", t.obj);
+    Err(Thrown { obj: wrapped })
 }

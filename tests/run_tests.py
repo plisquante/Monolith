@@ -60,7 +60,8 @@ def env_for_children() -> dict[str, str]:
 
 
 def run_java(jdk: str, classes: str, name: str, env: dict[str, str], timeout: float) -> subprocess.CompletedProcess:
-    return subprocess.run([os.path.join(jdk, "bin", "java"), "-cp", classes, name], capture_output=True, text=True,
+    # -Xss8m: the reference stack depth the Exceptions test is written against
+    return subprocess.run([os.path.join(jdk, "bin", "java"), "-Xss8m", "-cp", classes, name], capture_output=True, text=True,
                           env=env, timeout=timeout)
 
 
