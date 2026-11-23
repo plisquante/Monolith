@@ -704,8 +704,9 @@ static JFR_CHUNK_START: AtomicI64 = AtomicI64::new(0);
 static JFR_RECORDING: AtomicI64 = AtomicI64::new(0);
 static JFR_NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
-fn jfr_state() -> &'static Mutex<(String, String, HashMap<String, i64>)> {
-    static S: OnceLock<Mutex<(String, String, HashMap<String, i64>)>> = OnceLock::new();
+type JfrState = (String, String, HashMap<String, i64>);
+fn jfr_state() -> &'static Mutex<JfrState> {
+    static S: OnceLock<Mutex<JfrState>> = OnceLock::new();
     S.get_or_init(|| Mutex::new((String::new(), "/tmp".to_string(), HashMap::new())))
 }
 

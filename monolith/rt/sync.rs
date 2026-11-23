@@ -32,8 +32,9 @@ pub struct Mon {
     wait_cv: Condvar,
 }
 const SHARDS: usize = 64;
-fn table() -> &'static Vec<Mutex<HashMap<usize, Arc<Mon>>>> {
-    static T: OnceLock<Vec<Mutex<HashMap<usize, Arc<Mon>>>>> = OnceLock::new();
+type ShardTable = Vec<Mutex<HashMap<usize, Arc<Mon>>>>;
+fn table() -> &'static ShardTable {
+    static T: OnceLock<ShardTable> = OnceLock::new();
     T.get_or_init(|| (0..SHARDS).map(|_| Mutex::new(HashMap::new())).collect())
 }
 fn mon(o: *mut Obj) -> Arc<Mon> {

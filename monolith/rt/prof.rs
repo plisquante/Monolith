@@ -19,6 +19,9 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
+
+/// Allocation-site table: (class, stack) key to (count, bytes).
+type SiteTable = HashMap<(u32, [usize; DEPTH]), (u64, u64)>;
 use std::time::Instant;
 
 pub static ON: AtomicBool = AtomicBool::new(false);
@@ -106,7 +109,7 @@ struct State {
     start: Instant,
     path: String,
     census: Mutex<Census>,
-    sites: Mutex<HashMap<(u32, [usize; DEPTH]), (u64, u64)>>,
+    sites: Mutex<SiteTable>,
     threads: Mutex<HashMap<String, (u64, u64)>>,
     dropped_sites: AtomicU64,
 }
