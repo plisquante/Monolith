@@ -51,12 +51,12 @@ mod alsa {
                 if p.is_null() { None } else { Some(p) }
             };
             Some(Alsa {
-                open: std::mem::transmute(sym(c"snd_pcm_open")?),
-                set_params: std::mem::transmute(sym(c"snd_pcm_set_params")?),
-                writei: std::mem::transmute(sym(c"snd_pcm_writei")?),
-                recover: std::mem::transmute(sym(c"snd_pcm_recover")?),
-                close: std::mem::transmute(sym(c"snd_pcm_close")?),
-                strerror: std::mem::transmute(sym(c"snd_strerror")?),
+                open: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut *mut c_void, *const c_char, c_int, c_int) -> c_int>(sym(c"snd_pcm_open")?),
+                set_params: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, c_int, c_int, c_uint, c_uint, c_int, c_uint) -> c_int>(sym(c"snd_pcm_set_params")?),
+                writei: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, *const c_void, c_long) -> c_long>(sym(c"snd_pcm_writei")?),
+                recover: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void, c_int, c_int) -> c_int>(sym(c"snd_pcm_recover")?),
+                close: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut c_void) -> c_int>(sym(c"snd_pcm_close")?),
+                strerror: std::mem::transmute::<*mut c_void, unsafe extern "C" fn(c_int) -> *const c_char>(sym(c"snd_strerror")?),
             })
         })
         .as_ref()
