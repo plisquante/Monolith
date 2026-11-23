@@ -356,33 +356,31 @@ pub fn n_jdk_internal_misc_Unsafe__staticFieldBase0(this: Ref, f: Ref) -> Res<Re
 // ------------------------------------------------------------------ Reflective invocation
 fn find_target(decl: &'static Class, slot: usize, recv: Ref, dispatch: bool) -> Res<&'static rt::MInfo> {
     let m = &decl.methods[slot];
-    if dispatch && (m.access & 0x000A) == 0 {
-        if !recv.is_null() {
-            let rc = unsafe { (*recv.0).class };
-            let mut k: Option<&'static Class> = Some(rc);
-            while let Some(kk) = k {
-                for km in kk.methods {
-                    if !km.fp.0.is_null() && (km.access & 0x000A) == 0 && km.name == m.name && km.desc == m.desc {
-                        return Ok(km);
-                    }
-                }
-                k = kk.super_;
-            }
-            let mut best_iface: Option<&'static Class> = None;
-            let mut best_m: Option<&'static rt::MInfo> = None;
-            for ic in rc.ifaces {
-                for km in ic.methods {
-                    if !km.fp.0.is_null() && (km.access & 0x040A) == 0 && km.name == m.name && km.desc == m.desc
-                        && best_iface.is_none_or(|bi| rt::is_subclass(ic, bi))
-                    {
-                        best_iface = Some(ic);
-                        best_m = Some(km);
-                    }
+    if dispatch && (m.access & 0x000A) == 0 && !recv.is_null() {
+        let rc = unsafe { (*recv.0).class };
+        let mut k: Option<&'static Class> = Some(rc);
+        while let Some(kk) = k {
+            for km in kk.methods {
+                if !km.fp.0.is_null() && (km.access & 0x000A) == 0 && km.name == m.name && km.desc == m.desc {
+                    return Ok(km);
                 }
             }
-            if let Some(bm) = best_m {
-                return Ok(bm);
+            k = kk.super_;
+        }
+        let mut best_iface: Option<&'static Class> = None;
+        let mut best_m: Option<&'static rt::MInfo> = None;
+        for ic in rc.ifaces {
+            for km in ic.methods {
+                if !km.fp.0.is_null() && (km.access & 0x040A) == 0 && km.name == m.name && km.desc == m.desc
+                    && best_iface.is_none_or(|bi| rt::is_subclass(ic, bi))
+                {
+                    best_iface = Some(ic);
+                    best_m = Some(km);
+                }
             }
+        }
+        if let Some(bm) = best_m {
+            return Ok(bm);
         }
     }
     if m.fp.0.is_null() {
