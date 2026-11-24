@@ -10,7 +10,7 @@ import java.util.StringJoiner;
 
 /**
  * monolith overlay of java.lang.String: immutable UTF-16 code unit sequence stored in a char[].
- * The runtime (rt.zig / generated hooks) creates literals directly through the {@code value} field.
+ * The runtime (monolith/rt/rt.rs / generated hooks) creates literals directly through the {@code value} field.
  */
 public final class String implements java.io.Serializable, Comparable<String>, CharSequence {
     private final char[] value;

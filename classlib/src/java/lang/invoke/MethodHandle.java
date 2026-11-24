@@ -12,7 +12,7 @@ import java.util.Optional;
  *
  * <p>The native image has no LambdaForms or bytecode spinning. A method handle is a tree of
  * small Java objects evaluated by {@link #invokeImpl}: direct handles call the compiled method
- * through the reflection natives (classes.zig reflectInvoke), combinators transform argument
+ * through the reflection natives (monolith/rt/natives_reflect.rs), combinators transform argument
  * arrays. The signature-polymorphic call sites {@code invokeExact}/{@code invoke} are rewritten by
  * the transpiler (monolith/program.py: mh_invoker) into static stubs that box the arguments, call
  * {@link #monoInvoke} and unbox the result with {@code monoTo*}. {@code invokeExact} is evaluated

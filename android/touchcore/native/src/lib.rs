@@ -1,5 +1,5 @@
-//! TouchCore native client core (Rust). Port of the Zig core that the Android launcher loads; replaces
-//! `android/touchcore/jni/touchcore_core.zig` and its runtime modules piece by piece.
+//! TouchCore native client core (Rust). The Android launcher loads this crate (`libtouchcore_native.a`, linked
+//! by `tools/build_touchcore_apk.py`). It was ported from the Zig core, which has been removed.
 pub mod arena;
 pub mod cull;
 #[cfg(target_os = "android")]

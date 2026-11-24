@@ -2,7 +2,7 @@
 
 Every supported invokedynamic call site is rewritten to an `invokestatic` of a
 synthetic method whose body is ordinary bytecode, so the rest of the pipeline
-(RTA, type inference, Zig codegen) needs no indy-specific logic.
+(RTA, type inference, Rust codegen) needs no indy-specific logic.
 
 Supported bootstrap methods (cover 100% of indy sites in Minecraft 26.3 client.jar
 and its libraries, see docs/ANALYSIS.md):

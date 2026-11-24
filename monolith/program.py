@@ -18,7 +18,7 @@ from .classfile import CONSTANT_Methodref, ClassConst, MemberRef, MethodInfo, Dy
 from .indy import IndyDesugarer
 from .world import ClassInfo, LinkError, World, parse_method_desc
 
-# Throwables the runtime itself raises (rt.zig `Exc` enum order must match).
+# Throwables the runtime itself raises (the runtime's exception enum order must match).
 RT_EXCEPTIONS = [
     ("NPE", "java/lang/NullPointerException"),
     ("Arithmetic", "java/lang/ArithmeticException"),
@@ -50,7 +50,7 @@ RT_EXCEPTIONS = [
 # Java methods the runtime calls directly (must survive RTA).
 RT_STATIC_ROOTS = [
     ("java/nio/DirectByteBuffer", "<init>", "(JJ)V"),  # JNI NewDirectByteBuffer
-    # boxing used by reflective invocation (classes.zig reflectInvoke)
+    # boxing used by reflective invocation (monolith/rt/natives_reflect.rs)
     ("java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"), ("java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;"),
     ("java/lang/Character", "valueOf", "(C)Ljava/lang/Character;"), ("java/lang/Short", "valueOf", "(S)Ljava/lang/Short;"),
     ("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"), ("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;"),

@@ -10,8 +10,8 @@ import jdk.internal.misc.Unsafe;
 /**
  * monolith overlay: reflective access without method handles.
  * Fields are read/written through Unsafe offsets; methods and constructors are invoked by
- * runtime-generated invokers keyed by the method's erased signature (runtime/natives.zig
- * MONO reflection natives + classes.zig reflectInvoke).
+ * runtime-generated invokers keyed by the method's erased signature (monolith/rt/natives_reflect.rs
+ * MONO reflection natives).
  */
 final class MethodHandleAccessorFactory {
     private MethodHandleAccessorFactory() {}

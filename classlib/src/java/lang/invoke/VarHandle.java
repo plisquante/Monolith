@@ -4,7 +4,7 @@ package java.lang.invoke;
  * monolith overlay of VarHandle. A VarHandle is a (kind, base, offset, type) descriptor; the
  * signature-polymorphic access methods (get, set, compareAndSet, getAndAdd, ...) are not
  * declared here: the transpiler lowers every invokevirtual of them to a direct atomic
- * memory operation in the runtime (runtime/varhandle.zig), using the call site descriptor.
+ * memory operation in the runtime (monolith/rt/vh.rs), using the call site descriptor.
  */
 public class VarHandle {
     static final int FIELD = 0, STATIC = 1, ARRAY = 2, BYTE_VIEW = 3;
