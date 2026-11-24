@@ -1237,6 +1237,10 @@ class Gen:
         self.world, self.prog, self.esc = world, prog, esc_res
         from .patches import PatchSet
         self.patches = patches if patches is not None else PatchSet({}, [])
+        import collections as _c
+        self.use_mir = bool(os.environ.get("MONO_MIR"))
+        self.mir_fallback = _c.Counter()
+        self.mir_methods = 0
         self.lits: dict[str, tuple] = {}
         self.sels: dict[str, int] = {}
         self.class_q: list = []
@@ -1897,8 +1901,22 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
                 if m.code is None:
                     continue
                 try:
-                    mg = MethodGen(g, ci, m)
-                    ms.append(mg.generate())
+                    mg = None
+                    if g.use_mir:
+                        from . import mir as _mir
+                        from .mir_emit import MirMethodGen
+                        try:
+                            mg = MirMethodGen(g, ci, m)
+                            body_txt = mg.generate()
+                        except _mir.MirError as mex:
+                            g.mir_fallback[str(mex).split(":")[-1][:48].strip()] += 1
+                            mg = None
+                    if mg is None:
+                        mg = MethodGen(g, ci, m)
+                        body_txt = mg.generate()
+                    elif g.use_mir:
+                        g.mir_methods += 1
+                    ms.append(body_txt)
                     class_weights[ci.name] = class_weights.get(ci.name, 64) + 40 + len(m.code.code)
                 except RustGenError as ex:
                     if strict:
@@ -2709,6 +2727,9 @@ def main() -> int:
         shutil.copytree(conf, os.path.join(a.output, "conf"), dirs_exist_ok=True)
     sys.stderr.write(f"monolith: {len(g.seen_classes)} classes, {len(g.seen_methods)} methods, "
                      f"{len(g.errors)} untranslatable, {len(g.link_errors)} link-errors, {len(g.missing_natives)} natives missing\n")
+    if g.use_mir:
+        sys.stderr.write(f"monolith: MIR path {g.mir_methods} methods, fallback {sum(g.mir_fallback.values())} "
+                         f"{dict(g.mir_fallback.most_common(6))}\n")
     if g.patches:
         sys.stderr.write("monolith: " + g.patches.report() + "\n")
     if os.environ.get("MONO_VERBOSE"):

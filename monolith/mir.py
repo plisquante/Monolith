@@ -240,12 +240,14 @@ class _B:
                 stack.append(p)
         k = self.idx[start]
         first = True
+        last_pc = start
         while True:
             ins = self.insns[k]
             if not first and ins.pc in self.frame_at:
-                blk.term = Term("goto", edges=[self.edge(ins.pc, locs, stack)], pc=ins.pc)
+                blk.term = Term("goto", edges=[self.edge(ins.pc, locs, stack)], pc=last_pc)
                 return
             first = False
+            last_pc = ins.pc
             if self.step(blk, ins, locs, stack):
                 return
             k += 1
@@ -424,6 +426,8 @@ class _B:
             if op == "invokespecial" and ref.name == "<init>" and recv is not None and recv.ty.startswith("uninit"):
                 cls = recv.cls if recv.ty.startswith("uninit@") else ci.name
                 recv.ty = "L" + cls + ";"
+        elif op == "initclass":
+            emit(None, [], ins.arg)
         elif op == "invokedynamic":
             raise MirUnsupported("invokedynamic left after desugaring")
         # ---- control
