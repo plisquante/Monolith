@@ -71,14 +71,16 @@ if kill -0 $GAME 2>/dev/null; then echo "game still running after $SECONDS_TOTAL
 ls "$BUILD/game/crash-reports" 2>/dev/null && { echo "crash report found"; exit 1; } || true
 ls "$BUILD"/game/mono-crash-*.txt 2>/dev/null && { echo "native crash report found"; exit 1; } || true
 if [ "$CLEAN_EXIT" = 1 ]; then
-  # no window manager under Xvfb: the keyboard focus follows the pointer, and the look-around loop drifts the pointer away
-  xdotool mousemove 640 360; sleep 1
-  xdotool key Escape; sleep 8              # software GL is slow: give the menu time to appear
-  import -window root "$SHOTS/99-pause.png"
-  click 638 521 12                         # Save and Quit to Title
-  click 790 641 3                          # Quit Game
-  i=0; while kill -0 $GAME 2>/dev/null && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
-  if kill -0 $GAME 2>/dev/null; then echo "the game did not end after Quit Game"; exit 1; fi
-  wait $GAME && echo "clean exit: status 0" || { echo "exit status $? after Quit Game"; exit 1; }
+  # SIGTERM, as a system shutdown or `kill` sends it: the runtime runs the shutdown hooks (Minecraft saves the world there)
+  # and exits with 143. Driving the pause menu with the mouse is not reliable under software GL (a frame can take seconds).
+  T0=$(date +%s)
+  kill -TERM $GAME
+  i=0; while kill -0 $GAME 2>/dev/null && [ $i -lt 90 ]; do sleep 1; i=$((i + 1)); done
+  if kill -0 $GAME 2>/dev/null; then echo "the game did not end within 90 s of SIGTERM"; exit 1; fi
+  set +e; wait $GAME; STATUS=$?; set -e
+  [ "$STATUS" = 143 ] || { echo "exit status $STATUS after SIGTERM (143 expected: shutdown hooks ran, then exit)"; exit 1; }
+  SAVED=$(find "$BUILD/game/saves" -name level.dat -newermt "@$T0" 2>/dev/null | head -1)
+  [ -n "$SAVED" ] || { echo "the world was not saved on exit (no level.dat newer than the SIGTERM)"; exit 1; }
+  echo "clean exit: status 143 after SIGTERM, world saved on exit"
 fi
 echo "screenshots: $SHOTS"
