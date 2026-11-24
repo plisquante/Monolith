@@ -1,3 +1,19 @@
+// DEVRE DIŞI (manifest.json içinde bu dosyaya bağlanan yama yok).
+//
+// Neden? Bu yama seti ilk kez 2026-11-24'te gerçek bir oyun açılışında denendi ve oyun şu hatayla durdu:
+//   "call of a method the reachability analysis did not keep"
+// Çağrı yığınının tepesi `GlStateManager.incrementTrackedBuffers` idi ve çağrılan `Plot.setValue` metodunun
+// sanal tablo girdisi (vtable slot) boştu.
+//
+// Sebep: Yama, `TracyClient.createPlot` gibi metotların orijinal gövdesini değiştirir. Orijinal gövde `new Plot(...)`
+// ile nesne oluşturuyordu. Yama bunu kaldırınca erişilebilirlik analizi (RTA) `Plot` sınıfını hiç örneklenmemiş sayıyor
+// ve `Plot.setValue` gibi metotları derlemeye almıyor. Oysa yamanın döndürdüğü `Plot.UNAVAILABLE` nesnesi çalışma
+// zamanında bu metotları çağırıyor.
+//
+// Yeniden açmak için: yamalanan sınıfların yine de "örneklenmiş" sayılmasını sağlamak gerekir (örneğin manifestte bir
+// `news` bağlaması ile) ve her sınıf için oyun açılışı test edilmelidir. Bunun dışında bu dosyadaki `init_X()?` çağrıları
+// (UNAVAILABLE okumadan önce sınıfı başlatma) doğru bir düzeltmedir ve korunmalıdır.
+//
 // Tracy (the profiler) is not part of this build.
 //
 // jtracy only calls its natives when TracyClient.load() succeeded (`loaded`); every object it hands out otherwise is a
