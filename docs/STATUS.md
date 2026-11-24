@@ -612,3 +612,17 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
   report "shaderc disabled in --no-lwjgl build", so the first critical pipeline (`minecraft:pipeline/gui`) fails and the game ends with a crash report.
   Needed: shaderc (glslang, SPIRV-Tools; sources ship with the NDK under `sources/third_party/shaderc`) and SPIRV-Cross compiled for aarch64,
   Java natives for the calls `renderpearl` makes, GLSL ES 3.x output, and linking into `libminecraft_mono.so`.
+
+## 21. Release-gate verification on this machine (2026-11-24)
+
+- Environment: 4 vCPU, 16 GiB RAM, JDK 25.0.5.1+2 (`~/.cache/monolith/temurin-25`), rustc/cargo, Python 3.13. No device, no GPU, no display.
+- Passed (commands as in `docs/RELEASE.md` section 2 where listed):
+  - `pyflakes monolith tools tests/run_tests.py`: no output. `compileall` on `monolith tools tests`: exit 0.
+  - `rustc --test tests/rust/audio_main.rs`: 12/12.
+  - `monolith.crc_tests`, `netty_tests`, `recycle_tests`, `patch_tests`, `stack_tests`: `ALL PASSED` each.
+  - `tests/run_tests.py GcStress Oop Threads Lambdas Strings Collections1` with `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`: 6/6, plain and `MONO_GC_CONCURRENT=1`.
+  - `tests/run_tests.py Arith`: 1/1.
+  - `tools/rt_typecheck.py`: PASS.
+  - `android/touchcore/native` `cargo test`: 29/29.
+- Correction: `GcStress` is no longer open. §18 and §16 lines about it are historical; this run passed both GC modes.
+- Not run here (hardware or time limit): full Minecraft build, `tools/headless_play.sh` game start, 60 min leak soak, Android device run, Client Core E2E.
