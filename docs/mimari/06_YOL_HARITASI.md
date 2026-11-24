@@ -89,3 +89,14 @@ Aşamalar kısmen paralel yürür (D ve E bağımsız).
 ## 6. Ürün tanımı (1.0 çıkışı)
 
 1.0: Q1-Q12 hepsi yeşil Linux x86_64'te; Windows, macOS ve Android Q12 geçmiş; E1-E7 ölçüleri belge 00 §1 tablosundaki hedefte ya da AÇIK karar sahibinin imzasıyla kabul edilmiş.
+
+## 7. İlerleme (güncellenir)
+
+| paket | durum | kanıt |
+|---|---|---|
+| L1 | bitti | `tools/lib_inventory.py`: 300 dosya, K1=68, K2=232 (`docs/KUTUPHANE_ENVANTER.json`) |
+| C0 | bitti | `monolith/stackmap.py`, `stackmap_tests.py`: java.util 3654 metot, 9750 çerçeve |
+| C1 | bitti | `monolith/mir.py`: java.base 13 059 sınıf, 111 407 metot, 0 hata, 27 sn; `mir_interp.py` ile 50 sonuç satırı JVM ile aynı (`mir_tests.py`) |
+| C2 | sürüyor | `monolith/mir_emit.py`, `MONO_MIR=1`: Collections1 8666 metot MIR yolundan, geri düşme 0, çıktı JVM ile aynı; fark süiti MIR yolunda henüz koşmadı |
+| C4 | başladı | `monolith/mir_opt.py` `inline_leaf`: Collections1'de 1682 çağrı satır içi; devirt artık yalnızca RTA'nın örneklediği sınıfları sayar (yükleme sırasına bağlı değil) |
+| N1 | sürüyor | `patches/rust/narrator.rs`: JNA `Native.register` yerine dlopen kontrolü; `monolith/narrator_tests.py` koşmadı |
