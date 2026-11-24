@@ -13,12 +13,12 @@ Amaç: MASTER_PLAN §8 "çalışma zamanında JVM, JNI, JNA, libffi yok". Her gr
 | `io.netty.channel.kqueue.*` | 31 | macOS taşıması | kaldır: Linux/Windows'ta hiç yüklenmez | yok (macOS'ta NIO) |
 | `io.netty.channel.unix.{Errors,Limits}StaticallyReferencedJniMethods, FileDescriptor, Buffer` | 25 | epoll taşıması | epoll ile birlikte | aynı |
 | `com.sun.jna.Native` (+ `read`, `write`) | 56 | oshi, narrator, Minecraft yerel çağrıları (JNA) | WS2: oshi'yi yama ile kaldır, narrator'ı kaldır ya da Rust'a taşı; kalan çağrı sayacı raporla ölçülür | oshi sistem bilgisi çağrıları; kaldırılırsa donanım bilgisi ekranı boş olur |
-| `com.mojang.jtracy.TracyBindings` | 21 | profil aracı (Tracy) | kaldır: `TracyClient.isAvailable()` var (jtracy 1.14.38 `javap` ile görüldü); Minecraft çağıranlarının bu kontrolü yaptığı henüz doğrulanmadı. Sınıf seviyesi yama (WS6) ile boş uygulama | düşük |
+| `com.mojang.jtracy.TracyBindings` | 21 | profil aracı (Tracy) | **normal oyunda çağrılmaz**: `Main` yalnızca komut satırında profil seçeneği verilirse `TracyBootstrap.setup()` çağırıyor (bayt kodu doğrulandı); `TracyClient` her çağrıda `loaded` bayrağını kontrol ediyor. Rust tarafı yalnız o seçenek için. Şimdi silmek `natives missing` sayacını 0'dan 21'e çıkarır (build bozulmaz, `rt::missing_native` yüksek sesle hata verir); sınıf seviyesi yama (WS6) gelince boş uygulamayla silinir | düşük; çalışma zamanı sayacına girmez |
 | `com.mojang.text2speech.NarratorLinux$FliteLibrary` | 7 | anlatıcı (erişilebilirlik) | WS2 kararı: Rust FFI ile flite ya da özellik olarak kapalı (açıkça belgeli) | erişilebilirlik özelliği kaybı |
 
 ## Sıra (küçükten büyüğe)
 
-1. Tracy (21): sınıf seviyesi yama ya da boş uygulama. Tek dosya, en düşük risk.
+1. Tracy (21): WS6 sınıf seviyesi yama bekliyor (yukarıdaki not); çalışma zamanı sayacını etkilemez.
 2. kqueue (31): Linux/Windows build'lerinde hiç yüklenmiyor; macOS ayrı karar.
 3. Flite (7): kapat ya da taşı.
 4. JNA (56): çağıranları tek tek çıkar (`MONO_TRACE_NATIVES` ile gerçek çağrılar sayılır).
