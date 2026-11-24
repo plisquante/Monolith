@@ -69,10 +69,42 @@
         "random_tick": "randomTick"
       }
     },
-    "narrator.rs": {},
+    "narrator.rs": {
+      "statics": {
+        "empty": "com/mojang/text2speech/Narrator.EMPTY",
+        "logger": "com/mojang/text2speech/Narrator.LOGGER"
+      },
+      "classes": {
+        "Fatal": "com/mojang/text2speech/Narrator$FatalException"
+      },
+      "news": {
+        "linux": "com/mojang/text2speech/NarratorLinux.<init>()V"
+      },
+      "vcalls": {
+        "log_error": "org/slf4j/Logger.error(Ljava/lang/String;Ljava/lang/Throwable;)V"
+      },
+      "strings": {
+        "load_error": "Error while loading the narrator"
+      }
+    },
     "netty.rs": {
       "statics": {
         "nio": "net/minecraft/server/network/EventLoopGroupHolder.NIO"
+      }
+    },
+    "sysinfo.rs": {
+      "fields": {
+        "nr_of_cpus": "net/minecraft/util/profiling/metrics/profiling/ServerMetricsSamplersProvider$CpuStats.nrOfCpus"
+      },
+      "statics": {
+        "cpu_info": "net/minecraft/client/gui/components/debug/DebugEntrySystemSpecs.cpuInfo"
+      },
+      "calls": {
+        "put_storage": "net/minecraft/SystemReport.putStorage()V",
+        "empty_list": "com/google/common/collect/ImmutableList.of()Lcom/google/common/collect/ImmutableList;"
+      },
+      "vcalls": {
+        "set_detail": "net/minecraft/SystemReport.setDetail(Ljava/lang/String;Ljava/lang/String;)V"
       }
     }
   },
@@ -174,9 +206,9 @@
       "desc": "()V",
       "file": "narrator.rs",
       "fn": "load_flite",
-      "orig": true,
       "verify": false,
-      "fingerprint": "24ef75bf55b16bae"
+      "fingerprint": "24ef75bf55b16bae",
+      "replace": true
     },
     {
       "class": "com/mojang/text2speech/NarratorLinux$FliteLibrary$CmuUsKal16",
@@ -184,9 +216,9 @@
       "desc": "()V",
       "file": "narrator.rs",
       "fn": "load_kal16",
-      "orig": true,
       "verify": false,
-      "fingerprint": "dde15b2f33507a16"
+      "fingerprint": "dde15b2f33507a16",
+      "replace": true
     },
     {
       "class": "net/minecraft/server/network/EventLoopGroupHolder",
@@ -217,6 +249,76 @@
       "replace": true,
       "verify": false,
       "fingerprint": "5b4da77b5fa3413a"
+    },
+    {
+      "class": "net/minecraft/SystemReport",
+      "method": "lambda$new$6",
+      "desc": "()V",
+      "file": "sysinfo.rs",
+      "fn": "hardware",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "d9c98820817c7b7c"
+    },
+    {
+      "class": "net/minecraft/SystemReport",
+      "method": "lambda$new$7",
+      "desc": "()V",
+      "file": "sysinfo.rs",
+      "fn": "software",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "5c5f4fba1bcfc6d9"
+    },
+    {
+      "class": "net/minecraft/client/gui/components/debug/DebugEntrySystemSpecs",
+      "method": "getCpuInfo",
+      "desc": "()Ljava/lang/String;",
+      "file": "sysinfo.rs",
+      "fn": "cpu_info",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "86d1bdbcb5a3d10b"
+    },
+    {
+      "class": "net/minecraft/util/profiling/metrics/profiling/ServerMetricsSamplersProvider$CpuStats",
+      "method": "<init>",
+      "desc": "()V",
+      "file": "sysinfo.rs",
+      "fn": "cpu_stats_init",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "067de98961c4c77a"
+    },
+    {
+      "class": "net/minecraft/util/profiling/metrics/profiling/ServerMetricsSamplersProvider$CpuStats",
+      "method": "loadForCpu",
+      "desc": "(I)D",
+      "file": "sysinfo.rs",
+      "fn": "cpu_stats_load",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "50c585fdab8eda56"
+    },
+    {
+      "class": "net/minecraft/util/NativeModuleLister",
+      "method": "listModules",
+      "desc": "()Ljava/util/List;",
+      "file": "sysinfo.rs",
+      "fn": "no_modules",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "8efc5e50af460dc8"
+    },
+    {
+      "class": "com/mojang/text2speech/Narrator",
+      "method": "getNarrator",
+      "desc": "()Lcom/mojang/text2speech/Narrator;",
+      "file": "narrator.rs",
+      "fn": "get_narrator",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "b91577f8f6049989"
     }
   ]
 }
