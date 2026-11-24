@@ -30,4 +30,17 @@ Hedef: 30 dk oynanışta JNI/JNA giriş sayısı 0 (`MASTER_PLAN` WS2 çıkış�
 runtime'da yoktu; yerine `MONO_COUNT_NATIVES=1` (ya da `=<dosya>`) yazıldı (`monolith/rt/ncount.rs`): `natives_jni.rs`
 içindeki her native'in stub'ı çağrıyı sayar, süreç çıkarken tablo yazılır (en çok çağrılan başta). Kapalıyken çağrı başına
 tek `Relaxed` yükleme. Doğrulama: `com.sun.jna.Native` taklidini çağıran küçük bir programda 7 çağrı / 3 native doğru
-sayıldı; birim testi `tests/rust/ncount_main.rs`. **Gerçek oyunda ölçüm henüz alınmadı** (tam build ve oynanış gerekir).
+sayıldı; birim testi `tests/rust/ncount_main.rs`.
+
+### İlk gerçek ölçüm (2026-11-24, Linux x86_64, Xvfb, yazılım GL, 26.3, açılış ekranında 75 sn)
+
+130 çağrı, 18 farklı native. Hepsi iki gruptan:
+
+| Grup | Çağrı | Ne |
+|---|---|---|
+| `com.sun.jna.Native` | 118 | `getShort` 26, `registerMethod` 14, `_getPointer` 13, `getLong` 13, `malloc` 13, `setMemory` 13, `findSymbol` 10, `open` 10, `sizeof` 6, `invokeInt` 2, `getNativeVersion`, `initIDs` |
+| `NarratorLinux$FliteLibrary` (anlatıcı) | 12 | `flite_init`, `register_cmu_us_kal16`, `flite_synth_text`, `utt_wave`, `play_wave`, `delete_utterance` |
+
+Netty (epoll/kqueue/unix) ve Tracy çağrısı **yok** (açılışta ağ ve profil aracı kullanılmıyor). Yani ilk 75 sn'de kaldırma hedefi:
+JNA'yı anlatıcı (Flite) çağıran taraf kullanıyor; anlatıcı kapatılırsa ya da Rust'a alınırsa bu ölçümdeki çağrıların tamamı gider.
+Henüz **ölçülmeyen**: dünyaya giriş, oynanış, çok oyunculu (netty), kapanış. Tablo yalnızca normal çıkışta yazılır.
