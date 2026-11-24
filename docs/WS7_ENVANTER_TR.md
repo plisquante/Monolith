@@ -44,7 +44,9 @@ kapalı dünyada, çünkü oyunun Vulkan sınıfları var ve bunlara başvuruyor
 
 - Yapıldı: `javac` ile kalan ağaç derleniyor, dışarıdan başvuru taraması boş, **silmeden sonra tam çeviri ve link error kapısı**
   (447 link error, bir açıklanmamış: `SDL_LogOutputFunction`, geri alındı; 446 bekleniyor).
-- **Yapılmadı:** geri almadan sonra çevirinin yeniden koşulup 0 açıklanmamış vermesi ve oyun açılışı.
+- Yapıldı (geri almadan sonra yeniden): 61 747 sınıf, 446 link error, **0 açıklanmamış**, 0 eksik native, 10 yama uygulandı
+  (parmak izleri kabul edildi).
+- **Yapılmadı:** oyun açılışı (build sürüyor).
 
 ## Sonraki adım
 
