@@ -1,7 +1,7 @@
 #!/bin/sh
-# Wall-clock time of one monolith.rustgen build with a fresh output directory (see docs/BUILD_PERF.md).
-#   tools/bench_build.sh <classes dir> <main class> <shards> <jobs>
-# Needs MONO_JDK_HOME (JDK 25). Prints one line: shards, jobs, exit code, seconds.
+# Yeni bir çıktı dizini ile tek bir monolith.rustgen derlemesinin duvar saati süresi (bkz. docs/BUILD_PERF.md).
+#   tools/bench_build.sh <sınıflar dizini> <ana sınıf> <shard> <iş>
+# MONO_JDK_HOME (JDK 25) gerekir. Tek satır yazar: shard, iş, çıkış kodu, saniye.
 set -e
 if [ "$#" -ne 4 ]; then
   echo "usage: $0 <classes dir> <main class> <shards> <jobs>" >&2

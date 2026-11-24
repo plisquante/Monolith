@@ -1,11 +1,11 @@
 #!/bin/sh
-# Steady-state leak measurement: opens the saved world, then does NOTHING for N minutes (no walking, so no new
-# chunks are loaded) and writes an allocation profile. The live managed heap after warm-up must be flat; tools/leak_budget.py
-# judges the slope.
+# Kararlı durum sızıntı ölçümü: kayıtlı dünyayı açar, sonra N dakika boyunca HİÇBİR ŞEY yapmaz (yürüme yok, yani yeni
+# yonga yüklenmez) ve bir tahsis profili yazar. Isınmadan sonra canlı yönetilen heap düz olmalıdır; tools/leak_budget.py
+# eğimi değerlendirir.
 #
 #   tools/leak_soak.sh <build-dir> [--minutes 10] [--profile DIR/prof.json] [--display :8]
 #
-# <build-dir> is what tools/mcbuild_rust.py wrote (rust/prog, resources/, assets/). The world "New World" must exist.
+# <build-dir>, tools/mcbuild_rust.py'nin yazdığıdır (rust/prog, resources/, assets/). "New World" dünyası var olmalıdır.
 set -e
 BUILD="$1"; shift || { echo "usage: $0 <build-dir> [--minutes N] [--profile FILE] [--display :N]"; exit 2; }
 MINUTES=10; PROFILE="${BUILD}/soak-prof.json"; DISPLAY_NUM=":8"
@@ -28,7 +28,7 @@ XVFB=$!
 sleep 2
 trap 'kill $GAME 2>/dev/null; kill $XVFB 2>/dev/null' EXIT INT TERM
 
-# MONO_ALLOC_SNAPSHOTS=1 (optional) adds per-snapshot class tables; set only when wanted (the variable is checked for presence)
+# MONO_ALLOC_SNAPSHOTS=1 (isteğe bağlı) anlık görüntü başına sınıf tabloları ekler; yalnızca gerektiğinde ayarlayın (değişkenin varlığı denetlenir)
 env MONO_RESOURCES="$BUILD/resources" MONO_ALLOC_PROFILE="$PROFILE" MONO_ALLOC_DUMP_SECS=30 ${MONO_ALLOC_SNAPSHOTS:+MONO_ALLOC_SNAPSHOTS=1} "$EXE" -Dmono.graphics.backend=opengl \
   --version "${MC_VERSION:-26.3}" --gameDir "$BUILD/game" --assetsDir "$BUILD/assets" --assetIndex "${MC_ASSET_INDEX:-34}" \
   --username "${MC_USERNAME:-Player}" --accessToken 0 --userType legacy > "$BUILD/game/soak.log" 2>&1 &

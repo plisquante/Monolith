@@ -1,11 +1,11 @@
 #!/bin/sh
-# Runs the steps of .github/workflows/game.yml for the host OS, in the same order, on this machine.
-# Use it to reproduce a CI game-boot failure locally, or to check a change before pushing.
+# .github/workflows/game.yml adımlarını ana makinenin işletim sistemi için, aynı sırayla, bu makinede çalıştırır.
+# Bir CI oyun açılışı hatasını yerelde yeniden üretmek ya da bir değişikliği göndermeden önce denetlemek için kullanın.
 #
 #   tools/ci_local.sh [--out DIR] [--seconds N] [--shards N] [--shard-jobs N] [--skip-build]
 #
-# Every step is logged to DIR/ci_local.log and the script exits 1 at the first failing step.
-# The client jar comes from fetch_client_jar.py (Mojang manifest, SHA-1 checked) and is never committed.
+# Her adım DIR/ci_local.log dosyasına yazılır ve betik, başarısız ilk adımda 1 ile çıkar.
+# İstemci jar'ı fetch_client_jar.py'dan gelir (Mojang manifesti, SHA-1 denetimli) ve hiçbir zaman commit edilmez.
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT="$ROOT/build/ci-local"; SECS=120; SHARDS=32; JOBS=2; SKIP=0

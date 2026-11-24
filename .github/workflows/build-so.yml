@@ -43,7 +43,7 @@ jobs:
 
     steps:
       # --------------------------------------------------
-      # CHECKOUT
+      # KAYNAĞI ÇEK (CHECKOUT)
       # --------------------------------------------------
 
       - name: Checkout Repository
@@ -52,7 +52,7 @@ jobs:
           submodules: recursive
 
       # --------------------------------------------------
-      # BUILD CACHE
+      # DERLEME ÖNBELLEĞİ
       # --------------------------------------------------
 
       - name: Restore MONOLITH and Cargo cache
@@ -74,7 +74,7 @@ jobs:
           key: minecraft-client-${{ inputs.mc_version }}
 
       # --------------------------------------------------
-      # JAVA & RUST
+      # JAVA VE RUST
       # --------------------------------------------------
 
       - name: Setup Java 25
@@ -87,7 +87,7 @@ jobs:
         run: rustup toolchain install stable --profile minimal && rustup default stable && rustup target add aarch64-linux-android
 
       # --------------------------------------------------
-      # ANDROID NDK CROSS LINKER
+      # ANDROID NDK ÇAPRAZ BAĞLAYICISI
       # --------------------------------------------------
 
       - name: Configure Android NDK AArch64 Linker
@@ -184,7 +184,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       # --------------------------------------------------
-      # DOWNLOAD MINECRAFT
+      # MINECRAFT'I İNDİR
       # --------------------------------------------------
 
       - name: Download Minecraft Client JAR
@@ -255,7 +255,7 @@ jobs:
           file client.jar
 
       # --------------------------------------------------
-      # BUILD
+      # DERLE
       # --------------------------------------------------
 
       - name: Build Minecraft ARM64 Native Library
@@ -303,7 +303,7 @@ jobs:
           echo "======================================"
 
       # --------------------------------------------------
-      # VERIFY NATIVE LIBRARY
+      # YEREL KÜTÜPHANEYİ DOĞRULA
       # --------------------------------------------------
 
       - name: Verify ARM64 ELF
@@ -352,7 +352,7 @@ jobs:
           echo "SUCCESS: ARM64 ELF verification passed."
 
       # --------------------------------------------------
-      # UPLOAD ARTIFACT
+      # ÇIKTIYI YÜKLE (ARTIFACT)
       # --------------------------------------------------
 
       - name: Upload Minecraft Native Library
@@ -364,7 +364,7 @@ jobs:
           retention-days: 14
 
       # --------------------------------------------------
-      # SUMMARY
+      # ÖZET
       # --------------------------------------------------
 
       - name: Build Summary

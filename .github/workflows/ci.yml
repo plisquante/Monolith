@@ -3,9 +3,9 @@ on:
   push:
   pull_request:
 
-# Quick gate for every push: syntax, lint, machine-independent sanity, plus ONE differential test.
-# Heavy verification (full suite, Client Core E2E, sharded Minecraft build) is intentionally NOT
-# in CI — see docs/HARDWARE.md for the machine it needs.
+# Her push için hızlı kapı: sözdizimi, lint, makineden bağımsız doğruluk denetimi ve TEK bir fark testi.
+# Ağır doğrulama (tam paket, Client Core E2E, parçalı Minecraft derlemesi) bilerek CI'da DEĞİLDİR;
+# gereken makine için docs/HARDWARE.md dosyasına bakın.
 
 jobs:
   checks:
@@ -95,7 +95,7 @@ jobs:
           EOF
           "$MONO_JDK_HOME/bin/javac" -source 17 -target 17 --add-exports java.base/jdk.internal.misc=ALL-UNNAMED -cp runtime/java_nolwjgl:runtime/java -sourcepath runtime/java_nolwjgl:runtime/java -d build/ci_nolwjgl/classes build/ci_nolwjgl/CiNoLwjgl.java
           "$MONO_JDK_HOME/bin/jar" cf build/ci_nolwjgl/CiNoLwjgl.jar -C build/ci_nolwjgl/classes CiNoLwjgl.class
-          # `python -m monolith build-lib` was removed with the Zig backend (it exits 2); the Rust path is rustgen --android
+          # `python -m monolith build-lib`, Zig arka ucuyla birlikte kaldırıldı (2 ile çıkar); Rust yolu rustgen --android'dir
           python3 -m monolith.rustgen --cp build/ci_nolwjgl/CiNoLwjgl.jar --main CiNoLwjgl --no-lwjgl --shards 4 --android -o build/ci_nolwjgl/out
           readelf -h build/ci_nolwjgl/out/libminecraft_mono.so | grep -q "AArch64"
           nm -D build/ci_nolwjgl/out/libminecraft_mono.so | grep -q "mono_android_entry"

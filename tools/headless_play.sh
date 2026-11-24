@@ -1,18 +1,18 @@
 #!/bin/sh
-# Plays the natively built game headless (Xvfb + xdotool) so a change can be checked and profiled the same way
-# every time: opens the saved world, walks and looks around for a while, takes screenshots.
+# Yerel olarak derlenmiş oyunu headless (Xvfb + xdotool) oynar; böylece bir değişiklik her seferinde aynı şekilde denetlenebilir
+# ve profillenebilir: kayıtlı dünyayı açar, bir süre yürür ve etrafa bakar, ekran görüntüleri alır.
 #
 #   tools/headless_play.sh <build-dir> [--seconds 180] [--shots DIR] [--display :7] [--clean-exit]
 #
-# <build-dir> is what tools/mcbuild_rust.py wrote: it holds rust/prog, resources/ and assets/. Needs xvfb, xdotool
-# and imagemagick (import). Environment passes through, so this works too:
+# <build-dir>, tools/mcbuild_rust.py'nin yazdığıdır: rust/prog, resources/ ve assets/ içerir. xvfb, xdotool
+# ve imagemagick (import) gerekir. Ortam geçer, bu yüzden şu da çalışır:
 #   MONO_ALLOC_PROFILE=/tmp/p.json  MONO_PATCH_VERIFY=1  MONO_ARENA_CHECK=abort  tools/headless_play.sh build/minecraft-26.3
-# A game directory without a saved world gets one: Singleplayer then opens "Create New World" and the script creates
-# it (checked on 2026-11-24 from an empty game directory). With a saved world it selects the first one.
-# --clean-exit ends the run like a player: Escape, "Save and Quit to Title", "Quit Game", then waits for the process to end
-# (so exit handlers run, e.g. the MONO_COUNT_NATIVES table) and fails if the exit status is not 0.
-# A crash writes mono-crash-<pid>.txt into the game directory (MONO_CRASH_DIR); its presence fails the run.
-# The click coordinates assume the 1280x720 window the game opens with.
+# Kayıtlı dünyası olmayan bir oyun dizini bir tane alır: Singleplayer o zaman "Create New World" açar ve betik
+# onu oluşturur (2026-11-24'te boş bir oyun dizininden denetlendi). Kayıtlı bir dünya varsa ilkini seçer.
+# --clean-exit, koşuyu bir oyuncu gibi bitirir: Escape, "Save and Quit to Title", "Quit Game"; sonra sürecin bitmesini bekler
+# (böylece çıkış işleyicileri çalışır, örn. MONO_COUNT_NATIVES tablosu) ve çıkış durumu 0 değilse başarısız olur.
+# Bir çökme oyun dizinine mono-crash-<pid>.txt yazar (MONO_CRASH_DIR); varlığı koşuyu başarısız kılar.
+# Tıklama koordinatları, oyunun açtığı 1280x720 pencereyi varsayar.
 set -e
 BUILD="$1"; shift || { echo "usage: $0 <build-dir> [--seconds N] [--shots DIR] [--display :N] [--clean-exit]"; exit 2; }
 SECONDS_TOTAL=180; SHOTS="${BUILD}/shots"; DISPLAY_NUM=":7"; CLEAN_EXIT=0
@@ -51,8 +51,8 @@ if [ -n "$(ls -A "$BUILD/game/saves" 2>/dev/null)" ]; then
   click 500 200 2                          # select the world
   click 402 593 70                         # Play Selected World, wait for the terrain
 else
-  # no world yet: the screen is "Create New World". Game Mode cycles Survival, Hardcore, Creative: two clicks make it
-  # Creative, so a random spawn in water cannot drown the walking player and end the run
+  # henüz dünya yok: ekran "Create New World". Game Mode Survival, Hardcore, Creative arasında döner: iki tıklama onu
+  # Creative yapar, böylece suda rastgele bir doğma, yürüyen oyuncuyu boğup koşuyu bitiremez
   click 638 257 1
   click 638 257 1
   click 402 671 100                        # create it, wait for the terrain
@@ -71,8 +71,8 @@ if kill -0 $GAME 2>/dev/null; then echo "game still running after $SECONDS_TOTAL
 ls "$BUILD/game/crash-reports" 2>/dev/null && { echo "crash report found"; exit 1; } || true
 ls "$BUILD"/game/mono-crash-*.txt 2>/dev/null && { echo "native crash report found"; exit 1; } || true
 if [ "$CLEAN_EXIT" = 1 ]; then
-  # SIGTERM, as a system shutdown or `kill` sends it: the runtime runs the shutdown hooks (Minecraft saves the world there)
-  # and exits with 143. Driving the pause menu with the mouse is not reliable under software GL (a frame can take seconds).
+  # SIGTERM, bir sistem kapanışının ya da `kill`'in gönderdiği gibi: çalışma zamanı kapanış kancalarını çalıştırır (Minecraft dünyayı orada kaydeder)
+  # ve 143 ile çıkar. Duraklatma menüsünü fareyle sürmek yazılım GL altında güvenilir değildir (bir kare saniyeler sürebilir).
   T0=$(date +%s)
   kill -TERM $GAME
   i=0; while kill -0 $GAME 2>/dev/null && [ $i -lt 90 ]; do sleep 1; i=$((i + 1)); done
