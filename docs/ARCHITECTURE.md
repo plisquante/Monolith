@@ -31,10 +31,10 @@
 * **Types**: `int/short/char/byte/boolean → i32` on the operand stack, fields keep their storage width
   (`i8/u16/i16`), `long → i64`, `float/double → f32/f64`, references → `rt.Ref = ?*rt.Object`.
 * **Operand stack & locals**: abstract interpretation over the CFG computes the stack shape at every
-  block entry; each `(depth, kind)` slot and `(local, kind)` pair becomes a Zig variable.
+  block entry; each `(depth, kind)` slot and `(local, kind)` pair becomes a Rust local.
   Reference slots live in the per-call GC frame array `R` (precise roots).
 * **Control flow**: basic blocks are prongs of a labeled `switch`; jumps are `continue :sw <pc>`
-  (Zig compiles this to direct branches). Straight-line methods are emitted without the switch.
+  (rustc/LLVM compiles this to direct branches). Straight-line methods are emitted without the switch.
 * **Arithmetic** follows JVMS exactly: wrapping `+% -% *%`, `idiv/irem` with `/ by zero` and
   `MIN_VALUE / -1`, masked shifts, saturating `f2i/d2l`, NaN-aware `fcmpl/fcmpg`.
 * **Exceptions**: every method returns `rt.E!T`; the thrown object is pending in the thread

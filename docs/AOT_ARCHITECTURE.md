@@ -25,9 +25,8 @@ mümkün, çünkü başlangıç işini derleme aşamasına taşıyacağız (böl
 
 ## 2. Bugünkü mimari ve bulunan hatalar
 
-Hat: Minecraft jar -> monolith (Python) -> Zig kaynağı (101 birim) -> `libminecraft_mono.so`; başlatıcı
-(TouchCore APK, Java + C) motoru yükler. Çalışma zamanı: `runtime/rt.zig` (nesneler, GC, iş parçacıkları),
-`mem_pool.zig` (slab havuzu).
+Hat: Minecraft jar -> monolith (Python) -> Rust kaynağı (`shard_NN.rs`) -> yerel program (Android: `libminecraft_mono.so`); başlatıcı
+(TouchCore APK, Java + C) motoru yükler. Çalışma zamanı: `monolith/rt/rt.rs` (nesneler, iş parçacıkları), `monolith/rt/gc.rs` (GC; kaldırma planı `GC_PLAN.md`).
 
 ### 2.1 Bellek ve GC (koddan ve loglardan kanıtlı)
 | # | Hata / eksik | Kanıt | Düzeltme (bölüm) |
@@ -38,7 +37,7 @@ Hat: Minecraft jar -> monolith (Python) -> Zig kaynağı (101 birim) -> `libmine
 | B4 | İşaretleme iş parçacıkları büyük/küçük çekirdek ayrımı yapmıyor (10 çekirdek, farklı hızlar). S24 işaretleme S26'dan 2-3 kat yavaş. | Aynı log'lar | Büyük çekirdeklere sabitle (5.3), ölçülmedi |
 | B5 | Tembel süpürme bitmeden yeni toplama başlayınca 100-400 ms ek bekleme (`finish-sweep`). | Eski loglar | Arka plan süpürücü (5.3) |
 | B6 | Muhafazakâr yığın taraması yanlış canlı tutabilir. | Tasarım gereği | Kesin yığın haritası (5.5) |
-| B7 | Büyük nesneler (32 KB üstü) `malloc` ile ayrı; parçalanma ve sayım ayrı. | `rt.zig` rawAlloc | Büyük nesne bloklarını havuza al (5.3) |
+| B7 | Büyük nesneler (32 KB üstü) `malloc` ile ayrı; parçalanma ve sayım ayrı. | `monolith/rt/gc.rs` alloc_obj | Büyük nesne bloklarını havuza al (5.3) |
 | B8 | Ayırma profilleyicisi yalnız yığın ayırmalarını sayıyor, arena'yı saymıyor. | `allocObject` | Ömür profilleyicisi (bölüm 6) |
 | B9 | Doğrudan bellek (NIO ByteBuffer) hesabı GC'den ayrı. | `native_mb` | Tek bütçe (5.4) |
 
@@ -113,11 +112,11 @@ Koda bakınca düzeltilen not: bunların bir kısmı **zaten var**, planda "yap�
 | Dönüşüm | Durum (koddan) | Kalan iş |
 |---|---|---|
 | Ulaşılabilirlik / ağaç budama | **Var.** `monolith/program.py`: `Program.run` kökten başlayıp RTA ile ulaşılabilir metot, örneklenen sınıf ve sanal çağrı kümesini çıkarıyor. Yansıma kökleri, ServiceLoader, JNI geri çağrıları ele alınıyor. | `.so` boyutunun neden 587 MB olduğunu ölçmek (JDK payı, MC payı, Zig kod şişmesi) |
-| Sanal çağrı çözümü (CHA) | **Var.** `zigen.py`: tek hedefli çağrı doğrudan, 2 hedefli çağrı korumalı satır içi, kalanı itable/vtable. | Yok (ölçümle bak) |
+| Sanal çağrı çözümü (CHA) | **Var.** `rustgen.py`: tek hedefli çağrı doğrudan, 2 hedefli çağrı korumalı satır içi, kalanı itable/vtable. | Yok (ölçümle bak) |
 | Yaprak (leaf) satır içine alma | **Var.** `_can_inline_leaf` | Yaprak olmayan küçük metotlara genişletmek |
 | Metot içi kaçış analizi | **Var ama dar.** `_analyze_local_allocs`: yalnız döngüsüz, istisna işleyicisiz, tek metot; çağrılan metoda geçen nesne, kendi kurucusu hariç, kaçmış sayılıyor. Kaçmayanlar arena'ya gidiyor (parçalama yok). | Metotlar arası özetler, döngüler, alan akışı, nesne parçalama |
 | Güvenli nokta yoklamaları | Kısmen (yaprak metotlarda yok) | Sınırlı döngülerde atlama |
-| Sabit katlama | Zig/LLVM yapıyor | PGO |
+| Sabit katlama | rustc/LLVM yapıyor | PGO |
 
 ### 4.4.1 Metotlar arası kaçış analizi (tasarım)
 - Birim: metot özeti. Her referans parametre (alıcı dahil) için: `NoEscape` (alana, statik alana, diziye yazılmaz;
@@ -259,7 +258,7 @@ Sıra gerekçesi: 0-2 hızlı, riski düşük, ölçülebilir; 3-6 asıl mimari 
 ## 11. Nasıl yapılır: mekanizmalar (koda dayalı)
 
 Bu bölüm "derleme zamanında nasıl" sorusunun cevabıdır. Dayanak: `Object` başlığı 16 bayt (`class*`, `hash`, `gc_bits` ve
-monitör indeksi, `runtime/rt.zig`), `client.jar` içinde 11383 sınıf, 4371 doku, 4195 model, 1289 blockstate, 93 shader ve
+monitör indeksi, `monolith/rt/rt.rs`), `client.jar` içinde 11383 sınıf, 4371 doku, 4195 model, 1289 blockstate, 93 shader ve
 10449 veri paketi dosyası var. Yani vanilla'nın kodu, dokuları, modelleri, shader'ları ve veri paketi **jar'ın içinde**;
 yalnız sesler ve bazı diller asset index'ten (cihazda indirilen) geliyor.
 
@@ -273,7 +272,7 @@ yalnız sesler ve bazı diller asset index'ten (cihazda indirilen) geliyor.
 Kurulum aşaması önemli: Mojang varlıklarını `.so`'ya gömmeyi gerektirmeden "çalışma zamanında hiçbir şey yapma" hedefine
 ulaşılır.
 
-### 11.2 Bellek kararları derleme zamanında (çevirici, `monolith/zigen.py`)
+### 11.2 Bellek kararları derleme zamanında (çevirici, `monolith/rustgen.py`)
 Bugün: `_analyze_local_allocs` yalnız **döngüsüz, istisna işleyicisiz, tek metot** içinde, soyut yorumlama ile
 "nesne metottan kaçıyor mu" bakıyor ve kaçmayanları arena'ya koyuyor (döndürülen nesne kaçmış sayılıyor). Genişletme:
 1. **Metotlar arası özetler:** Çağrı grafı alt-yukarı (SCC sırasıyla) her metot için her parametre/dönüş için bir özet
@@ -345,7 +344,7 @@ durumda çözülemez; ama kodu sahiplik kurallarına uyacak şekilde değiştiri
    - Taşıma (move): sahiplik başka sahibe geçince eskisi kullanılamaz (kullanırsa derleme hatası).
    - Ödünç alma (borrow): bir çağrı süresince salt okunur veya tek yazan; çağrı dışına sızamaz.
    - Sızma: statik alana, paylaşılan koleksiyona, başka iş parçacığına yazma yasak (hata).
-2. **Hata raporu:** İhlal edilen kural, sınıf, metot, satır numarası. Biz o noktayı yamalarız (Java overlay'de yeniden yazarız veya Zig'de elle).
+2. **Hata raporu:** İhlal edilen kural, sınıf, metot, satır numarası. Biz o noktayı yamalarız (Java overlay'de yeniden yazarız veya Rust çalışma zamanında elle).
 3. **Sonuç:** Denetleyiciyi geçen modülde sahip kapsamdan çıkınca silme kodu derleme zamanında üretilir (`defer free` gibi);
    bu nesneler GC yığınına hiç girmez, GC tarafından görülmez.
 4. **Geçemeyen kod:** GC yığınında kalır (yedek). Modül listesi büyüdükçe GC'nin işi azalır.

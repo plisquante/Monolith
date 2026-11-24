@@ -1,5 +1,9 @@
 # Benchmarks
 
+> **Tarihî ölçümler (Zig dönemi).** Aşağıdaki sayılar Zig arka ucu ve `runtime/*.zig` modülleri içindir; bugünkü Rust
+> çalışma zamanı ve TouchCore çekirdeği (`android/touchcore/native`) için yeniden ölçülmedi. Güncel yapı süresi ölçümü:
+> [`BUILD_PERF.md`](BUILD_PERF.md).
+
 ## 1. GC-Free Client Core Subsystems (`-O ReleaseFast`, `aarch64` 10-core Linux)
 
 Measured directly with `python3 tools/microbench/run_client_core_bench.py` (`tools/microbench/client_core_bench.zig`, Zig 0.15.1 `-O ReleaseFast`) on this host (`aarch64`, 10 cores, ~7.4 GB RAM) after replacing STW mark-and-sweep GC and external LWJGL dependencies with the 4-subsystem Client Core:

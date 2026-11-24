@@ -26,6 +26,10 @@ Targets, not results. Every row gets a measuring tool in phase 0 and is checked 
 * Done: frame (stack) allocation of non-escaping objects, scope-bound iterator recycling, DataFixer patch (live heap -61 %),
   inliner + iteration-local escape analysis, `tickChunk` patch, allocation profiler with steady-state diff.
 * Not done: any incremental or concurrent collection, any write barrier, owned (manually released) objects.
+* Phase 2 evidence (test harness, not the game): `tests/run_tests.py GcStress Oop Threads` passes with
+  `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`, and `GcStress Oop Threads Lambdas Strings Collections1`
+  passes with the same settings plus `MONO_GC_CONCURRENT=1`. These runs exercise the tracing collector and the
+  concurrent mode switch only; the SATB marker and the lazy sweep are not built yet.
 
 ## 2. The four tiers
 
