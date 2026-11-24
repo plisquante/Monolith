@@ -48,6 +48,11 @@ jobs:
           rustc --edition 2021 --test tests/rust/crash_main.rs -o /tmp/crash_tests
           /tmp/crash_tests
 
+      - name: Runtime native-call counter unit tests
+        run: |
+          rustc --edition 2021 --test tests/rust/ncount_main.rs -o /tmp/ncount_tests
+          /tmp/ncount_tests
+
       - name: Runtime dependencies build offline (rt_deps, vendored)
         run: |
           cd rt_deps

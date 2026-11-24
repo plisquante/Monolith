@@ -26,6 +26,8 @@ Amaç: MASTER_PLAN §8 "çalışma zamanında JVM, JNI, JNA, libffi yok". Her gr
 
 ## Ölçü
 
-Hedef: 30 dk oynanışta JNI/JNA giriş sayısı 0 (`MASTER_PLAN` WS2 çıkışı). `MASTER_PLAN` bunu `MONO_TRACE_NATIVES` ile
-ölçmeyi söylüyor, ama runtime'da böyle bir değişken yok; yalnız `MONO_JNA_TRACE` (JNA çağrılarını yazar) var. Sayaç henüz
-yazılmadı ve envanter statik; çalışma zamanı verisi alınmadı.
+Hedef: 30 dk oynanışta JNI/JNA giriş sayısı 0 (`MASTER_PLAN` WS2 çıkışı). `MASTER_PLAN`'ın söylediği `MONO_TRACE_NATIVES`
+runtime'da yoktu; yerine `MONO_COUNT_NATIVES=1` (ya da `=<dosya>`) yazıldı (`monolith/rt/ncount.rs`): `natives_jni.rs`
+içindeki her native'in stub'ı çağrıyı sayar, süreç çıkarken tablo yazılır (en çok çağrılan başta). Kapalıyken çağrı başına
+tek `Relaxed` yükleme. Doğrulama: `com.sun.jna.Native` taklidini çağıran küçük bir programda 7 çağrı / 3 native doğru
+sayıldı; birim testi `tests/rust/ncount_main.rs`. **Gerçek oyunda ölçüm henüz alınmadı** (tam build ve oynanış gerekir).

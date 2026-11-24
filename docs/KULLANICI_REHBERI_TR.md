@@ -43,6 +43,7 @@ Hepsi çalışma zamanı kodunda okunur (`monolith/rt/`); belirtilmeyen varsayı
 | `MONO_TRACE_EX=1` | her istisnada yığın izi (`err`: `ClassNotFoundException` hariç) |
 | `MONO_TRACE_INIT=1`, `MONO_TRACE_PARK=1` | sınıf başlatma ve bloklanma izleri |
 | `MONO_JNA_TRACE=1` | JNA kaydı izleri |
+| `MONO_COUNT_NATIVES=1` (ya da `=<dosya>`) | çıkışta JNI/JNA taklit native'lerinin çağrı tablosunu stderr'e (ya da dosyaya) yaz; `_exit`, çökme ve öldürme ile bitişte yazılmaz |
 | `MONO_JAVA_HOME=<dizin>` | `java.home` (conf/ ve lib/tzdb.dat burada) |
 | `-Dad=değer` | yürütülebilire verilen argümanlar sistem özelliği olur |
 

@@ -1246,10 +1246,14 @@ class Gen:
         import re
         rt_dir = os.path.dirname(natives_src)
         self.natives = set()
+        self.jni_natives = set()   # the JNI/JNA emulation (natives_jni.rs): their stubs count calls for MONO_COUNT_NATIVES
         for fn in os.listdir(rt_dir):
             if fn.endswith(".rs"):
                 txt = open(os.path.join(rt_dir, fn), encoding="utf-8").read()
-                self.natives |= set(re.findall(r"pub fn (n_\w+)", txt)) | set(re.findall(r"\w+!\(\s*(n_\w+)", txt))
+                found = set(re.findall(r"pub fn (n_\w+)", txt)) | set(re.findall(r"\w+!\(\s*(n_\w+)", txt))
+                self.natives |= found
+                if fn == "natives_jni.rs":
+                    self.jni_natives |= found
 
     _NO_THROW_OPS = frozenset({
         "nop", "aconst_null", "iconst_m1", "iconst_0", "iconst_1", "iconst_2", "iconst_3", "iconst_4", "iconst_5",
@@ -1554,7 +1558,8 @@ class Gen:
         nn_ = self.native_name(ci, m)
         sig = f"#[no_mangle] pub extern \"C\" fn {fn_nm}({', '.join(params)}) -> {cret} {{"
         if nn_ in self.natives:
-            return sig + f" rt::{cwrap}(natives::{nn_}({', '.join(call)})) }}\n"
+            count = f" mono_rt::ncount::count({rstr(nn_)});" if nn_ in self.jni_natives else ""
+            return sig + f"{count} rt::{cwrap}(natives::{nn_}({', '.join(call)})) }}\n"
         self.missing_natives.append(f"{nn_}  ({ci.name}.{m.name}{m.desc})")
         return sig + f" rt::{cwrap}(rt::missing_native({rstr(f'{ci.name}.{m.name}{m.desc}')})) }}\n"
 

@@ -7,6 +7,7 @@ pub mod vh;
 pub mod patch;
 pub mod prof;
 pub mod crash;
+pub mod ncount;
 pub mod natives;
 pub mod natives_reflect;
 pub mod natives_io;

@@ -235,16 +235,24 @@ pub fn init_hooks(h: Hooks) {
     HOOKS.store(Box::leak(Box::new(h)), std::sync::atomic::Ordering::Release);
     crate::prof::init();
     crate::crash::install();
+    crate::ncount::install();
 }
 #[inline(always)]
 pub fn hooks() -> &'static Hooks {
     unsafe { HOOKS.load(std::sync::atomic::Ordering::Acquire).as_ref() }.expect("Monolith: runtime hooks not registered")
 }
 
+/// MONO_TRACE_EX, read once: exceptions are thrown all the time (class lookups, parsing, control flow), and a lookup of the
+/// environment takes a global lock and allocates.
+fn trace_ex() -> Option<&'static str> {
+    static V: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    V.get_or_init(|| std::env::var("MONO_TRACE_EX").ok()).as_deref()
+}
+
 #[cold]
 #[inline(never)]
 pub fn throw<T>(class: &'static str, msg: String) -> Res<T> {
-    if let Ok(v) = std::env::var("MONO_TRACE_EX") {
+    if let Some(v) = trace_ex() {
         if v != "err" || class != "java/lang/ClassNotFoundException" {
             eprintln!("[mono:throw] {} ({})\n{}", class, msg, std::backtrace::Backtrace::force_capture());
         }
@@ -260,7 +268,7 @@ pub fn throw_ref<T>(r: Ref) -> Res<T> {
     if r.is_null() {
         return throw("java/lang/NullPointerException", String::new());
     }
-    if let Ok(v) = std::env::var("MONO_TRACE_EX") {
+    if let Some(v) = trace_ex() {
         let cls = unsafe { (*r.0).class.name };
         if v != "err" || cls != "java/lang/ClassNotFoundException" {
             eprintln!("[mono:athrow] {}\n{}", cls, std::backtrace::Backtrace::force_capture());
@@ -1083,7 +1091,7 @@ pub fn init_enter(st: &AtomicU64, name: &str) -> Res<bool> {
     }
 }
 pub fn init_leave(st: &AtomicU64, ok: bool) {
-    if !ok && std::env::var_os("MONO_TRACE_EX").is_some() {
+    if !ok && trace_ex().is_some() {
         eprintln!("[mono:init_fail]\n{}", std::backtrace::Backtrace::force_capture());
     }
     let (m, cv) = init_lock();
