@@ -1,0 +1,1802 @@
+[
+ {
+  "file": "classlib/src/java/io/PrintStream.java",
+  "class": "K2",
+  "logic_bodies": 44,
+  "lines": 213
+ },
+ {
+  "file": "classlib/src/java/lang/AbstractStringBuilder.java",
+  "class": "K2",
+  "logic_bodies": 56,
+  "lines": 375
+ },
+ {
+  "file": "classlib/src/java/lang/CharacterName.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 24
+ },
+ {
+  "file": "classlib/src/java/lang/Class.java",
+  "class": "K2",
+  "logic_bodies": 93,
+  "lines": 724
+ },
+ {
+  "file": "classlib/src/java/lang/ClassLoader.java",
+  "class": "K2",
+  "logic_bodies": 21,
+  "lines": 247
+ },
+ {
+  "file": "classlib/src/java/lang/InheritableThreadLocal.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 21
+ },
+ {
+  "file": "classlib/src/java/lang/Integer.java",
+  "class": "K2",
+  "logic_bodies": 59,
+  "lines": 418
+ },
+ {
+  "file": "classlib/src/java/lang/Long.java",
+  "class": "K2",
+  "logic_bodies": 59,
+  "lines": 415
+ },
+ {
+  "file": "classlib/src/java/lang/Module.java",
+  "class": "K2",
+  "logic_bodies": 91,
+  "lines": 1553
+ },
+ {
+  "file": "classlib/src/java/lang/ModuleLayer.java",
+  "class": "K2",
+  "logic_bodies": 34,
+  "lines": 978
+ },
+ {
+  "file": "classlib/src/java/lang/MonoSignals.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 37
+ },
+ {
+  "file": "classlib/src/java/lang/Object.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 45
+ },
+ {
+  "file": "classlib/src/java/lang/Runtime.java",
+  "class": "K2",
+  "logic_bodies": 31,
+  "lines": 242
+ },
+ {
+  "file": "classlib/src/java/lang/StackTraceElement.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 57
+ },
+ {
+  "file": "classlib/src/java/lang/StackWalker.java",
+  "class": "K2",
+  "logic_bodies": 17,
+  "lines": 212
+ },
+ {
+  "file": "classlib/src/java/lang/String.java",
+  "class": "K2",
+  "logic_bodies": 164,
+  "lines": 1430
+ },
+ {
+  "file": "classlib/src/java/lang/StringBuffer.java",
+  "class": "K2",
+  "logic_bodies": 37,
+  "lines": 44
+ },
+ {
+  "file": "classlib/src/java/lang/StringBuilder.java",
+  "class": "K2",
+  "logic_bodies": 37,
+  "lines": 44
+ },
+ {
+  "file": "classlib/src/java/lang/System.java",
+  "class": "K2",
+  "logic_bodies": 42,
+  "lines": 334
+ },
+ {
+  "file": "classlib/src/java/lang/Thread.java",
+  "class": "K2",
+  "logic_bodies": 60,
+  "lines": 524
+ },
+ {
+  "file": "classlib/src/java/lang/ThreadGroup.java",
+  "class": "K2",
+  "logic_bodies": 9,
+  "lines": 76
+ },
+ {
+  "file": "classlib/src/java/lang/ThreadLocal.java",
+  "class": "K2",
+  "logic_bodies": 13,
+  "lines": 115
+ },
+ {
+  "file": "classlib/src/java/lang/Throwable.java",
+  "class": "K2",
+  "logic_bodies": 21,
+  "lines": 179
+ },
+ {
+  "file": "classlib/src/java/lang/invoke/MethodHandle.java",
+  "class": "K2",
+  "logic_bodies": 29,
+  "lines": 259
+ },
+ {
+  "file": "classlib/src/java/lang/invoke/MethodHandles.java",
+  "class": "K2",
+  "logic_bodies": 70,
+  "lines": 430
+ },
+ {
+  "file": "classlib/src/java/lang/invoke/MonoMH.java",
+  "class": "K2",
+  "logic_bodies": 57,
+  "lines": 586
+ },
+ {
+  "file": "classlib/src/java/lang/invoke/VarHandle.java",
+  "class": "K2",
+  "logic_bodies": 15,
+  "lines": 193
+ },
+ {
+  "file": "classlib/src/java/lang/ref/FinalReference.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 7
+ },
+ {
+  "file": "classlib/src/java/lang/ref/PhantomReference.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 8
+ },
+ {
+  "file": "classlib/src/java/lang/ref/Reference.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 50
+ },
+ {
+  "file": "classlib/src/java/lang/ref/ReferenceQueue.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 52
+ },
+ {
+  "file": "classlib/src/java/lang/ref/SoftReference.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 8
+ },
+ {
+  "file": "classlib/src/java/lang/ref/WeakReference.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 8
+ },
+ {
+  "file": "classlib/src/java/lang/reflect/Array.java",
+  "class": "K2",
+  "logic_bodies": 21,
+  "lines": 181
+ },
+ {
+  "file": "classlib/src/java/lang/reflect/Proxy.java",
+  "class": "K2",
+  "logic_bodies": 8,
+  "lines": 80
+ },
+ {
+  "file": "classlib/src/java/security/AccessController.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 62
+ },
+ {
+  "file": "classlib/src/java/security/SecureRandom.java",
+  "class": "K2",
+  "logic_bodies": 9,
+  "lines": 94
+ },
+ {
+  "file": "classlib/src/java/text/DecimalFormatSymbols.java",
+  "class": "K2",
+  "logic_bodies": 28,
+  "lines": 131
+ },
+ {
+  "file": "classlib/src/java/text/NumberFormat.java",
+  "class": "K2",
+  "logic_bodies": 38,
+  "lines": 1535
+ },
+ {
+  "file": "classlib/src/java/util/ServiceLoader.java",
+  "class": "K2",
+  "logic_bodies": 14,
+  "lines": 89
+ },
+ {
+  "file": "classlib/src/java/util/Tripwire.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 11
+ },
+ {
+  "file": "classlib/src/java/util/concurrent/atomic/AtomicBoolean.java",
+  "class": "K2",
+  "logic_bodies": 18,
+  "lines": 34
+ },
+ {
+  "file": "classlib/src/java/util/concurrent/atomic/AtomicInteger.java",
+  "class": "K2",
+  "logic_bodies": 28,
+  "lines": 51
+ },
+ {
+  "file": "classlib/src/java/util/concurrent/atomic/AtomicLong.java",
+  "class": "K2",
+  "logic_bodies": 28,
+  "lines": 51
+ },
+ {
+  "file": "classlib/src/java/util/concurrent/atomic/AtomicReference.java",
+  "class": "K2",
+  "logic_bodies": 20,
+  "lines": 41
+ },
+ {
+  "file": "classlib/src/java/util/stream/Tripwire.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 11
+ },
+ {
+  "file": "classlib/src/jdk/internal/loader/BootLoader.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 81
+ },
+ {
+  "file": "classlib/src/jdk/internal/loader/ClassLoaders.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 23
+ },
+ {
+  "file": "classlib/src/jdk/internal/misc/CDS.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 29
+ },
+ {
+  "file": "classlib/src/jdk/internal/misc/UnsafeConstants.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 16
+ },
+ {
+  "file": "classlib/src/jdk/internal/misc/VM.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 75
+ },
+ {
+  "file": "classlib/src/jdk/internal/reflect/MethodHandleAccessorFactory.java",
+  "class": "K2",
+  "logic_bodies": 12,
+  "lines": 110
+ },
+ {
+  "file": "classlib/src/jdk/internal/reflect/MonoFieldAccessor.java",
+  "class": "K2",
+  "logic_bodies": 40,
+  "lines": 236
+ },
+ {
+  "file": "classlib/src/jdk/internal/util/ClassFileDumper.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 29
+ },
+ {
+  "file": "classlib/src/jdk/internal/util/Preconditions.java",
+  "class": "K2",
+  "logic_bodies": 9,
+  "lines": 91
+ },
+ {
+  "file": "classlib/src/jdk/internal/util/ReferencedKeyMap.java",
+  "class": "K2",
+  "logic_bodies": 35,
+  "lines": 281
+ },
+ {
+  "file": "classlib/src/sun/reflect/generics/reflectiveObjects/ParameterizedTypeImpl.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 101
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/BufferUtils.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 38
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/PointerBuffer.java",
+  "class": "K2",
+  "logic_bodies": 11,
+  "lines": 66
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/Version.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/AL.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/AL10.java",
+  "class": "K2",
+  "logic_bodies": 19,
+  "lines": 74
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/ALC.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 15
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/ALC10.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 56
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/ALC11.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/ALCCapabilities.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/ALCapabilities.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 9
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/ALUtil.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/SOFTSystemEventProcI.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/openal/SOFTSystemEvents.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/ARBBaseInstance.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 20
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/ARBBufferStorage.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 18
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/ARBClipControl.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/ARBDebugOutput.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 9
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/ARBDirectStateAccess.java",
+  "class": "K2",
+  "logic_bodies": 11,
+  "lines": 67
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/ARBDrawIndirect.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 9
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/ARBMultiDrawIndirect.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 9
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/ARBVertexAttribBinding.java",
+  "class": "K2",
+  "logic_bodies": 8,
+  "lines": 85
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/EXTDebugLabel.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GL.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 37
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GL11C.java",
+  "class": "K2",
+  "logic_bodies": 32,
+  "lines": 124
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GL15C.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 42
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GL20C.java",
+  "class": "K2",
+  "logic_bodies": 26,
+  "lines": 81
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GL30C.java",
+  "class": "K2",
+  "logic_bodies": 17,
+  "lines": 92
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GL31C.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 31
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GL32C.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 20
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GL33C.java",
+  "class": "K2",
+  "logic_bodies": 14,
+  "lines": 46
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GLCapabilities.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 33
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GLDebugMessageARBCallback.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GLDebugMessageARBCallbackI.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GLDebugMessageCallback.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 26
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/GLDebugMessageCallbackI.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/opengl/KHRDebug.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLClipboard.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLError.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 16
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLEvents.java",
+  "class": "K2",
+  "logic_bodies": 14,
+  "lines": 271
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLHints.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLInit.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 43
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLKeyboard.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 69
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLKeycode.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 23
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLLog.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLMessageBox.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 20
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLMisc.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLMouse.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 42
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLPixels.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 18
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLPlatform.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLScancode.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 23
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLStdinc.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLSurface.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 20
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLTimer.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLVideo.java",
+  "class": "K2",
+  "logic_bodies": 30,
+  "lines": 200
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDLVulkan.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 35
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_DisplayEvent.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_DisplayMode.java",
+  "class": "K2",
+  "logic_bodies": 8,
+  "lines": 40
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_DropEvent.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_Event.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 32
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_KeyboardEvent.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_LogOutputFunction.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 20
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_LogOutputFunctionI.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_MessageBoxButtonData.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 48
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_MessageBoxData.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 28
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_MouseButtonEvent.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_MouseMotionEvent.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_MouseWheelEvent.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_PixelFormatDetails.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 18
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_Rect.java",
+  "class": "K2",
+  "logic_bodies": 19,
+  "lines": 67
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_Surface.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 23
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_TextEditingEvent.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_TextInputEvent.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/sdl/SDL_WindowEvent.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/stb/STBIWriteCallback.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/stb/STBImage.java",
+  "class": "K2",
+  "logic_bodies": 20,
+  "lines": 349
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/stb/STBImageResize.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 49
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/stb/STBImageWrite.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 96
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/Callback.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 45
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/CallbackI.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 9
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/Configuration.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 26
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/CustomBuffer.java",
+  "class": "K2",
+  "logic_bodies": 11,
+  "lines": 100
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/FunctionProvider.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 6
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/FunctionProviderLocal.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/Library.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 16
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/MemoryManage.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/MemoryStack.java",
+  "class": "K2",
+  "logic_bodies": 25,
+  "lines": 142
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/MemoryUtil.java",
+  "class": "K2",
+  "logic_bodies": 40,
+  "lines": 270
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/NativeResource.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/Platform.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 51
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/Pointer.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/SharedLibrary.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 26
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/Struct.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 38
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/StructBuffer.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 29
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/system/macosx/ObjCRuntime.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/MonoShader.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 58
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/freetype/FT_Bitmap.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 26
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/freetype/FT_Face.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 31
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/freetype/FT_GlyphSlot.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 25
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/freetype/FT_Matrix.java",
+  "class": "K2",
+  "logic_bodies": 10,
+  "lines": 37
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/freetype/FT_Vector.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 32
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/freetype/FreeType.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 30
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/shaderc/Shaderc.java",
+  "class": "K2",
+  "logic_bodies": 21,
+  "lines": 211
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/shaderc/ShadercIncludeResolve.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 18
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/shaderc/ShadercIncludeResolveI.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/shaderc/ShadercIncludeResult.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 37
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/shaderc/ShadercIncludeResultRelease.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 18
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/shaderc/ShadercIncludeResultReleaseI.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/spvc/Spvc.java",
+  "class": "K2",
+  "logic_bodies": 27,
+  "lines": 277
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/spvc/SpvcReflectedResource.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 46
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/vma/Vma.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/vma/VmaAllocationCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 8,
+  "lines": 32
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/vma/VmaAllocationInfo.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 26
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/vma/VmaAllocatorCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 33
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/util/vma/VmaVulkanFunctions.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 28
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/AMDBufferMarker.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 6
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/DispatchableHandleDevice.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/DispatchableHandleInstance.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/EXTCalibratedTimestamps.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 6
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/EXTDebugUtils.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/KHRDynamicRendering.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/KHRPushDescriptor.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 6
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/KHRSurface.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 9
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/KHRSwapchain.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/KHRSynchronization2.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/NVDeviceDiagnosticCheckpoints.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VK.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VK10.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 5
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VK11.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 5
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VK12.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 69
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VKCapabilitiesDevice.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 5
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VKCapabilitiesInstance.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 5
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkAllocationCallbacks.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkApplicationInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 15
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkBufferCopy.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkBufferCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkBufferImageCopy.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 22
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkBufferMemoryBarrier.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 15
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkBufferViewCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkCalibratedTimestampInfoEXT.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkCalibratedTimestampInfoKHR.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkCheckpointData2NV.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 20
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkClearAttachment.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkClearColorValue.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkClearDepthStencilValue.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkClearRect.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkClearValue.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkCommandBuffer.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 6
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkCommandBufferAllocateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkCommandBufferBeginInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkCommandBufferSubmitInfo.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkCommandPoolCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDebugUtilsLabelEXT.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDebugUtilsMessengerCallbackEXTI.java",
+  "class": "K1",
+  "logic_bodies": 0,
+  "lines": 5
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDebugUtilsMessengerCreateInfoEXT.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDebugUtilsObjectNameInfoEXT.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDependencyInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDescriptorBufferInfo.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDescriptorImageInfo.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDescriptorSetLayoutBinding.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 23
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDescriptorSetLayoutCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDevice.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDeviceCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDeviceQueueCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkDrawIndexedIndirectCommand.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 9
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkExtensionProperties.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 26
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkExtent2D.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkExtent3D.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 9
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkGraphicsPipelineCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 29
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkImageBlit.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 20
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkImageCopy.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkImageCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkImageMemoryBarrier.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 25
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkImageMemoryBarrier2.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 27
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkImageSubresourceLayers.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkImageSubresourceRange.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkImageViewCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkInstance.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 6
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkInstanceCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 15
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkLayerProperties.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkMemoryBarrier.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 15
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkMemoryBarrier2.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkMemoryHeap.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkMemoryType.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 10
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkOffset2D.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 9
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkOffset3D.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDevice.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 7
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceDriverProperties.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceDynamicRenderingFeatures.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceFeatures.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 16
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceFeatures2.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceLimits.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceMemoryProperties.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceMultiDrawFeaturesEXT.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceMultiDrawPropertiesEXT.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDevicePortabilitySubsetFeaturesKHR.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceProperties.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 15
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceProperties2.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 22
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceSynchronization2Features.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceVertexAttributeDivisorFeatures.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 16
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceVulkan11Features.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceVulkan11Properties.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPhysicalDeviceVulkan12Features.java",
+  "class": "K2",
+  "logic_bodies": 4,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineColorBlendAttachmentState.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 26
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineColorBlendStateCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineDepthStencilStateCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineDynamicStateCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineInputAssemblyStateCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineLayoutCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineMultisampleStateCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineRasterizationStateCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 17
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineRenderingCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineRenderingCreateInfoKHR.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineShaderStageCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 23
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineVertexInputDivisorStateCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 2,
+  "lines": 8
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineVertexInputDivisorStateCreateInfoEXT.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineVertexInputStateCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPipelineViewportStateCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPresentInfoKHR.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 14
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkPushConstantRange.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkQueryPoolCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkQueue.java",
+  "class": "K2",
+  "logic_bodies": 1,
+  "lines": 6
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkQueueFamilyProperties.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkRect2D.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkRenderingAttachmentInfo.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 30
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkRenderingInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 15
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkSamplerCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkSemaphoreCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkSemaphoreSubmitInfo.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkSemaphoreTypeCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 12
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkSemaphoreWaitInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkShaderModuleCreateInfo.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 11
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkSubmitInfo2.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 21
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkSurfaceCapabilitiesKHR.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 13
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkSurfaceFormatKHR.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 19
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkSwapchainCreateInfoKHR.java",
+  "class": "K2",
+  "logic_bodies": 3,
+  "lines": 22
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkVertexInputAttributeDescription.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 23
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkVertexInputBindingDescription.java",
+  "class": "K2",
+  "logic_bodies": 7,
+  "lines": 22
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkVertexInputBindingDivisorDescription.java",
+  "class": "K2",
+  "logic_bodies": 5,
+  "lines": 15
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkVertexInputBindingDivisorDescriptionEXT.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 18
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkViewport.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 22
+ },
+ {
+  "file": "runtime/java_nolwjgl/org/lwjgl/vulkan/VkWriteDescriptorSet.java",
+  "class": "K2",
+  "logic_bodies": 6,
+  "lines": 25
+ }
+]

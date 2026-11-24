@@ -23,6 +23,10 @@ Etiketler `00_ANA_MIMARI.md` ile aynıdır. Hedef E3 (elle yazılmış Java mant
 Envanter aracı (L1): `tools/lib_inventory.py` her dosyayı K1-K4'e atar (mantık = metot gövdesinde `invoke` ya da dal), sonucu `docs/KUTUPHANE_ENVANTER.json`.
 Kabul: sınıflandırılmamış dosya 0.
 
+**ÖLÇÜ (2026-11-24, `tools/lib_inventory.py`, sezgisel: gövdesi boş/sabit dönüş/throw olmayan metot = mantık):** 300 dosya, K1=68, K2=232.
+`classlib/src` K1=7 K2=50 (13 208 satır mantık); `runtime/java_nolwjgl` K1=61 K2=182 (5 837 satır; LWJGL kabukları sarmalayıcı mantığı taşıyor: aşırı yüklemeler, `MemoryStack`, kontroller).
+Sonuç: "K1 = üretilir" hedefi için LWJGL sarmalayıcı mantığı da üretilmeli (L3 kapsamı büyür: native imza + standart aşırı yükleme şablonları) ya da Rust'ta yeniden yazılmalı. Liste: `docs/KUTUPHANE_ENVANTER.json`.
+
 ## 3. Hedef kaynak hattı
 
 ```
