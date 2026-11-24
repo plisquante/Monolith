@@ -1,110 +1,63 @@
-# monolith — Java bytecode → Rust transpiler: architecture
+# monolith — Java bytecode → Rust çevirici: mimari
 
 ```
  app.jar + libs ─┐
- classlib overlay ├─► ClassPath ─► World (hierarchy, JVMS resolution, vtables/itables)
+ classlib overlay ├─► ClassPath ─► World (hiyerarşi, JVMS çözümü, vtable/itable)
  java.base.jmod ─┘                   │
                                      ▼
-                     Program: decode + invokedynamic desugaring + RTA
-                                     │  (reachable methods, instantiated classes)
+                     Program: çözme + invokedynamic desugar + RTA
+                                     │  (erişilebilir metotlar, örneklenmiş sınıflar)
                                      ▼
-                     RustGen: one Rust module per shard + main.rs
+                     RustGen: shard başına bir Rust modülü + main.rs
                                      │
- monolith/rt/*.rs (runtime; GC being replaced) ┴─► rustc ─► native executable (no JVM)
+ monolith/rt/*.rs (çalışma zamanı; GC değiştiriliyor) ┴─► rustc ─► yerel çalıştırılabilir (JVM yok)
 ```
 
-## Front end (`monolith/`)
+## Ön uç (`monolith/`)
 
-| module | role |
+| modül | görevi |
 |---|---|
-| `classfile.py` | class file parser, versions 45–69 (Java 1.1 … 25): constant pool, fields, methods, Code, exception tables, BootstrapMethods, Signature (generics metadata), InnerClasses, NestHost/Members, Record, PermittedSubclasses, LineNumberTable |
-| `bytecode.py` | decoder for all 202 opcodes (wide, tableswitch/lookupswitch normalised); `jsr/ret` are decoded and reported as unsupported |
-| `classpath.py` | dirs, JARs (multi-release aware), JDK `.jmod` files |
-| `world.py` | closed-world class hierarchy: JVMS §5.4.3 field/method resolution, §5.4.6 selection, maximally-specific default methods, vtable layout (with miranda/default slots), itable contents, prefix-compatible instance layouts |
-| `indy.py` | **invokedynamic desugaring** into synthetic bytecode classes: `LambdaMetafactory.metafactory/altMetafactory` (captures, bridges, marker interfaces, boxing/unboxing/widening adaptation), `StringConcatFactory` (recipes, constants), `ObjectMethods.bootstrap` (record `toString/hashCode/equals` with the JDK's exact formulas and comparison order), `SwitchBootstraps.typeSwitch/enumSwitch`. Unknown bootstraps are reported and throw `BootstrapMethodError` like a JVM. |
-| `program.py` | instruction preparation (indy rewrite, folding of disabled `assert`s) and **Rapid Type Analysis** with a `why`-chain for every reachable method |
-| `rustgen.py` | Rust code generation (below) |
-| `analyze.py` | JAR statistics: versions, opcode histogram, indy bootstraps, reflection/Unsafe/VarHandle use, natives |
+| `classfile.py` | sınıf dosyası ayrıştırıcı, sürümler 45–69 (Java 1.1 … 25): sabit havuz, alanlar, metotlar, Code, istisna tabloları, BootstrapMethods, Signature (jenerik metaverisi), InnerClasses, NestHost/Members, Record, PermittedSubclasses, LineNumberTable |
+| `bytecode.py` | 202 opcode'un tamamının çözücüsü (wide, tableswitch/lookupswitch normalleştirilmiş); `jsr/ret` çözülür ve desteklenmediği bildirilir |
+| `classpath.py` | dizinler, JAR'lar (çoklu sürüm farkında), JDK `.jmod` dosyaları |
+| `world.py` | kapalı dünya sınıf hiyerarşisi: JVMS §5.4.3 alan/metot çözümü, §5.4.6 seçim, en belirgin default metotlar, vtable yerleşimi (miranda/default yuvalarıyla), itable içeriği, önek uyumlu örnek yerleşimleri |
+| `indy.py` | **invokedynamic desugar**: sentetik bytecode sınıflarına çevirir: `LambdaMetafactory.metafactory/altMetafactory` (yakalamalar, köprüler, işaret arayüzleri, kutulama/açma/genişletme uyarlaması), `StringConcatFactory` (tarifler, sabitler), `ObjectMethods.bootstrap` (record `toString/hashCode/equals`, JDK'nın birebir formülleri ve karşılaştırma sırasıyla), `SwitchBootstraps.typeSwitch/enumSwitch`. Bilinmeyen bootstrap'ler bildirilir ve bir JVM gibi `BootstrapMethodError` fırlatır. |
+| `program.py` | komut hazırlığı (indy yeniden yazımı, devre dışı `assert`lerin katlanması) ve her erişilebilir metot için `why` zinciriyle **Rapid Type Analysis** |
+| `rustgen.py` | Rust kodu üretimi (aşağıda) |
+| `analyze.py` | JAR istatistikleri: sürümler, opcode histogramı, indy bootstrap'leri, yansıma/Unsafe/VarHandle kullanımı, yerel metotlar |
 
-## Code generation scheme
+## Kod üretim şeması
 
-* **Types**: `int/short/char/byte/boolean → i32` on the operand stack, fields keep their storage width
-  (`i8/u16/i16`), `long → i64`, `float/double → f32/f64`, references → `rt.Ref = ?*rt.Object`.
-* **Operand stack & locals**: abstract interpretation over the CFG computes the stack shape at every
-  block entry; each `(depth, kind)` slot and `(local, kind)` pair becomes a Rust local.
-  Reference slots live in the per-call GC frame array `R` (precise roots).
-* **Control flow**: basic blocks are prongs of a labeled `switch`; jumps are `continue :sw <pc>`
-  (rustc/LLVM compiles this to direct branches). Straight-line methods are emitted without the switch.
-* **Arithmetic** follows JVMS exactly: wrapping `+% -% *%`, `idiv/irem` with `/ by zero` and
-  `MIN_VALUE / -1`, masked shifts, saturating `f2i/d2l`, NaN-aware `fcmpl/fcmpg`.
-* **Exceptions**: every method returns `rt.E!T`; the thrown object is pending in the thread
-  state. Throwing operations inside a try-range use `catch continue :sw D`, where dispatch
-  prong `D` tests the handlers in exception-table order. Runtime checks (null, bounds,
-  casts, array stores, negative sizes, division) throw the same exception classes and
-  messages as HotSpot.
-* **Dispatch**: `invokevirtual` → vtable slot; `invokeinterface` → per-class itable;
-  `invokespecial/static` → direct. Calls are devirtualized when the target is private/final,
-  the class is final, or **class hierarchy analysis** over the instantiated classes proves a
-  single possible target (sound in the closed world; any late change to the program triggers
-  a full regeneration).
-* **Liveness**: reference operand-stack slots consumed by a call are cleared afterwards, so
-  stale slots do not keep garbage (or weakly referenced objects) alive.
-* **Class initialization**: JVMS §5.5 (per-class state, recursive requests by the initializing
-  thread, waiting threads, `ExceptionInInitializerError` wrapping, `NoClassDefFoundError` with
-  the JDK 21 cause chain). Checks are elided where the JVMS guarantees initialization.
-* **Synchronization**: `monitorenter/exit` and `synchronized` methods use a lazily allocated,
-  reentrant per-object monitor (mutex + condition); `wait/notify/notifyAll` included.
-* **volatile** fields use sequentially consistent atomics.
-* **VarHandle**: `findVarHandle/findStaticVarHandle/arrayElementVarHandle` produce
-  (kind, offset) descriptors; signature-polymorphic calls (`get`, `set*`, `compareAndSet`,
-  `compareAndExchange*`, `getAndSet*`, `getAndAdd*`, `getAndBitwise*`) are lowered to atomic
-  memory operations in `monolith/rt/vh.rs` using the call-site descriptor.
-* **Line numbers**: `F.line` is updated before instructions that can throw, so stack traces
-  carry `File.java:NN` like the JVM.
+* **Tipler**: `int/short/char/byte/boolean → i32` işlenen yığınında; alanlar depolama genişliğini korur (`i8/u16/i16`), `long → i64`, `float/double → f32/f64`, referanslar → `rt.Ref = ?*rt.Object`.
+* **İşlenen yığını ve yerel değişkenler**: CFG üzerinde soyut yorumlama, her blok girişindeki yığın şeklini hesaplar; her `(derinlik, tür)` yuvası ve `(yerel, tür)` çifti bir Rust yerel değişkeni olur. Referans yuvaları çağrı başına GC çerçeve dizisi `R` içinde yaşar (kesin kökler).
+* **Akış kontrolü**: temel bloklar, etiketli bir `switch`'in kollarıdır; atlamalar `continue :sw <pc>` olur (rustc/LLVM bunu doğrudan dallara derler). Düz metotlar switch olmadan üretilir.
+* **Aritmetik** JVMS'i birebir izler: sarmalı `+% -% *%`, `/ by zero` ve `MIN_VALUE / -1` ile `idiv/irem`, maskeli kaydırmalar, doyuran `f2i/d2l`, NaN duyarlı `fcmpl/fcmpg`.
+* **İstisnalar**: her metot `rt.E!T` döndürür; fırlatılan nesne iş parçacığı durumunda bekler. Bir try aralığındaki fırlatan işlemler `catch continue :sw D` kullanır; `D` kolu işleyicileri istisna tablosu sırasıyla denetler. Çalışma zamanı denetimleri (null, sınır, cast, dizi yazımı, negatif boyut, bölme) HotSpot ile aynı istisna sınıflarını ve mesajlarını fırlatır.
+* **Dağıtım (dispatch)**: `invokevirtual` → vtable yuvası; `invokeinterface` → sınıf başına itable; `invokespecial/static` → doğrudan. Hedef private/final ise, sınıf final ise ya da örneklenmiş sınıflar üzerinde **sınıf hiyerarşisi analizi** tek bir olası hedef kanıtlıyorsa çağrılar devirtualize edilir (kapalı dünyada sağlam; programda geç bir değişiklik tam yeniden üretimi tetikler).
+* **Canlılık**: bir çağrının tükettiği referans yığın yuvaları sonra temizlenir; böylece bayat yuvalar çöpü (ya da zayıf referanslı nesneleri) canlı tutmaz.
+* **Sınıf başlatma**: JVMS §5.5 (sınıf başına durum, başlatan iş parçacığının özyinelemeli istekleri, bekleyen iş parçacıkları, `ExceptionInInitializerError` sarmalama, JDK 21 neden zinciriyle `NoClassDefFoundError`). JVMS'nin başlatmayı garanti ettiği yerlerde denetimler atlanır.
+* **Eşzamanlama**: `monitorenter/exit` ve `synchronized` metotlar, tembel tahsis edilen, yeniden girilebilir nesne başına monitör kullanır (mutex + koşul); `wait/notify/notifyAll` dahil.
+* **volatile** alanlar sıralı tutarlı atomikler kullanır.
+* **VarHandle**: `findVarHandle/findStaticVarHandle/arrayElementVarHandle`, (tür, ofset) tanımlayıcıları üretir; imza-polimorfik çağrılar (`get`, `set*`, `compareAndSet`, `compareAndExchange*`, `getAndSet*`, `getAndAdd*`, `getAndBitwise*`) çağrı noktasının tanımlayıcısını kullanarak `monolith/rt/vh.rs` içinde atomik bellek işlemlerine indirgenir.
+* **Satır numaraları**: `F.line`, istisna fırlatabilecek komutlardan önce güncellenir; böylece yığın izleri JVM gibi `File.java:NN` taşır.
 
-## Runtime (`runtime/`)
+## Çalışma zamanı (`runtime/`)
 
-* `mem_pool.zig` & `thread_pool.zig` — lock-free page-backed `ArenaAllocator` (`ArenaMark`,
-  `madvise(MADV_DONTNEED)`), segregated `SlabPool` (`16..32768` B) with quiescent 3-epoch deferred
-  reclamation (zero STW pauses), and condition-variable `WorkerPool` + `WaitGroup` (`0%` idle CPU spin).
-* `rt.zig` — object header, arrays, class metadata, allocation via `SlabPool`/`ArenaAllocator`,
-  wait-free `safepoint()` no-op, frame scoping (`beginFrame`/`endFrame`/`pushArenaScope`/`popArenaScope`),
-  OS threads (`std.Thread`), and stack-overflow guard (`StackOverflowError`).
-* `rhi.zig`, `rhi_vk.zig`, `rhi_gl.zig`, `rhi_bridge.zig` — Zero-LWJGL custom RHI (`auto` ->
-  Vulkan 1.1+ -> strict OpenGL 3.3 Core TBO + `glMapBufferRange` for legacy integrated GPUs like
-  Intel HD 5500 -> Headless command verification) plus `NativeRhi.java` JNI/native entry points.
-* `world_render.zig` & `gpu_instancing.zig` — vanilla-safe `SectionSnapshot` 3-stage culling
-  (6-plane FOV frustum, 6-face CaveCulling portal BFS, conservative `HiZPyramid`, pixel-coverage LOD)
-  and unified `64B` `GpuInstance` / `32B` `GpuParticle` non-block instancing across display entities,
-  mobs, players, items, chests, signs, and particles.
-* `natives.zig` — native methods of the class library (Object, Class, System, Runtime,
-  Thread, Throwable backtraces, Float/Double bits, reflect.Array, `MethodHandleNatives`,
-  `NativeImageBuffer`, and `jdk.internal.misc.Unsafe` memory/CAS/park API).
-* `vh.rs` — VarHandle access modes (field, static, array element, `byteArrayViewVarHandle`,
-  and JDK 25 Foreign `MemorySegment` views).
-* `io.zig` — `java.io` file streams, `RandomAccessFile`, `UnixFileSystem`, and
-  `java.util.zip` (`CRC32`, `Adler32`, `Inflater`, `Deflater`) on top of the system zlib,
-  which is also what the JDK uses — compressed output is byte-identical.
+* `mem_pool.zig` ve `thread_pool.zig`: kilitsiz, sayfa destekli `ArenaAllocator` (`ArenaMark`, `madvise(MADV_DONTNEED)`), 3 çağlı (epoch) ertelenmiş geri kazanımlı ayrık `SlabPool` (`16..32768` B; sıfır STW duraklaması) ve koşul değişkenli `WorkerPool` + `WaitGroup` (`%0` boşta CPU döngüsü).
+* `rt.zig`: nesne başlığı, diziler, sınıf metaverisi, `SlabPool`/`ArenaAllocator` üzerinden tahsis, bekleme gerektirmeyen `safepoint()` no-op'u, çerçeve kapsamları (`beginFrame`/`endFrame`/`pushArenaScope`/`popArenaScope`), işletim sistemi iş parçacıkları (`std.Thread`) ve yığın taşması koruması (`StackOverflowError`).
+* `rhi.zig`, `rhi_vk.zig`, `rhi_gl.zig`, `rhi_bridge.zig`: LWJGL'siz özel RHI (`auto` → Vulkan 1.1+ → katı OpenGL 3.3 Core TBO + Intel HD 5500 gibi eski entegre GPU'lar için `glMapBufferRange` → Headless komut doğrulaması) ve `NativeRhi.java` JNI/yerel giriş noktaları.
+* `world_render.zig` ve `gpu_instancing.zig`: Vanilla'ya güvenli `SectionSnapshot` üç aşamalı eleme (6 düzlemli FOV frustum, 6 yüzlü CaveCulling portal BFS, muhafazakâr `HiZPyramid`, piksel kapsamlı LOD) ve birleşik `64B` `GpuInstance` / `32B` `GpuParticle` blok dışı örnekleme (ekran varlıkları, yaratıklar, oyuncular, eşyalar, sandıklar, tabelalar ve parçacıklar).
+* `natives.zig`: sınıf kütüphanesinin yerel metotları (Object, Class, System, Runtime, Thread, Throwable geri izlemeleri, Float/Double bitleri, reflect.Array, `MethodHandleNatives`, `NativeImageBuffer` ve `jdk.internal.misc.Unsafe` bellek/CAS/park API'si).
+* `vh.rs`: VarHandle erişim modları (alan, statik, dizi elemanı, `byteArrayViewVarHandle` ve JDK 25 Foreign `MemorySegment` görünümleri).
+* `io.zig`: `java.io` dosya akışları, `RandomAccessFile`, `UnixFileSystem` ve `java.util.zip` (`CRC32`, `Adler32`, `Inflater`, `Deflater`); JDK'nın da kullandığı sistem zlib'i üzerinde çalışır, bu yüzden sıkıştırılmış çıktı bayt bayt aynıdır.
 
-## Closed-world services
+## Kapalı dünya hizmetleri
 
-* `ServiceLoader`: providers are read from the application's `META-INF/services` files at
-  build time, rooted in RTA, and compiled into a table of constructor thunks.
-* `Class.forName("constant")`, class literals and `Lookup.ensureInitialized` keep the
-  target class and its `<clinit>` alive (constant folding of reflective references).
-* `Class.getDeclaredField/getField` produce `Field` objects (declaring class, name, type,
-  modifiers) backed by field metadata tables, enough for `Unsafe`/`VarHandle` offsets.
+* `ServiceLoader`: sağlayıcılar, derleme zamanında uygulamanın `META-INF/services` dosyalarından okunur, RTA'ya kök olarak eklenir ve yapıcı thunk'larından oluşan bir tabloya derlenir.
+* `Class.forName("sabit")`, sınıf literalleri ve `Lookup.ensureInitialized`, hedef sınıfı ve `<clinit>`'ini canlı tutar (yansıtıcı referansların sabit katlanması).
+* `Class.getDeclaredField/getField`, alan metaverisi tablolarıyla desteklenen `Field` nesneleri üretir (bildiren sınıf, ad, tür, değiştiriciler); `Unsafe`/`VarHandle` ofsetleri için yeterli.
 
-## Class library strategy (`classlib/src`)
+## Sınıf kütüphanesi stratejisi (`classlib/src`)
 
-The real JDK `java.base` is transpiled as-is, except for classes whose implementation is
-tied to HotSpot internals; those are replaced by overlay sources compiled with
-`javac --patch-module java.base=…` (GraalVM-style substitutions): `Object`, `String`
-(UTF-16 `char[]`), `StringBuilder/StringBuffer`, `Class`, `System`, `Runtime`, `Thread`,
-`ThreadLocal`, `Throwable`, `StackTraceElement`, `Integer`, `Long`, `PrintStream`,
-`java.lang.ref.*`, `java.util.concurrent.atomic.Atomic{Integer,Long,Boolean,Reference}`,
-`java.lang.invoke.{MethodHandles,VarHandle}`, `jdk.internal.misc.{VM,CDS}`,
-`jdk.internal.util.Preconditions`, `java.lang.CharacterName`.
-Everything else (collections, streams, `java.util.concurrent`, `Math/StrictMath` (fdlibm),
-`Double/Float.toString` (Raffaello Giulietti's algorithm), regex, …) is the JDK's own code,
-which is what makes results bit-identical to the JVM.
+Gerçek JDK `java.base` olduğu gibi çevrilir; yalnızca uygulaması HotSpot iç yapılarına bağlı olan sınıflar hariç. Bunlar `javac --patch-module java.base=…` ile derlenen kaplama kaynaklarıyla değiştirilir (GraalVM tarzı ikameler): `Object`, `String` (UTF-16 `char[]`), `StringBuilder/StringBuffer`, `Class`, `System`, `Runtime`, `Thread`, `ThreadLocal`, `Throwable`, `StackTraceElement`, `Integer`, `Long`, `PrintStream`, `java.lang.ref.*`, `java.util.concurrent.atomic.Atomic{Integer,Long,Boolean,Reference}`, `java.lang.invoke.{MethodHandles,VarHandle}`, `jdk.internal.misc.{VM,CDS}`, `jdk.internal.util.Preconditions`, `java.lang.CharacterName`.
+Geri kalan her şey (koleksiyonlar, akışlar, `java.util.concurrent`, `Math/StrictMath` (fdlibm), `Double/Float.toString` (Raffaello Giulietti'nin algoritması), regex, ...) JDK'nın kendi kodudur; sonuçların JVM ile bit bit aynı olmasını sağlayan da budur.
