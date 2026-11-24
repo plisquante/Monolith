@@ -101,7 +101,8 @@
       },
       "calls": {
         "put_storage": "net/minecraft/SystemReport.putStorage()V",
-        "empty_list": "com/google/common/collect/ImmutableList.of()Lcom/google/common/collect/ImmutableList;"
+        "empty_list": "com/google/common/collect/ImmutableList.of()Lcom/google/common/collect/ImmutableList;",
+        "empty_optional": "java/util/Optional.empty()Ljava/util/Optional;"
       },
       "vcalls": {
         "set_detail": "net/minecraft/SystemReport.setDetail(Ljava/lang/String;Ljava/lang/String;)V"
@@ -319,6 +320,16 @@
       "replace": true,
       "verify": false,
       "fingerprint": "b91577f8f6049989"
+    },
+    {
+      "class": "net/minecraft/util/NativeModuleLister",
+      "method": "tryGetModuleVersion",
+      "desc": "(Ljava/lang/String;)Ljava/util/Optional;",
+      "file": "sysinfo.rs",
+      "fn": "no_module_version",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "3a3a748f08e6729d"
     }
   ]
 }

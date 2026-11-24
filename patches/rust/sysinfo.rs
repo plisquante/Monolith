@@ -235,3 +235,9 @@ pub fn cpu_stats_load(this: rt::Ref, cpu: i32) -> rt::Res<f64> {
 pub fn no_modules() -> rt::Res<rt::Ref> {
     c_empty_list()
 }
+
+/// NativeModuleLister.tryGetModuleVersion: a DLL's version resource for crash reports. Empty everywhere but Windows in the
+/// original, where it reads the resource through JNA (Version.dll). Empty on every platform here.
+pub fn no_module_version(_name: rt::Ref) -> rt::Res<rt::Ref> {
+    c_empty_optional()
+}

@@ -366,9 +366,8 @@ def reflection_metadata(jars: list[str]) -> list[str]:
             # LWJGL picks its memory backend by name (Class.forName with a computed version suffix)
             if n.startswith("org/lwjgl/system/MemoryBackend") and n.endswith(".class") and "$" not in n:
                 out.append(n[:-6])
-            # JNA instantiates its own Structure subclasses reflectively (Klass.newInstance)
-            if n.startswith("com/sun/jna/Structure$FFIType") and n.endswith(".class"):
-                out.append(n[:-6])
+            # (JNA's Structure$FFIType classes are not listed: nothing in the build uses JNA any more, see patches/rust/sysinfo.rs
+            # and narrator.rs; listing them kept com.sun.jna.Native and its 55 emulated natives in the program)
             # netty's ReflectiveChannelFactory instantiates the channel class passed to .channel(Class)
             if n in NETTY_CHANNELS or (n.startswith("io/netty/util/internal/CleanerJava") and n.endswith(".class")):
                 out.append(n[:-6])  # CleanerJava*: direct-buffer cleaners built through method handles
