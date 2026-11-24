@@ -801,11 +801,15 @@ class MethodGen:
 
     # ---------------------------------------------------------------- whole method
     def generate(self) -> str:
-        m, insns = self.m, self.insns
-        if m.code is None:
+        if self.m.code is None:
             self.err("native/abstract methods are not in this slice")
+        blocks, has_sp = self.build_blocks()
+        return self.assemble(blocks, has_sp)
+
+    def build_blocks(self):
+        """Statement lists per basic block (key: pc) and whether a safepoint counter is needed."""
+        m, insns = self.m, self.insns
         handlers = m.code.handlers
-        args, ret = parse_method_desc(m.desc)
         leaders = {0}
         for i, x in enumerate(insns):
             for t in x.targets:
@@ -866,17 +870,27 @@ class MethodGen:
                 for sl in slots:
                     ln = self.lname(sl, "A")
                     blocks[exit_pc].insert(0, f"rt::recycle_scope({ln}); {ln} = rt::Ref::NULL;")
+        return blocks, has_sp
+
+    def param_init(self, slot: int, k: str, src: str) -> str:
+        """Statement that moves argument `src` into the method's variable for local `slot` (kind k)."""
+        return f"{self.lname(slot, k)} = {src};"
+
+    def assemble(self, blocks, has_sp) -> str:
+        m = self.m
+        handlers = m.code.handlers
+        args, ret = parse_method_desc(m.desc)
         params = []
         init = []
         slot = 0
         if not m.is_static:
             params.append("this: rt::Ref")
-            init.append(f"{self.lname(0, 'A')} = this;")
+            init.append(self.param_init(0, "A", "this"))
             slot = 1
         for j, d in enumerate(args):
             k = kind_of(d)
             params.append(f"a{j}: {RT[k]}")
-            init.append(f"{self.lname(slot, k)} = a{j};")
+            init.append(self.param_init(slot, k, f"a{j}"))
             slot += 2 if k in WIDE else 1
         rret = "()" if ret == "V" else RT[kind_of(ret)]
         if handlers:
