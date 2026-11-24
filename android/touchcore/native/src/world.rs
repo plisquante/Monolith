@@ -1,8 +1,8 @@
-//! Visibility core of the world renderer. Port of the geometry parts of `world_render.zig`: column-major matrices,
-//! Gribb-Hartmann frustum, 6-face portal reachability per 16^3 section, and the conservative Hi-Z pyramid.
-//! Everything works on immutable section snapshots; nothing here touches game state.
+//! Dünya çizicisinin görünürlük çekirdeği. `world_render.zig`'in geometri kısımlarının taşınmış hâli: sütun öncelikli matrisler,
+//! Gribb-Hartmann frustum, 16^3 bölümü başına 6 yüzlü portal erişilebilirliği ve muhafazakâr Hi-Z piramidi.
+//! Her şey değişmez bölüm anlık görüntüleri üzerinde çalışır; buradaki hiçbir şey oyun durumuna dokunmaz.
 //!
-//! Not in this module yet: the BFS section traversal, LOD selection and the sorted draw schedule of the Zig original.
+//! Bu modülde henüz olmayanlar: Zig orijinalinin BFS bölüm gezintisi, LOD seçimi ve sıralı çizim çizelgesi.
 
 pub const SECTION_DIM: usize = 16;
 pub const SECTION_VOXELS: usize = SECTION_DIM * SECTION_DIM * SECTION_DIM;
@@ -50,7 +50,7 @@ impl Vec3 {
     pub fn cross(self, b: Vec3) -> Vec3 {
         Vec3::new(self.y * b.z - self.z * b.y, self.z * b.x - self.x * b.z, self.x * b.y - self.y * b.x)
     }
-    /// Unit vector; degenerate input yields +Z, as in the Zig original.
+    /// Birim vektör; dejenere girdi +Z verir, Zig orijinalindeki gibi.
     pub fn normalize(self) -> Vec3 {
         let l = (self.x * self.x + self.y * self.y + self.z * self.z).sqrt();
         if l <= 1e-8 {
@@ -61,7 +61,7 @@ impl Vec3 {
     }
 }
 
-/// Column-major 4x4 matrix: element (row r, column c) is `m[c * 4 + r]`.
+/// Sütun öncelikli 4x4 matris: eleman (satır r, sütun c) `m[c * 4 + r]`'dir.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Mat4 {
     pub m: [f32; 16],
@@ -113,7 +113,7 @@ impl Mat4 {
         Mat4 { m: r }
     }
 
-    /// Homogeneous transform of a point: (x, y, z, w).
+    /// Bir noktanın homojen dönüşümü: (x, y, z, w).
     pub fn transform_point(&self, p: Vec3) -> [f32; 4] {
         let m = &self.m;
         [
@@ -144,7 +144,7 @@ impl Plane {
     }
 }
 
-/// Gribb-Hartmann six-plane frustum taken from a combined view-projection matrix.
+/// Birleşik görünüm-izdüşüm matrisinden alınan Gribb-Hartmann altı düzlemli frustum.
 #[derive(Clone, Copy, Debug)]
 pub struct Frustum6 {
     pub planes: [Plane; 6],
@@ -178,21 +178,21 @@ impl Frustum6 {
         }
     }
 
-    /// Positive-vertex test: rejects a box only when it lies fully behind one plane.
+    /// Pozitif köşe testi: bir kutuyu yalnızca tamamen bir düzlemin arkasında yer aldığında reddeder.
     pub fn intersects_aabb(&self, min_p: Vec3, max_p: Vec3) -> bool {
         self.planes.iter().all(|p| {
             let px = if p.nx >= 0.0 { max_p.x } else { min_p.x };
             let py = if p.ny >= 0.0 { max_p.y } else { min_p.y };
             let pz = if p.nz >= 0.0 { max_p.z } else { min_p.z };
-            // same as the Zig test `dist < 0 -> outside`: a NaN distance counts as inside
+            // Zig testi `dist < 0 -> dışarıda` ile aynı: NaN mesafe içeride sayılır
             let dist = p.nx * px + p.ny * py + p.nz * pz + p.d;
             !matches!(dist.partial_cmp(&0.0), Some(std::cmp::Ordering::Less))
         })
     }
 }
 
-/// Reachability between the six faces of one section: bit `from * 6 + to` is set when a path of non-opaque
-/// voxels joins them.
+/// Bir bölümün altı yüzü arasındaki erişilebilirlik: opak olmayan voksellerin bir yolu onları birleştirdiğinde
+/// `from * 6 + to` biti ayarlanır.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SectionPortalMask {
     pub bits: u64,
@@ -210,7 +210,7 @@ impl SectionPortalMask {
     }
 }
 
-/// Flood fill over the non-opaque voxels of a 16^3 section. `opaque` holds one bit per voxel, index `y*256 + z*16 + x`.
+/// 16^3 bölümünün opak olmayan vokselleri üzerinde taşkın doldurma. `opaque`, voksel başına bir bit tutar, indeks `y*256 + z*16 + x`.
 pub fn compute_section_portals(opaque: &[u64; 64]) -> SectionPortalMask {
     let mut visited = [0u64; 64];
     let mut queue = [0u16; SECTION_VOXELS];
@@ -285,7 +285,7 @@ pub fn compute_section_portals(opaque: &[u64; 64]) -> SectionPortalMask {
     mask
 }
 
-/// Box projected to normalized device coordinates; `near_clip_overlap` means it reaches behind the near plane.
+/// Normalleştirilmiş aygıt koordinatlarına izdüşürülmüş kutu; `near_clip_overlap`, yakın düzlemin arkasına ulaştığı anlamına gelir.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ProjectedBox {
     pub min_x: f32,
@@ -337,7 +337,7 @@ fn clamp_f32(v: f32, lo: f32, hi: f32) -> f32 {
     v.max(lo).min(hi)
 }
 
-/// Conservative Hi-Z pyramid: per tile, the farthest normalized depth of the occluders drawn into it (1.0 is far).
+/// Muhafazakâr Hi-Z piramidi: karo başına, ona çizilen örtücülerin en uzak normalleştirilmiş derinliği (1.0 uzaktır).
 pub struct HiZPyramid {
     mip0: [f32; Self::W * Self::H],
     mip1: [f32; (Self::W / 2) * (Self::H / 2)],
@@ -365,7 +365,7 @@ impl HiZPyramid {
         self.mip3.fill(1.0);
     }
 
-    /// Writes an opaque occluder's farthest depth into the texels it fully covers.
+    /// Opak bir örtücünün en uzak derinliğini, tamamen kapladığı texel'lere yazar.
     pub fn rasterize_opaque_box(&mut self, vp: &Mat4, min_p: Vec3, max_p: Vec3) {
         let Some(p) = project_aabb_ndc(vp, min_p, max_p) else { return };
         if p.near_clip_overlap {
@@ -395,7 +395,7 @@ impl HiZPyramid {
         downsample_max(&self.mip2, Self::W / 4, Self::H / 4, &mut self.mip3);
     }
 
-    /// True when the box is behind the farthest occluder depth of every Hi-Z texel it covers.
+    /// Kutu, kapsadığı her Hi-Z texel'inin en uzak örtücü derinliğinin arkasındaysa doğru.
     pub fn is_occluded(&self, p: &ProjectedBox) -> bool {
         if p.near_clip_overlap {
             return false;
@@ -469,7 +469,7 @@ mod tests {
 
     #[test]
     fn sealed_section_has_no_portals() {
-        // every voxel opaque: no transparent component, so nothing connects
+        // her voksel opak: saydam bileşen yok, bu yüzden hiçbir şey bağlanmaz
         let mask = compute_section_portals(&[u64::MAX; 64]);
         assert_eq!(mask.bits, 0);
     }

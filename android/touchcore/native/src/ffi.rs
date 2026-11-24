@@ -1,6 +1,6 @@
-//! C ABI consumed by `android/touchcore/jni/touchcore_android.c`: `tc_init`, `tc_tick_frame`, `tc_shutdown`.
-//! The engine is one process-wide value behind a mutex, as in the Zig original. Every entry point is safe to
-//! call from any thread; a call before `tc_init` (or after `tc_shutdown`) does nothing.
+//! `android/touchcore/jni/touchcore_android.c` tarafından tüketilen C ABI: `tc_init`, `tc_tick_frame`, `tc_shutdown`.
+//! Motor, Zig orijinalindeki gibi bir mutex'in arkasında süreç çapında tek bir değerdir. Her giriş noktası herhangi bir
+//! iş parçacığından çağrılabilir; `tc_init`'ten önceki (ya da `tc_shutdown`'dan sonraki) çağrı hiçbir şey yapmaz.
 use std::ffi::c_void;
 use std::sync::{Mutex, MutexGuard};
 
@@ -12,7 +12,7 @@ use crate::rhi::{BackendKind, Backend, Command, Headless, PipelineHandle, PowerP
 use crate::thread_pool::{WaitGroup, WorkerPool};
 use crate::world::{compute_section_portals, HiZPyramid, Mat4, SectionPortalMask, Vec3};
 
-/// Per-frame numbers the launcher shows. Layout is fixed: `touchcore_android.c` declares the same struct.
+/// Başlatıcının gösterdiği kare başına sayılar. Yerleşim sabittir: `touchcore_android.c` aynı yapıyı bildirir.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Telemetry {
@@ -71,7 +71,7 @@ fn power_of(profile: i32) -> PowerProfile {
     }
 }
 
-/// Backend code as the launcher reads it: Auto 0, Vulkan 1, OpenGL 3.3 2, Headless 3.
+/// Başlatıcının okuduğu arka uç kodu: Auto 0, Vulkan 1, OpenGL 3.3 2, Headless 3.
 fn backend_code(k: BackendKind) -> i32 {
     match k {
         BackendKind::Auto => 0,
@@ -81,7 +81,7 @@ fn backend_code(k: BackendKind) -> i32 {
     }
 }
 
-/// Portal job for the worker pool: one 16^3 section per index.
+/// İşçi havuzu için portal işi: indeks başına bir 16^3 bölümü.
 struct PortalJob {
     grids: *const [u64; 64],
     masks: *mut SectionPortalMask,
@@ -93,7 +93,7 @@ unsafe fn portal_task(ctx: *mut c_void, idx: usize) {
 }
 
 fn build_sections(workers: &WorkerPool) -> Vec<SectionSnapshot> {
-    // every eighth section is a solid occluder: its voxels are all opaque, the rest are open
+    // her sekizinci bölüm katı bir örtücüdür: voksellerinin hepsi opaktır, geri kalanı açıktır
     let mut grids = vec![[0u64; 64]; PORTAL_GRIDS];
     for (i, g) in grids.iter_mut().enumerate() {
         if i % 7 == 5 {
@@ -103,7 +103,7 @@ fn build_sections(workers: &WorkerPool) -> Vec<SectionSnapshot> {
     let mut masks = vec![SectionPortalMask { bits: 0 }; PORTAL_GRIDS];
     let job = PortalJob { grids: grids.as_ptr(), masks: masks.as_mut_ptr() };
     let wg = WaitGroup::new();
-    // SAFETY: `job`, `grids`, `masks` and `wg` all outlive the wait below.
+    // GÜVENLİK: `job`, `grids`, `masks` ve `wg` aşağıdaki beklemeden sonra da yaşar.
     unsafe { workers.dispatch_batch(portal_task, &job as *const PortalJob as *mut c_void, PORTAL_GRIDS, &wg) };
     wg.wait();
 
@@ -130,10 +130,10 @@ fn build_sections(workers: &WorkerPool) -> Vec<SectionSnapshot> {
     out
 }
 
-/// Starts the engine. Returns the active back end code (see `backend_code`).
+/// Motoru başlatır. Etkin arka uç kodunu döndürür (bkz. `backend_code`).
 ///
 /// # Safety
-/// Called from the launcher's JNI thread; no pointers are involved.
+/// Başlatıcının JNI iş parçacığından çağrılır; hiçbir işaretçi söz konusu değildir.
 #[no_mangle]
 pub extern "C" fn tc_init(backend_pref: i32, power_profile: i32, worker_count: i32) -> i32 {
     let mut guard = lock();
@@ -165,10 +165,10 @@ pub extern "C" fn tc_init(backend_pref: i32, power_profile: i32, worker_count: i
     code
 }
 
-/// Runs one frame: culls the sections, builds the instance batch and submits it. Fills `out_tel` when non-null.
+/// Bir kare çalıştırır: bölümleri eler, örnek toplu işini kurar ve gönderir. Null değilse `out_tel`'i doldurur.
 ///
 /// # Safety
-/// `out_tel`, when non-null, must point to a writable `Telemetry`.
+/// `out_tel` null değilse, yazılabilir bir `Telemetry`'ye işaret etmelidir.
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn tc_tick_frame(
@@ -190,10 +190,10 @@ pub unsafe extern "C" fn tc_tick_frame(
     e.arena.reset_retaining_capacity();
     e.hiz.clear();
     e.pool.advance_and_reclaim();
-    // a little slot churn each frame keeps the epoch accounting exercised
+    // her karede biraz yuva dalgalanması, çağ muhasebesinin çalışır kalmasını sağlar
     if let Some(sc) = size_class(64) {
         if let Some(slot) = e.pool.alloc_slot(sc) {
-            // SAFETY: `slot` came from `alloc_slot(sc)` and is not used after this call.
+            // GÜVENLİK: `slot`, `alloc_slot(sc)`'den geldi ve bu çağrıdan sonra kullanılmaz.
             e.pool.retire(slot, sc);
         }
     }
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn tc_tick_frame(
     }
 }
 
-/// Stops the workers and releases the engine. Safe to call more than once.
+/// İşçileri durdurur ve motoru serbest bırakır. Birden fazla kez çağırmak güvenlidir.
 #[no_mangle]
 pub extern "C" fn tc_shutdown() {
     let mut guard = lock();
@@ -278,10 +278,10 @@ pub extern "C" fn tc_shutdown() {
     }
 }
 
-/// Views a slice of plain-data values as bytes for upload.
+/// Düz veri değerlerinden oluşan bir dilimi yükleme için bayt olarak görüntüler.
 fn as_bytes<T: Copy>(items: &[T]) -> &[u8] {
-    // SAFETY: the crate only uses this for `repr(C)` values without padding that matters to the reader
-    // (`GpuInstance`, `DrawIndexedIndirect`); the byte view covers exactly the slice's memory.
+    // GÜVENLİK: crate bunu yalnızca okuyucu için önemli dolgusu olmayan `repr(C)` değerlerde kullanır
+    // (`GpuInstance`, `DrawIndexedIndirect`); bayt görünümü tam olarak dilimin belleğini kapsar.
     unsafe { std::slice::from_raw_parts(items.as_ptr() as *const u8, std::mem::size_of_val(items)) }
 }
 
@@ -295,7 +295,7 @@ mod tests {
         tc_shutdown();
         tc_shutdown();
         let mut tel = Telemetry::default();
-        // SAFETY: `tel` is a valid, writable Telemetry for the duration of the call.
+        // GÜVENLİK: `tel`, çağrı süresince geçerli ve yazılabilir bir Telemetry'dir.
         unsafe { tc_tick_frame(0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 70.0, 1920, 1080, 10, &mut tel) };
         assert_eq!(tel.frame_epoch, 0);
     }
@@ -305,14 +305,14 @@ mod tests {
         let code = tc_init(3, 0, 2);
         assert_eq!(code, backend_code(BackendKind::Headless));
         let mut tel = Telemetry::default();
-        // SAFETY: `tel` is valid and writable.
+        // GÜVENLİK: `tel` geçerli ve yazılabilirdir.
         unsafe { tc_tick_frame(8.0, 8.0, 8.0, 8.0, 8.0, -8.0, 70.0, 1920, 1080, 64, &mut tel) };
         assert_eq!(tel.frame_epoch, 1);
         assert_eq!(tel.rhi_active_backend, backend_code(BackendKind::Headless));
         assert!(tel.worker_threads >= 1);
         assert!(tel.slab_committed_bytes > 0);
         tc_shutdown();
-        // SAFETY: as above.
+        // GÜVENLİK: yukarıdaki gibi.
         unsafe { tc_tick_frame(0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 70.0, 1, 1, 0, &mut tel) };
         assert_eq!(tel.frame_epoch, 1, "no frame runs after shutdown");
     }

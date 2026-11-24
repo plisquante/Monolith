@@ -1,5 +1,5 @@
-//! TouchCore native client core (Rust). The Android launcher loads this crate (`libtouchcore_native.a`, linked
-//! by `tools/build_touchcore_apk.py`). It was ported from the Zig core, which has been removed.
+//! TouchCore yerel istemci çekirdeği (Rust). Android başlatıcı bu crate'i yükler (`libtouchcore_native.a`,
+//! `tools/build_touchcore_apk.py` ile bağlanır). Kaldırılmış olan Zig çekirdeğinden taşındı.
 pub mod arena;
 pub mod cull;
 #[cfg(target_os = "android")]

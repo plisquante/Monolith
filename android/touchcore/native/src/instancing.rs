@@ -1,10 +1,10 @@
-//! GPU instancing batcher: collects non-block entities (display entities, mobs, players, dropped items, block
-//! entities, particles), culls them, sorts the survivors into draw runs and produces one instance buffer plus one
-//! indirect command per run. Port of `gpu_instancing.zig`, CPU side only.
+//! GPU örnekleme toplayıcısı: blok dışı varlıkları (ekran varlıkları, yaratıklar, oyuncular, düşen eşyalar, blok
+//! varlıkları, parçacıklar) toplar, eler, sağ kalanları çizim dizilerine sıralar ve dizi başına bir örnek tamponu artı bir
+//! dolaylı komut üretir. `gpu_instancing.zig`'in taşınmış hâli, yalnızca CPU tarafı.
 //!
-//! The Zig version pushed the result straight into an RHI device. Here the result is a `FrameDraw` value; the
-//! GPU back end (Vulkan or GL 3.3) consumes it. Keeping the batch construction free of GPU calls lets it be
-//! tested on any host.
+//! Zig sürümü sonucu doğrudan bir RHI aygıtına itiyordu. Burada sonuç bir `FrameDraw` değeridir; GPU
+//! arka ucu (Vulkan ya da GL 3.3) onu tüketir. Toplu iş kurulumunu GPU çağrılarından uzak tutmak, onun herhangi bir ana
+//! makinede test edilebilmesini sağlar.
 use std::collections::HashMap;
 
 use crate::cull::View;
@@ -33,20 +33,20 @@ pub enum Billboard {
     Center = 3,
 }
 
-/// 64-byte instance descriptor, the same layout for a Vulkan SSBO and four RGBA32F texels of a GL TBO.
+/// 64 baytlık örnek tanımlayıcısı; bir Vulkan SSBO'su ve bir GL TBO'nun dört RGBA32F texel'i için aynı yerleşim.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub struct GpuInstance {
     pub row0: [f32; 4],
     pub row1: [f32; 4],
     pub row2: [f32; 4],
-    /// packed normalized atlas cell (u0, v0, u1, v1), 8 bits each
+    /// paketlenmiş normalleştirilmiş atlas hücresi (u0, v0, u1, v1), her biri 8 bit
     pub uv_rect: u32,
-    /// RGB tint (24 bits) and block/sky light (8 bits)
+    /// RGB rengi (24 bit) ve blok/gökyüzü ışığı (8 bit)
     pub color_light: u32,
-    /// kind (4 bits) | billboard (2 bits, from bit 4) | hurt flash (bit 6) | custom
+    /// tür (4 bit) | billboard (2 bit, 4. bitten başlar) | hasar parıltısı (bit 6) | özel
     pub flags: u32,
-    /// low 16 bits: mesh id; high 16 bits: bounding radius * 256
+    /// alt 16 bit: ağ kimliği; üst 16 bit: sınırlayıcı yarıçap * 256
     pub mesh_and_radius: u32,
 }
 
@@ -78,19 +78,19 @@ impl GpuInstance {
         self.flags & 0xF
     }
 
-    /// Translucent kinds are drawn after every opaque one.
+    /// Yarı saydam türler her opak türden sonra çizilir.
     pub fn is_translucent(&self) -> bool {
         let k = self.kind_bits();
         k == EntityKind::Particle as u32 || k == EntityKind::TextDisplay as u32
     }
 
-    /// Sort key: opaque before translucent, then by mesh id.
+    /// Sıralama anahtarı: opak yarı saydamdan önce, sonra ağ kimliğine göre.
     pub fn run_key(&self) -> u32 {
         ((self.is_translucent() as u32) << 16) | self.mesh_id() as u32
     }
 }
 
-/// 32-byte particle state.
+/// 32 baytlık parçacık durumu.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
 pub struct GpuParticle {
@@ -112,7 +112,7 @@ pub struct MeshProto {
     pub vertex_offset: i32,
 }
 
-/// Matches `VkDrawIndexedIndirectCommand` and the GL `DrawElementsIndirectCommand` layout.
+/// `VkDrawIndexedIndirectCommand` ve GL `DrawElementsIndirectCommand` yerleşimiyle eşleşir.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct DrawIndexedIndirect {
@@ -129,14 +129,14 @@ pub struct InstancingStats {
     pub frustum_culled: usize,
     pub hiz_culled: usize,
     pub subpixel_culled: usize,
-    /// instances placed into a draw run
+    /// bir çizim dizisine yerleştirilen örnekler
     pub surviving_instances: usize,
-    /// instances whose mesh was never registered (never drawn, never counted as drawn)
+    /// ağı hiç kaydedilmemiş örnekler (hiç çizilmez, çizilmiş sayılmaz)
     pub unregistered_mesh_instances: usize,
     pub draw_batches_emitted: usize,
 }
 
-/// What the GPU back end has to upload and draw this frame.
+/// GPU arka ucunun bu karede yüklemesi ve çizmesi gerekenler.
 #[derive(Default, Debug, PartialEq)]
 pub struct FrameDraw {
     pub instances: Vec<GpuInstance>,
@@ -152,7 +152,7 @@ pub struct InstanceBatcher {
 }
 
 impl InstanceBatcher {
-    /// Clears the frame's entities and keeps their storage.
+    /// Karenin varlıklarını temizler ve depolamalarını korur.
     pub fn begin_frame(&mut self, reserve_instances: usize) {
         self.raw.clear();
         self.raw.reserve(reserve_instances);
@@ -203,12 +203,12 @@ impl InstanceBatcher {
         &self.stats
     }
 
-    /// The last flushed frame: instances in draw order, and one indirect command per run.
+    /// Son boşaltılan kare: çizim sırasında örnekler ve dizi başına bir dolaylı komut.
     pub fn frame(&self) -> &FrameDraw {
         &self.frame
     }
 
-    /// Culls (frustum, Hi-Z, screen area), sorts the survivors into runs and builds the frame's draw data.
+    /// Eler (frustum, Hi-Z, ekran alanı), sağ kalanları dizilere sıralar ve karenin çizim verisini kurar.
     pub fn flush(&mut self, view: &View, hiz: &HiZPyramid) {
         self.frame.instances.clear();
         self.frame.commands.clear();
@@ -253,7 +253,7 @@ impl InstanceBatcher {
             return;
         }
 
-        // Opaque runs first (grouped by mesh), translucent after, so blending composes over the finished opaque pass.
+        // Önce opak diziler (ağa göre gruplanmış), sonra yarı saydamlar; böylece karışım tamamlanmış opak geçişin üzerine biner.
         self.frame.instances.sort_unstable_by_key(GpuInstance::run_key);
 
         let instances = &self.frame.instances;
@@ -265,7 +265,7 @@ impl InstanceBatcher {
             while run_end < instances.len() && instances[run_end].run_key() == key {
                 run_end += 1;
             }
-            // every survivor has a registered mesh, so each run becomes one command
+            // her sağ kalanın kayıtlı bir ağı var, bu yüzden her dizi bir komut olur
             let proto = self.meshes[&mid];
             self.frame.commands.push(DrawIndexedIndirect {
                 index_count: proto.index_count,
@@ -301,7 +301,7 @@ mod tests {
         let vp = vp_from(cam, Vec3::new(0.0, 10.0, 0.0));
         let mut hiz = HiZPyramid::new();
         hiz.clear();
-        // an opaque wall right in front of the camera
+        // kameranın hemen önünde opak bir duvar
         hiz.rasterize_opaque_box(&vp, Vec3::new(-16.0, 0.0, 5.0), Vec3::new(16.0, 20.0, 10.0));
         hiz.build_mips();
 

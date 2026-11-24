@@ -1,7 +1,7 @@
-//! Render hardware interface: a command recorder with state deduplication, a per-frame staging ring, frame
-//! statistics, and a backend trait. Port of `rhi.zig` (device and recorder). Backends are plugged in through
-//! `Backend`. Only the headless backend exists here; asking for Vulkan or OpenGL 3.3 fails loudly until those
-//! backends are ported and verified on a device.
+//! Render donanım arayüzü: durum tekilleştirmeli bir komut kaydedici, kare başına bir hazırlama halkası, kare
+//! istatistikleri ve bir arka uç trait'i. `rhi.zig`'in (aygıt ve kaydedici) taşınmış hâli. Arka uçlar `Backend` aracılığıyla takılır.
+//! Burada yalnızca headless arka uç var; Vulkan ya da OpenGL 3.3 istemek, bu arka uçlar taşınıp bir cihazda
+//! doğrulanana kadar yüksek sesle başarısız olur.
 use crate::instancing::DrawIndexedIndirect;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,10 +14,10 @@ pub enum BackendKind {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PowerProfile {
-    /// vsync off where the platform allows
+    /// platformun izin verdiği yerde vsync kapalı
     MaxFps,
     Balanced,
-    /// vsync on, frame pacing, less idle GPU work
+    /// vsync açık, kare hızı ayarı, daha az boşta GPU işi
     EcoBattery,
 }
 
@@ -29,9 +29,9 @@ pub struct BufferHandle(pub u32);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RhiError {
-    /// the requested back end is not ported yet
+    /// istenen arka uç henüz taşınmadı
     UnsupportedBackend(BackendKind),
-    /// the staging ring cannot hold the upload this frame
+    /// hazırlama halkası bu karedeki yüklemeyi tutamaz
     OutOfStaging,
 }
 
@@ -45,7 +45,7 @@ pub struct FrameStats {
     pub staging_bytes_used: usize,
 }
 
-/// A range of fallback commands kept in the frame's storage (zero allocation per command).
+/// Karenin depolamasında tutulan geri düşüş komutları aralığı (komut başına sıfır tahsis).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FallbackRange {
     start: usize,
@@ -53,7 +53,7 @@ pub struct FallbackRange {
 }
 
 impl FallbackRange {
-    /// Positions of this range in the frame's fallback list passed to `Backend::execute`.
+    /// Bu aralığın, `Backend::execute`'a geçirilen karenin geri düşüş listesindeki konumları.
     pub fn range(&self) -> std::ops::Range<usize> {
         self.start..self.start + self.len
     }
@@ -66,12 +66,12 @@ pub enum Command {
     BindInstanceBuffer { binding: u32, buf: BufferHandle, offset_bytes: usize, size_bytes: usize, texel_stride: u32 },
     DrawIndexedInstanced { index_count: u32, instance_count: u32, first_index: u32, vertex_offset: i32, first_instance: u32 },
     DrawIndexedIndirectRange { indirect_buf: BufferHandle, offset_bytes: usize, draw_count: u32, stride: u32, fallback: FallbackRange },
-    /// Copies `len` bytes of the frame's staging ring, starting at the absolute ring offset `src_offset`, into `dst`
-    /// at `dst_offset`. Written by `RhiDevice::copy_to_buffer`.
+    /// Karenin hazırlama halkasının mutlak halka ofseti `src_offset`'ten başlayan `len` baytını, `dst_offset`'te `dst` içine
+    /// kopyalar. `RhiDevice::copy_to_buffer` tarafından yazılır.
     CopyStaging { src_offset: usize, len: usize, dst: BufferHandle, dst_offset: usize },
 }
 
-/// Where an upload landed in the staging ring for this frame.
+/// Bir yüklemenin bu kare için hazırlama halkasında nereye indiği.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StagingSlice {
     pub buffer: BufferHandle,
@@ -79,7 +79,7 @@ pub struct StagingSlice {
     pub len: usize,
 }
 
-/// Three frames of upload space: the frame being recorded and the two still in flight on the GPU.
+/// Üç karelik yükleme alanı: kaydedilmekte olan kare ve GPU'da hâlâ uçuşta olan iki kare.
 pub struct FrameRing {
     per_frame_bytes: usize,
     used: [usize; Self::FRAMES_IN_FLIGHT],
@@ -97,7 +97,7 @@ impl FrameRing {
         self.used[slot] = 0;
     }
 
-    /// Copies `bytes` into the slot's region at an aligned offset.
+    /// `bytes`'ı yuvanın bölgesine hizalı bir ofsette kopyalar.
     fn alloc(&mut self, slot: usize, bytes: &[u8], align: usize) -> Option<(usize, usize)> {
         let align = align.max(1);
         let base = slot * self.per_frame_bytes;
@@ -116,12 +116,12 @@ impl FrameRing {
     }
 }
 
-/// What a back end must do with a frame's commands.
+/// Bir arka ucun bir karenin komutlarıyla ne yapması gerektiği.
 pub trait Backend {
     fn execute(&mut self, commands: &[Command], fallback: &[DrawIndexedIndirect], ring: &FrameRing);
 }
 
-/// Consumes commands and draws nothing. Used for tests and for machines without a GPU.
+/// Komutları tüketir ve hiçbir şey çizmez. Testler ve GPU'suz makineler için kullanılır.
 #[derive(Default)]
 pub struct Headless;
 
@@ -145,7 +145,7 @@ pub struct RhiDevice {
 }
 
 impl RhiDevice {
-    /// `Auto` and `Headless` resolve to the headless device. Vulkan and OpenGL 3.3 are refused until ported.
+    /// `Auto` ve `Headless` headless aygıta çözülür. Vulkan ve OpenGL 3.3, taşınana kadar reddedilir.
     pub fn init(preferred: BackendKind, power: PowerProfile, staging_mb_per_frame: usize) -> Result<Self, RhiError> {
         match preferred {
             BackendKind::Auto | BackendKind::Headless => {}
@@ -196,14 +196,14 @@ impl RhiDevice {
         self.stats = FrameStats { frame_index: next, ..FrameStats::default() };
     }
 
-    /// Copies an upload into this frame's staging region.
+    /// Bir yüklemeyi bu karenin hazırlama bölgesine kopyalar.
     pub fn upload(&mut self, bytes: &[u8], align: usize) -> Result<StagingSlice, RhiError> {
         let (offset, len) = self.ring.alloc(self.frame_slot, bytes, align).ok_or(RhiError::OutOfStaging)?;
         self.stats.staging_bytes_used += bytes.len();
         Ok(StagingSlice { buffer: BufferHandle(1), offset, len })
     }
 
-    /// Records a command. Rebinding the same pipeline or index buffer is dropped and counted.
+    /// Bir komutu kaydeder. Aynı boru hattını ya da indeks tamponunu yeniden bağlamak atılır ve sayılır.
     pub fn record(&mut self, cmd: Command) {
         match cmd {
             Command::BindPipeline(p) => {
@@ -225,7 +225,7 @@ impl RhiDevice {
         self.commands.push(cmd);
     }
 
-    /// Records an indirect range and keeps its CPU-side fallback commands for back ends without multi-draw.
+    /// Dolaylı bir aralığı kaydeder ve çoklu çizim olmayan arka uçlar için CPU tarafı geri düşüş komutlarını tutar.
     pub fn record_indirect(&mut self, indirect_buf: BufferHandle, offset_bytes: usize, cmds: &[DrawIndexedIndirect]) {
         let start = self.fallback.len();
         self.fallback.extend_from_slice(cmds);
@@ -239,7 +239,7 @@ impl RhiDevice {
         });
     }
 
-    /// Copies a staging upload into a device buffer. The copy runs in the back end, in command order.
+    /// Bir hazırlama yüklemesini aygıt tamponuna kopyalar. Kopya arka uçta, komut sırasıyla çalışır.
     pub fn copy_to_buffer(&mut self, src: StagingSlice, dst: BufferHandle, dst_offset: usize) {
         self.record(Command::CopyStaging { src_offset: src.offset, len: src.len, dst, dst_offset });
     }
@@ -248,7 +248,7 @@ impl RhiDevice {
         &self.fallback[r.start..r.start + r.len]
     }
 
-    /// Accounts the frame and hands it to the back end.
+    /// Kareyi hesaba katar ve arka uca verir.
     pub fn submit_frame(&mut self, backend: &mut dyn Backend) {
         let multi_draw = false; // no back end reports multi-draw indirect yet
         for cmd in &self.commands {
@@ -280,7 +280,7 @@ impl RhiDevice {
         &self.commands
     }
 
-    /// Fallback commands of an indirect range recorded this frame.
+    /// Bu karede kaydedilen dolaylı bir aralığın geri düşüş komutları.
     pub fn fallback_commands(&self, range: FallbackRange) -> &[DrawIndexedIndirect] {
         self.fallback_of(range)
     }

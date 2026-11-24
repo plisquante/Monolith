@@ -1,14 +1,14 @@
-//! Three-stage section culling: frustum, then portal BFS with Hi-Z occlusion, then screen-area LOD. Port of
-//! `cullAndScheduleWorld` in `world_render.zig`. The Zig version carved its scratch space out of an arena each
-//! frame; here `CullScratch` owns the same buffers and keeps their capacity, so a steady-state frame allocates
-//! nothing.
+//! Üç aşamalı bölüm elemesi: frustum, sonra Hi-Z örtmeli portal BFS, sonra ekran alanı LOD'u. `world_render.zig` içindeki
+//! `cullAndScheduleWorld`'in taşınmış hâli. Zig sürümü ara belleğini her karede bir arenadan oyuyordu; burada
+//! `CullScratch` aynı tamponlara sahiptir ve kapasitelerini korur, bu yüzden kararlı durumdaki bir kare
+//! hiçbir şey ayırmaz.
 use std::collections::HashMap;
 
 use crate::world::{project_aabb_ndc, Face, Frustum6, HiZPyramid, Mat4, SectionPortalMask, Vec3, SECTION_DIM};
 
 pub const ALL_FACES: u8 = 0b11_1111;
 
-/// Immutable snapshot of one 16^3 section, taken from the level without blocking the game.
+/// Bir 16^3 bölümünün, oyunu bloke etmeden seviyeden alınmış değişmez anlık görüntüsü.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SectionSnapshot {
     pub sx: i32,
@@ -52,11 +52,11 @@ impl SectionSnapshot {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Lod {
-    /// near: full geometry
+    /// yakın: tam geometri
     Full,
-    /// mid: merged quads
+    /// orta: birleştirilmiş dörtgenler
     Merged,
-    /// far: coarse silhouette
+    /// uzak: kaba siluet
     Coarse,
 }
 
@@ -91,7 +91,7 @@ struct QueueItem {
     enter_face_bits: u8,
 }
 
-/// Buffers reused across frames. Their capacity survives `cull_and_schedule_world` calls.
+/// Kareler arasında yeniden kullanılan tamponlar. Kapasiteleri `cull_and_schedule_world` çağrıları boyunca korunur.
 #[derive(Default)]
 pub struct CullScratch {
     coord_map: HashMap<Coord, u32>,
@@ -106,17 +106,17 @@ fn section_of(camera: f32) -> i32 {
     (camera / SECTION_DIM as f32).floor() as i32
 }
 
-/// What the camera sees this frame.
+/// Kameranın bu karede gördüğü.
 #[derive(Clone, Copy, Debug)]
 pub struct View {
     pub camera: Vec3,
     pub view_proj: Mat4,
     pub viewport: (u32, u32),
-    /// sections covering fewer pixels than this are dropped
+    /// bundan az piksel kaplayan bölümler atılır
     pub min_pixel_area: f32,
 }
 
-/// Runs the full pipeline. The returned slice lives in `scratch` and is sorted front to back.
+/// Tam boru hattını çalıştırır. Dönen dilim `scratch` içinde yaşar ve önden arkaya sıralıdır.
 pub fn cull_and_schedule_world<'a>(
     scratch: &'a mut CullScratch,
     sections: &[SectionSnapshot],
@@ -148,7 +148,7 @@ pub fn cull_and_schedule_world<'a>(
     scratch.bfs.reserve(n * 7);
     scratch.visible.reserve(n);
 
-    // Step 1: seed the Hi-Z pyramid from opaque occluders inside the frustum.
+    // Adım 1: Hi-Z piramidini frustum içindeki opak örtücülerden tohumla.
     hiz.clear();
     for s in sections.iter().filter(|s| s.fully_opaque_occluder) {
         let (mn, mx) = (s.world_min(), s.world_max());
@@ -158,7 +158,7 @@ pub fn cull_and_schedule_world<'a>(
     }
     hiz.build_mips();
 
-    // Step 2: portal traversal. A section is queued once per entry face: the exits it opens depend on that face.
+    // Adım 2: portal gezintisi. Bir bölüm her giriş yüzü için bir kez kuyruğa alınır: açtığı çıkışlar o yüze bağlıdır.
     let (cam_sx, cam_sy, cam_sz) = (section_of(camera.x), section_of(camera.y), section_of(camera.z));
     match scratch.coord_map.get(&Coord { x: cam_sx, y: cam_sy, z: cam_sz }).copied() {
         Some(start) => {
@@ -167,7 +167,7 @@ pub fn cull_and_schedule_world<'a>(
             scratch.bfs.push(QueueItem { idx: start, enter_face_bits: ALL_FACES });
         }
         None => {
-            // camera outside the snapshot (high orbit): seed every section in view
+            // kamera anlık görüntünün dışında (yüksek yörünge): görüştaki her bölümü tohumla
             for (idx, s) in sections.iter().enumerate() {
                 if frustum.intersects_aabb(s.world_min(), s.world_max()) {
                     scratch.visited[idx] = true;
@@ -187,7 +187,7 @@ pub fn cull_and_schedule_world<'a>(
         let s = sections[i];
         let (mn, mx) = (s.world_min(), s.world_max());
 
-        // Stage A: frustum.
+        // Aşama A: frustum.
         if !frustum.intersects_aabb(mn, mx) {
             if !scratch.emitted[i] {
                 scratch.emitted[i] = true;
@@ -196,7 +196,7 @@ pub fn cull_and_schedule_world<'a>(
             continue;
         }
 
-        // Propagate through every face reachable from the entry faces.
+        // Giriş yüzlerinden erişilebilen her yüz boyunca yay.
         for out_face in Face::ALL {
             let can_reach = item.enter_face_bits == ALL_FACES
                 || Face::ALL.iter().any(|&in_face| {
@@ -210,7 +210,7 @@ pub fn cull_and_schedule_world<'a>(
                 y: s.sy + out_dy(out_face),
                 z: s.sz + out_dz(out_face),
             };
-            // Only outward moves relative to the camera section: stops the BFS from bouncing back and forth.
+            // Yalnızca kamera bölümüne göre dışa doğru hareketler: BFS'in ileri geri sekmesini engeller.
             let dir_dot = (nkey.x - s.sx) * (s.sx - cam_sx)
                 + (nkey.y - s.sy) * (s.sy - cam_sy)
                 + (nkey.z - s.sz) * (s.sz - cam_sz);
@@ -228,7 +228,7 @@ pub fn cull_and_schedule_world<'a>(
             }
         }
 
-        // Visibility tests do not depend on the entry face: run them once per section.
+        // Görünürlük testleri giriş yüzüne bağlı değildir: bölüm başına bir kez çalıştır.
         if scratch.emitted[i] {
             continue;
         }
@@ -237,7 +237,7 @@ pub fn cull_and_schedule_world<'a>(
             continue;
         }
 
-        // Stages B and C: Hi-Z occlusion, then screen coverage and LOD.
+        // Aşama B ve C: Hi-Z örtme, sonra ekran kapsamı ve LOD.
         let c = [mn.x + 8.0 - camera.x, mn.y + 8.0 - camera.y, mn.z + 8.0 - camera.z];
         let dist_sq = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
         let mut area_px = vw * vh;
@@ -275,7 +275,7 @@ pub fn cull_and_schedule_world<'a>(
         scratch.visible.push(VisibleSection { snapshot_idx: item.idx, dist_sq, screen_area_px: area_px, lod });
     }
 
-    // Sections the traversal never reached: behind walls and underground, or outside the frustum.
+    // Gezintinin hiç ulaşmadığı bölümler: duvarların arkasında ve yeraltında ya da frustumun dışında.
     let mut unvisited_in_frustum = 0usize;
     for (i, s) in sections.iter().enumerate() {
         if !scratch.visited[i] {
@@ -289,7 +289,7 @@ pub fn cull_and_schedule_world<'a>(
     out.portal_culled = unvisited_in_frustum;
     out.visible_sections = scratch.visible.len();
 
-    // Front to back: early-Z rejection on the GPU.
+    // Önden arkaya: GPU'da erken-Z reddi.
     scratch
         .visible
         .sort_unstable_by(|a, b| a.dist_sq.partial_cmp(&b.dist_sq).unwrap_or(std::cmp::Ordering::Equal));
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn portal_traversal_keeps_every_entry_face() {
-        // T is reached first from the south, later from the west; only west-east passes. U is seen only via west.
+        // T'ye önce güneyden, sonra batıdan ulaşılır; yalnızca batı-doğu geçer. U yalnızca batı üzerinden görülür.
         let only_we = {
             let mut m = SectionPortalMask { bits: 0 };
             m.set_bidirectional(Face::NegX, Face::PosX);

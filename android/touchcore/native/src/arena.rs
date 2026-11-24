@@ -1,12 +1,12 @@
-//! Bump allocator over page-aligned chunks with O(1) scoped rewind. Port of `ArenaAllocator` in `mem_pool.zig`.
-//! Nothing here is traced or collected: memory is valid until the arena is rewound, reset or dropped.
-//! Chunks that end up empty are kept warm (up to `max_retained`) so the next frame does not hit the OS.
+//! Sayfa hizalı parçalar üzerinde, O(1) kapsamlı geri sarmalı bump ayırıcı. `mem_pool.zig` içindeki `ArenaAllocator`'ın taşınmış hâli.
+//! Burada hiçbir şey izlenmez ya da toplanmaz: bellek, arena geri sarılana, sıfırlanana ya da bırakılana kadar geçerlidir.
+//! Boş kalan parçalar (en fazla `max_retained` kadar) sıcak tutulur; böylece sonraki kare işletim sistemine gitmez.
 use std::alloc::{alloc, dealloc, Layout};
 use std::ptr::NonNull;
 
 pub const DEFAULT_CHUNK_SIZE: usize = 256 * 1024;
 const PAGE: usize = 4096;
-/// Debug builds overwrite rewound memory so a dangling pointer into a rewound scope fails loudly.
+/// Debug derlemeleri geri sarılan belleğin üzerine yazar; böylece geri sarılmış bir kapsama asılı kalan işaretçi yüksek sesle başarısız olur.
 const POISON: u8 = 0xAA;
 
 struct Chunk {
@@ -23,7 +23,7 @@ impl Chunk {
 
     fn poison(&mut self, from: usize, to: usize) {
         if cfg!(debug_assertions) && to > from {
-            // SAFETY: `from..to` lies inside this chunk's allocation (`to <= used <= cap`).
+            // GÜVENLİK: `from..to`, bu parçanın tahsisinin içinde yer alır (`to <= used <= cap`).
             unsafe { std::ptr::write_bytes(self.base.as_ptr().add(from), POISON, to - from) };
         }
     }
@@ -31,12 +31,12 @@ impl Chunk {
 
 impl Drop for Chunk {
     fn drop(&mut self) {
-        // SAFETY: allocated in `Arena::alloc_slow` with exactly this layout.
+        // GÜVENLİK: `Arena::alloc_slow` içinde tam olarak bu düzenle tahsis edildi.
         unsafe { dealloc(self.base.as_ptr(), Chunk::layout(self.cap)) };
     }
 }
 
-/// A rewind point. Valid only while the arena is not reset past it (scope discipline, as in the Zig original).
+/// Bir geri sarma noktası. Yalnızca arena onun ötesine sıfırlanmadığı sürece geçerlidir (kapsam disiplini, Zig orijinalindeki gibi).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Mark {
     top: Option<u64>,
@@ -45,9 +45,9 @@ pub struct Mark {
 }
 
 pub struct Arena {
-    /// Chunks in use; the last one is the current bump chunk.
+    /// Kullanımdaki parçalar; sonuncusu mevcut bump parçasıdır.
     chain: Vec<Chunk>,
-    /// Empty chunks of the standard size, kept for reuse.
+    /// Standart boyutlu boş parçalar, yeniden kullanım için tutulur.
     free: Vec<Chunk>,
     next_id: u64,
     chunk_size: usize,
@@ -56,7 +56,7 @@ pub struct Arena {
     committed_bytes: usize,
 }
 
-// SAFETY: an arena owns its memory exclusively; handing it to another thread moves that ownership.
+// GÜVENLİK: bir arena belleğinin tek sahibidir; onu başka bir iş parçacığına vermek sahipliği taşır.
 unsafe impl Send for Arena {}
 
 impl Arena {
@@ -80,7 +80,7 @@ impl Arena {
         self.committed_bytes
     }
 
-    /// Allocates `size` bytes aligned to `align` (at most a page). `None` if the request cannot be honoured.
+    /// `align` hizalamasıyla `size` bayt ayırır (en fazla bir sayfa). İstek karşılanamazsa `None`.
     pub fn alloc(&mut self, size: usize, align: usize) -> Option<NonNull<u8>> {
         let a = align.max(8);
         if a > PAGE {
@@ -89,7 +89,7 @@ impl Arena {
         if let Some(ch) = self.chain.last_mut() {
             let off = (ch.used + a - 1) & !(a - 1);
             if off <= ch.cap && size <= ch.cap - off {
-                // SAFETY: `off + size <= cap`, so the pointer stays inside the chunk.
+                // GÜVENLİK: `off + size <= cap`, bu yüzden işaretçi parçanın içinde kalır.
                 let p = unsafe { NonNull::new_unchecked(ch.base.as_ptr().add(off)) };
                 ch.used = off + size;
                 self.total_allocated += size;
@@ -101,7 +101,7 @@ impl Arena {
 
     pub fn alloc_zeroed(&mut self, size: usize, align: usize) -> Option<NonNull<u8>> {
         let p = self.alloc(size, align)?;
-        // SAFETY: `alloc` returned `size` writable bytes at `p`.
+        // GÜVENLİK: `alloc`, `p` adresinde `size` yazılabilir bayt döndürdü.
         unsafe { std::ptr::write_bytes(p.as_ptr(), 0, size) };
         Some(p)
     }
@@ -120,7 +120,7 @@ impl Arena {
             }
             None => {
                 let layout = Chunk::layout(need);
-                // SAFETY: `layout` has non-zero size (need >= PAGE).
+                // GÜVENLİK: `layout` sıfırdan farklı boyuta sahip (need >= PAGE).
                 let raw = unsafe { alloc(layout) };
                 let base = NonNull::new(raw)?;
                 self.committed_bytes += need;
@@ -129,8 +129,8 @@ impl Arena {
                 Chunk { id, base, cap: need, used: 0 }
             }
         };
-        // a fresh or recycled chunk starts at offset 0, which is aligned for every request accepted here
-        // SAFETY: `need >= size`, so the first `size` bytes are inside the chunk.
+        // taze ya da geri dönüştürülmüş bir parça 0 ofsetinde başlar; bu, burada kabul edilen her istek için hizalıdır
+        // GÜVENLİK: `need >= size`, bu yüzden ilk `size` bayt parçanın içindedir.
         let p = unsafe { NonNull::new_unchecked(chunk.base.as_ptr()) };
         chunk.used = size;
         self.total_allocated += size;
@@ -143,7 +143,7 @@ impl Arena {
         Mark { top: top.map(|c| c.id), used: top.map_or(0, |c| c.used), total: self.total_allocated }
     }
 
-    /// Rewinds to `m`, recycling every chunk opened after it.
+    /// `m`'ye geri sarar; ondan sonra açılan her parçayı geri dönüştürür.
     pub fn restore(&mut self, m: Mark) {
         while self.chain.last().map(|c| c.id) != m.top {
             match self.chain.pop() {
@@ -161,8 +161,8 @@ impl Arena {
         self.total_allocated = m.total;
     }
 
-    /// Rewinds everything in O(1) time per chunk, keeping one base chunk warm for the next frame. An oversized
-    /// base chunk (made for one large request) is released so it cannot pin memory forever.
+    /// Her parça için O(1) sürede her şeyi geri sarar; bir temel parçayı sonraki kare için sıcak tutar. Aşırı büyük
+    /// bir temel parça (tek bir büyük istek için yapılmış) serbest bırakılır; böylece belleği sonsuza dek sabitleyemez.
     pub fn reset_retaining_capacity(&mut self) {
         if self.chain.is_empty() {
             self.total_allocated = 0;
@@ -229,7 +229,7 @@ mod tests {
         let committed = a.committed_bytes();
         a.restore(m);
         assert_eq!(a.total_allocated(), 100);
-        // the chunks opened after the mark went to the free list, so a new burst commits nothing
+        // işaretten sonra açılan parçalar serbest listeye gitti, bu yüzden yeni bir dalga hiçbir şey ayırmaz (commit etmez)
         for _ in 0..10 {
             a.alloc(1000, 8).unwrap();
         }

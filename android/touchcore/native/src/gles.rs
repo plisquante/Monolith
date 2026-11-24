@@ -1,15 +1,15 @@
-//! OpenGL ES 3.0 back end for the render hardware interface (Android only).
+//! Render donanım arayüzü (RHI) için OpenGL ES 3.0 arka ucu (yalnızca Android).
 //!
-//! It implements `rhi::Backend` on top of `libGLESv3` (provided by the NDK). Device buffers and pipelines are created
-//! by the caller and registered here by handle; this back end only records GL state and issues draws in command order.
+//! `libGLESv3` (NDK tarafından sağlanır) üzerinde `rhi::Backend`'i gerçekleştirir. Aygıt tamponları ve boru hatları
+//! çağıran tarafından oluşturulur ve burada tutamaçla kaydedilir; bu arka uç yalnızca GL durumunu kaydeder ve çizimleri komut sırasıyla yapar.
 //!
-//! What GLES 3.0 cannot do is refused loudly (a panic that names the missing feature), never skipped:
-//! * base vertex and base instance need GLES 3.2 (`glDrawElementsInstancedBaseVertexBaseInstance`);
-//! * multi-draw indirect needs GLES 3.1, so an indirect range is drawn command by command from the CPU-side fallback list.
+//! GLES 3.0'ın yapamadığı şey yüksek sesle reddedilir (eksik özelliği adlandıran bir panic), asla atlanmaz:
+//! * temel tepe (base vertex) ve temel örnek (base instance) GLES 3.2 gerektirir (`glDrawElementsInstancedBaseVertexBaseInstance`);
+//! * çoklu dolaylı çizim GLES 3.1 gerektirir, bu yüzden dolaylı bir aralık CPU tarafı geri düşüş listesinden komut komut çizilir.
 //!
-//! Status: written and not yet built or run. It must compile for `aarch64-linux-android` and be checked on a device
-//! before it is used. The per-instance attribute layout (`BindInstanceBuffer`) is an assumption (four float components
-//! at `texel_stride` bytes) that the shader side has to confirm.
+//! Durum: yazıldı ama henüz derlenmedi ya da çalıştırılmadı. `aarch64-linux-android` için derlenmeli ve kullanılmadan önce
+//! bir cihazda denetlenmelidir. Örnek başına öznitelik yerleşimi (`BindInstanceBuffer`) bir varsayımdır (`texel_stride` baytta
+//! dört float bileşeni); gölgelendirici tarafının bunu doğrulaması gerekir.
 #![cfg(target_os = "android")]
 
 use crate::instancing::DrawIndexedIndirect;
@@ -50,8 +50,8 @@ unsafe extern "C" {
     fn glDrawElementsInstanced(mode: GLenum, count: GLsizei, ty: GLenum, indices: *const c_void, instance_count: GLsizei);
 }
 
-/// GL state for one render thread. Create it on the thread that owns the EGL context, and call `new` only when that
-/// context is current (it creates the vertex array object that every attribute call needs).
+/// Bir çizim iş parçacığının GL durumu. EGL bağlamına sahip iş parçacığında oluşturun ve `new`'i yalnızca o
+/// bağlam geçerliyken çağırın (her öznitelik çağrısının ihtiyaç duyduğu köşe dizisi nesnesini oluşturur).
 pub struct GlesBackend {
     vao: GLuint,
     buffers: HashMap<u32, GLuint>,
@@ -69,7 +69,7 @@ impl GlesBackend {
         GlesBackend { vao, buffers: HashMap::new(), programs: HashMap::new(), index_32: true }
     }
 
-    /// Creates the GL buffer behind a device buffer handle. Call once per handle, before the frame that uses it.
+    /// Bir aygıt tamponu tutamacının arkasındaki GL tamponunu oluşturur. Tutamaç başına bir kez, onu kullanan kareden önce çağırın.
     pub fn create_buffer(&mut self, handle: BufferHandle, size_bytes: usize) {
         let mut id: GLuint = 0;
         unsafe {
@@ -83,12 +83,12 @@ impl GlesBackend {
         }
     }
 
-    /// Maps a device pipeline handle to a linked GL program. The program is owned by the caller.
+    /// Bir aygıt boru hattı tutamacını bağlanmış bir GL programına eşler. Program çağıranın sahipliğindedir.
     pub fn register_pipeline(&mut self, handle: PipelineHandle, program: GLuint) {
         self.programs.insert(handle.0, program);
     }
 
-    /// The VAO this back end binds for all attribute and element state.
+    /// Bu arka ucun tüm öznitelik ve eleman durumu için bağladığı VAO.
     pub fn vertex_array(&self) -> GLuint {
         self.vao
     }

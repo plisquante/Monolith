@@ -1,6 +1,6 @@
-//! Worker pool for parallel chunk meshing, culling and asset decode. Workers park on a condition variable
-//! when idle. Tasks are plain function pointers with an opaque context, so submitting one allocates nothing:
-//! the queue is sized once at `start`.
+//! Paralel yonga ağı oluşturma, eleme ve asset çözme için işçi havuzu. İşçiler boştayken bir koşul değişkeninde park eder.
+//! Görevler, opak bir bağlamla düz fonksiyon işaretçileridir; bu yüzden birini göndermek hiçbir şey ayırmaz:
+//! kuyruk `start` sırasında bir kez boyutlandırılır.
 use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::io;
@@ -8,14 +8,14 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 
-/// Task body: `ctx` is the caller's context, `arg` the slice index of a batch.
+/// Görev gövdesi: `ctx` çağıranın bağlamı, `arg` bir toplu işin dilim indeksidir.
 pub type TaskFn = unsafe fn(ctx: *mut c_void, arg: usize);
 
 pub const QUEUE_CAP: usize = 4096;
 const MAX_WORKERS: usize = 16;
 const WORKER_STACK: usize = 512 * 1024;
 
-/// Completion fence: `wait` returns once every task that was counted into it has called `done`.
+/// Tamamlanma bariyeri: `wait`, ona sayılmış her görev `done` çağırdığında döner.
 pub struct WaitGroup {
     pending: AtomicUsize,
     lock: Mutex<()>,
@@ -63,7 +63,7 @@ struct Task {
     wg: *const WaitGroup,
 }
 
-// The pointers are caller-owned; `submit` and `dispatch_batch` require them to stay valid until the task ran.
+// İşaretçiler çağıranın sahipliğindedir; `submit` ve `dispatch_batch`, görev çalışana kadar onların geçerli kalmasını gerektirir.
 unsafe impl Send for Task {}
 
 struct Queue {
@@ -94,7 +94,7 @@ impl WorkerPool {
         }
     }
 
-    /// Starts workers. `requested == 0` picks one less than the CPU count, at most 8.
+    /// İşçileri başlatır. `requested == 0` CPU sayısından bir eksiği seçer, en fazla 8.
     pub fn start(&mut self, requested: usize) -> io::Result<()> {
         let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
         let n = if requested == 0 {
@@ -115,7 +115,7 @@ impl WorkerPool {
         Ok(())
     }
 
-    /// Stops accepting work, runs what is queued, and joins every worker.
+    /// İş kabul etmeyi bırakır, kuyruktakileri çalıştırır ve her işçiyi birleştirir (join).
     pub fn stop(&mut self) {
         {
             let mut q = self.shared.queue.lock().unwrap_or_else(|e| e.into_inner());
@@ -135,10 +135,10 @@ impl WorkerPool {
         self.shared.completed.load(Ordering::Relaxed)
     }
 
-    /// Submits one task. When the queue is full, or there are no workers, the task runs on the caller.
+    /// Bir görev gönderir. Kuyruk doluysa ya da işçi yoksa görev çağıranda çalışır.
     ///
     /// # Safety
-    /// `ctx` and `wg` (if given) must stay valid until the task has run.
+    /// `ctx` ve `wg` (verilmişse), görev çalışana kadar geçerli kalmalıdır.
     pub unsafe fn submit(&self, func: TaskFn, ctx: *mut c_void, arg: usize, wg: Option<&WaitGroup>) {
         if let Some(w) = wg {
             w.add(1);
@@ -164,11 +164,11 @@ impl WorkerPool {
         }
     }
 
-    /// Submits `count` tasks `func(ctx, 0..count)` under one lock, then wakes the workers. Whatever does not fit
-    /// in the queue runs on the caller.
+    /// `func(ctx, 0..count)` görevlerinin `count` tanesini tek bir kilit altında gönderir, sonra işçileri uyandırır. Kuyruğa sığmayan
+    /// her şey çağıranda çalışır.
     ///
     /// # Safety
-    /// `ctx` must stay valid until `wg.wait()` returns.
+    /// `ctx`, `wg.wait()` dönene kadar geçerli kalmalıdır.
     pub unsafe fn dispatch_batch(&self, func: TaskFn, ctx: *mut c_void, count: usize, wg: &WaitGroup) {
         if count == 0 {
             return;
@@ -221,11 +221,11 @@ fn worker_main(shared: &Shared) {
                 None => return, // stopping and drained
             }
         };
-        // SAFETY: the submitter keeps `ctx` and `wg` alive until the task has run (see `submit`).
+        // GÜVENLİK: gönderen, görev çalışana kadar `ctx` ve `wg`'yi canlı tutar (bkz. `submit`).
         unsafe { (task.func)(task.ctx, task.arg) };
         shared.completed.fetch_add(1, Ordering::Relaxed);
         if !task.wg.is_null() {
-            // SAFETY: as above, the fence outlives the task.
+            // GÜVENLİK: yukarıdaki gibi, bariyer görevden uzun yaşar.
             unsafe { (*task.wg).done() };
         }
     }
