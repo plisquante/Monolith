@@ -21,8 +21,12 @@ Log: the run log has three error lines, all network related: Mojang user-propert
 (`Couldn't connect to realms`, one PKIX error because the sandbox proxy certificate is not in the game's trust
 store). No exception or panic was logged.
 
-Concurrent GC (`MONO_GC_CONCURRENT=1`), one boot: title screen reached, process still running at 120 s, no
+Concurrent GC (`MONO_GC_CONCURRENT=1`), first boot: title screen reached, process still running at 120 s, no
 ClassCastException, panic or fatal line in the log. The same three network-only error lines as the plain run.
+
+Concurrent GC, second boot, same script: the saved world loaded with the same view, walking advanced the tutorial to
+"Look around", save and quit returned to the title. No crash, panic or fatal line; the same three network-only errors.
+Two runs out of two in concurrent mode; the 60 min leak soak is still required before it can be the default.
 
 ## Android native core (build and link, no device)
 
@@ -34,5 +38,23 @@ ClassCastException, panic or fatal line in the log. The same three network-only 
 
 Not covered: running the engine on a device or emulator, the GPU back ends (`rhi.rs` returns `UnsupportedBackend` for
 Vulkan and GL 3.3), the Minecraft engine library (`libminecraft_mono.so`) inside the APK.
+
+## Leak gate, 60 minutes standing still (collector on, plain mode)
+
+Run: `tools/leak_soak.sh /home/user/mc_build --minutes 60` (saved world, no movement), then
+`tools/leak_budget.py soak-prof.json --warmup-s 1800 --budget-mb-per-min 1`.
+
+| Measure | Result |
+|---|---|
+| Game still running after 60 min, no crash report | yes |
+| Collections, total / after 1800 s warm-up | 111 / 42 |
+| Live after first collection / last | 7.9 MiB / 593.5 MiB |
+| Live growth after warm-up (least squares) | -0.054 MiB/min, budget 1.00, within budget, tool exit 0 |
+| Pause, longest / mean | 1473 ms / 1045 ms |
+
+What this shows: after the warm-up the live managed heap is flat, so this gate passes as written. What it does not
+show: the heap grew from 7.9 to 593.5 MiB over the whole run, the warm-up window hides that, and the pauses are about
+1 s, far above the < 1 ms target in `GC_PLAN.md`. The run used the tracing collector, not the collector-off mode, so it
+says nothing yet about removing the collector. One pass only.
 
 Not covered: multiplayer, Realms, audio output, a second session, long play, repeated boots, FPS and memory figures.

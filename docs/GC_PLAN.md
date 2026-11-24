@@ -26,6 +26,9 @@ Targets, not results. Every row gets a measuring tool in phase 0 and is checked 
 * Done: frame (stack) allocation of non-escaping objects, scope-bound iterator recycling, DataFixer patch (live heap -61 %),
   inliner + iteration-local escape analysis, `tickChunk` patch, allocation profiler with steady-state diff.
 * Not done: any incremental or concurrent collection, any write barrier, owned (manually released) objects.
+* Leak gate, first pass (collector on): 60 min standing still, slope after 1800 s warm-up -0.054 MiB/min against the
+  1 MiB/min budget, passes as written. Heap grew from 7.9 to 593.5 MiB over the whole run, longest pause 1473 ms.
+  Details in `docs/VERIFICATION.md`.
 * Phase 2 evidence (test harness, not the game): `tests/run_tests.py GcStress Oop Threads` passes with
   `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`, and `GcStress Oop Threads Lambdas Strings Collections1`
   passes with the same settings plus `MONO_GC_CONCURRENT=1`. These runs exercise the tracing collector and the
