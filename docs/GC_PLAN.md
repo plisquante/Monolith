@@ -26,6 +26,8 @@ Targets, not results. Every row gets a measuring tool in phase 0 and is checked 
 * Done: frame (stack) allocation of non-escaping objects, scope-bound iterator recycling, DataFixer patch (live heap -61 %),
   inliner + iteration-local escape analysis, `tickChunk` patch, allocation profiler with steady-state diff.
 * Not done: any incremental or concurrent collection, any write barrier, owned (manually released) objects.
+* `MONO_GC=off` (phase 0 switch): done. Automatic collections never run; `System.gc()` still collects. Tests pass with it
+  (`GcStress Oop Threads`). Not yet measured in the game: that needs a Minecraft rebuild and a 60 min soak.
 * Leak gate, first pass (collector on): 60 min standing still, slope after 1800 s warm-up -0.054 MiB/min against the
   1 MiB/min budget, passes as written. Heap grew from 7.9 to 593.5 MiB over the whole run, longest pause 1473 ms.
   Details in `docs/VERIFICATION.md`.

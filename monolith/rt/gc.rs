@@ -784,6 +784,8 @@ struct Knobs {
     poison: bool,
     concurrent: bool,
     recycle: bool,
+    /// MONO_GC=off: no automatic collection (measures what the heap does with the collector disabled).
+    gc_off: bool,
 }
 
 fn knobs() -> &'static Knobs {
@@ -798,6 +800,7 @@ fn knobs() -> &'static Knobs {
         poison: std::env::var_os("MONO_GC_POISON").is_some_and(|v| !v.is_empty() && v != "0"),
         concurrent: std::env::var_os("MONO_GC_CONCURRENT").is_some(),
         recycle: std::env::var("MONO_RECYCLE").map_or(true, |v| v != "0"),
+        gc_off: std::env::var("MONO_GC").is_ok_and(|v| v == "off"),
     })
 }
 
@@ -881,6 +884,9 @@ fn new_obj_bits() -> u32 {
 }
 
 pub fn collect() {
+    if knobs().gc_off {
+        return; // MONO_GC=off: automatic collections never run; System.gc() still does (collect_explicit)
+    }
     if G.cycle.load(Ordering::Acquire) && !G.finishing.load(Ordering::Acquire) {
         return; // a cycle is running and finishes itself
     }

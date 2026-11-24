@@ -57,4 +57,9 @@ show: the heap grew from 7.9 to 593.5 MiB over the whole run, the warm-up window
 1 s, far above the < 1 ms target in `GC_PLAN.md`. The run used the tracing collector, not the collector-off mode, so it
 says nothing yet about removing the collector. One pass only.
 
+## Collector-off switch (`MONO_GC=off`), test programs only
+
+`tests/run_tests.py GcStress Oop Threads` passes with `MONO_GC=off`. The game has not been run this way: the
+Minecraft binary in the build directory predates the switch, and a rebuild plus a 60 min soak are still needed.
+
 Not covered: multiplayer, Realms, audio output, a second session, long play, repeated boots, FPS and memory figures.
