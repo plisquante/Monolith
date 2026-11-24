@@ -19,7 +19,8 @@ The first target is Minecraft Java Edition 26.3 (client).
 | Sound | Linux ALSA (`libasound`, loaded at run time), Windows WASAPI, macOS AudioQueue; silent fallback when no device |
 | Windows, macOS | window (Win32+WGL, AppKit+NSOpenGLContext), input and sound back ends are written; CI runs the back-end smoke test on both and a full game boot (`.github/workflows/game.yml`). Not yet tested on real hardware |
 | Android | a launcher APK exists; the native engine has not been tested on a device |
-| Java class library overlays and JNA/Netty emulation | still in use; being replaced |
+| Java class library overlays and JNA/Netty emulation | still in use; being replaced. Today: 243 Java files in `runtime/java_nolwjgl` and 56 in `classlib` ([`docs/WS7_ENVANTER_TR.md`](docs/WS7_ENVANTER_TR.md)), 259 JNI/JNA emulation natives ([`docs/JNI_ENVANTER_TR.md`](docs/JNI_ENVANTER_TR.md)); `MONO_COUNT_NATIVES=1` counts their calls at run time (no measurement of a real game yet) |
+| Continuous integration | the GitHub Actions runs of this repository end in 3 to 4 seconds with a failure before any step runs, also on commits from before 2026-11-24 (no job log exists); the job exists but has no log, which points at the account or the runner (quota, billing, runner start) rather than at the workflow files, but that is not confirmed. No CI result can be relied on until it is fixed. `tools/release_check.py` runs the gates locally |
 
 The project is not a finished product. Read [`docs/RELEASE.md`](docs/RELEASE.md) for what must pass before a release,
 and [`docs/IMPL_SPEC.md`](docs/IMPL_SPEC.md) for the decisions and measurements.
