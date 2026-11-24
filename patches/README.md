@@ -1,17 +1,13 @@
-# Patches: hand-written Rust for hot methods (Rust back end)
+# Yamalar: sıcak metotlar için el yazımı Rust (Rust arka ucu)
 
-The Rust back end reads `patches/rust/manifest.json` (implementation: `monolith/patches.py`). Nothing of Mojang's code
-is stored here: a patch is a Rust function plus a manifest entry that names the method it replaces
-(`class`, `method`, `desc`). The translator still translates the original (it stays available as
-`r_<name>_orig`) and generates a wrapper in its place. This is how game logic moves to Rust method by method:
-a replaced method whose original is no longer called disappears from the build.
+Rust arka ucu `patches/rust/manifest.json` dosyasını okur (uygulama: `monolith/patches.py`). Mojang'ın kodundan burada hiçbir şey saklanmaz: bir yama, bir Rust fonksiyonu ve değiştirdiği metodu adlandıran (`class`, `method`, `desc`) bir manifest girdisidir. Çevirici orijinali yine çevirir (`r_<ad>_orig` olarak kalır) ve yerine bir sarmalayıcı üretir. Oyun mantığı böyle, metot metot Rust'a taşınır: orijinali artık çağrılmayan değiştirilmiş bir metot derlemeden çıkar.
 
 ## manifest.json
 
     {
       "files": {
         "bitstorage.rs": {
-          "fields":  {"size": "net/minecraft/util/SimpleBitStorage.size"},   // F_size: usize, byte offset
+          "fields":  {"size": "net/minecraft/util/SimpleBitStorage.size"},   // F_size: usize, bayt ofseti
           "statics": {"count": "pkg/Cls.count"},                              // s_count() -> *mut T
           "classes": {"Level": "net/minecraft/world/level/Level"},            // class_Level(), is_Level(o), init_Level()
           "calls":   {"helper": "pkg/Cls.helper(I)I"}                         // c_helper(args) -> rt::Res<R>
@@ -22,30 +18,16 @@ a replaced method whose original is no longer called disappears from the build.
       ]
     }
 
-The patch file is pasted into a module in the shard of the patched class, after the generated bindings, so it can
-use `rt::` (the runtime), `mono_rt::patch::*` (`get`, `set`, `array`, `array_len`, `class_ptr`) and the bindings above.
-A field declared in a superclass is found through the subclass named in the binding. `calls` are direct
-(non-virtual) calls; the callee is compiled even if nothing else reaches it, and a static callee's class is
-initialized first.
+Yama dosyası, yamalanan sınıfın yonga (shard) içinde, üretilen bağlamalardan sonra bir modüle yapıştırılır; bu yüzden `rt::` (çalışma zamanı), `mono_rt::patch::*` (`get`, `set`, `array`, `array_len`, `class_ptr`) ve yukarıdaki bağlamaları kullanabilir.
+Bir üst sınıfta bildirilmiş bir alan, bağlamada adı geçen alt sınıf üzerinden bulunur. `calls` doğrudan (sanal olmayan) çağrılardır; çağrılan metot, başka hiçbir şey ona ulaşmasa bile derlenir ve statik bir çağrılanın sınıfı önce başlatılır.
 
-## Rules for patch functions
+## Yama fonksiyonları için kurallar
 
-* Signature of the generated method: `pub fn f(this: rt::Ref, a0: i32, ...) -> rt::Res<R>` (no `this` for static
-  methods). Return `Err` through `rt::throw(...)`, or hand the call to the original.
-* `"orig": true`: the first parameter is the translated original (`orig: impl Fn(rt::Ref, i32) -> rt::Res<i32>`).
-  Handle only the common case and pass every input the Java code would reject (null, index out of range, ...) to
-  `orig`, which then throws exactly what the Java code throws. See `patches/rust/bitstorage.rs`.
-* Same observable behaviour as the Java method, exceptions included.
-* References held in locals are found by the collector (it scans stacks conservatively): no frames to register.
-* `MONO_PATCH_VERIFY=1` runs original and patch on every call of a method that returns a primitive and aborts on the
-  first difference (compared as raw bits). Methods with side effects must say `"verify": false` (both would run).
-  Methods that return references or `void` are covered by differential tests: `python3 monolith/patch_tests.py`
-  and `monolith/tests/patch/`.
-* A patch whose class is not on the class path is skipped (the generator prints how many applied / were unused /
-  skipped). A class that exists without the method stops the build, so a Minecraft update cannot silently
-  disable a patch. `MONO_PATCH_MANIFEST=<file>` selects another manifest (tests).
-* `"fingerprint"`: 16 hex digits identifying the bytecode of the method the patch was written against (decoded instructions,
-  exception table, frame sizes; independent of constant-pool numbering and line numbers). When Minecraft changes that body the
-  build stops with a message naming both values. After reviewing the patch against the new bytecode, store the new value with
-  `python3 tools/patch_fingerprints.py --cp <client.jar:libs...> --write`. Without `--write` the tool only reports
-  (`ok`, `MISMATCH`, `no value`, `skipped`). All patches in the manifest carry one. Tests: `python3 -m monolith.patch_fp_tests`.
+* Üretilen metodun imzası: `pub fn f(this: rt::Ref, a0: i32, ...) -> rt::Res<R>` (statik metotlarda `this` yok). `Err` döndürmek için `rt::throw(...)` kullanın ya da çağrıyı orijinale devredin.
+* `"orig": true`: ilk parametre çevrilmiş orijinaldir (`orig: impl Fn(rt::Ref, i32) -> rt::Res<i32>`). Yalnızca yaygın durumu ele alın; Java kodunun reddedeceği her girdiyi (null, aralık dışı indeks, ...) `orig`'e devredin; o da Java kodunun tam olarak fırlattığını fırlatır. Bkz. `patches/rust/bitstorage.rs`.
+* Java metoduyla aynı gözlemlenebilir davranış, istisnalar dahil.
+* Yerel değişkenlerde tutulan referansları toplayıcı bulur (yığınları muhafazakâr biçimde tarar): kaydedilecek bir çerçeve yoktur.
+* `MONO_PATCH_VERIFY=1`, ilkel değer döndüren bir metodun her çağrısında orijinali ve yamayı çalıştırır ve ilk farkta (ham bitler olarak karşılaştırılır) durur. Yan etkisi olan metotlar `"verify": false` yazmalıdır (ikisi de çalışırdı).
+  Referans ya da `void` döndüren metotlar fark testleriyle kapsanır: `python3 monolith/patch_tests.py` ve `monolith/tests/patch/`.
+* Sınıfı sınıf yolunda olmayan bir yama atlanır (üretici kaç yamanın uygulandığını, kaçının kullanılmadığını ya da atlandığını yazar). Sınıf var ama metot yoksa derleme durur; böylece bir Minecraft güncellemesi yamayı sessizce devre dışı bırakamaz. `MONO_PATCH_MANIFEST=<dosya>` başka bir manifest seçer (testler).
+* `"fingerprint"`: yamanın yazıldığı metodun bytecode'unu tanımlayan 16 hanelik onaltılık sayı (çözülmüş komutlar, istisna tablosu, çerçeve boyutları; sabit havuzu numaralarından ve satır numaralarından bağımsız). Minecraft o gövdeyi değiştirdiğinde derleme, iki değeri de adlandıran bir mesajla durur. Yamayı yeni bytecode'a göre gözden geçirdikten sonra yeni değeri şöyle kaydedin: `python3 tools/patch_fingerprints.py --cp <client.jar:libs...> --write`. `--write` olmadan araç yalnızca raporlar (`ok`, `MISMATCH`, `no value`, `skipped`). Manifestteki tüm yamalarda bir parmak izi var. Testler: `python3 -m monolith.patch_fp_tests`.

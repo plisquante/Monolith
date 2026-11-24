@@ -1,17 +1,16 @@
-# GC removal: inventory
+# GC kaldırma: envanter
 
-Status: analysis only. No behaviour changed. The tracing collector is still `monolith/rt/gc.rs` (about 1490 lines),
-reached through `monolith/rt/heap.rs`.
+Durum: yalnızca analiz. Davranış değişmedi. İzleyici (tracing) toplayıcı hâlâ `monolith/rt/gc.rs` (yaklaşık 1490 satır), `monolith/rt/heap.rs` üzerinden erişiliyor.
 
-## Where objects are allocated (runtime, GC heap entry points)
+## Nesnelerin nerede tahsis edildiği (çalışma zamanı, GC heap giriş noktaları)
 
-Call sites of `alloc_obj`, `alloc_arena`, `alloc_recyclable`, `new_str`, `new_array`, `new_obj_array`, `alloc_zeroed`:
+`alloc_obj`, `alloc_arena`, `alloc_recyclable`, `new_str`, `new_array`, `new_obj_array`, `alloc_zeroed` çağrı noktaları:
 
-| file | sites |
+| dosya | nokta sayısı |
 |---|---|
-| `rt.rs` | 28 (object and array construction, string literals, class mirrors) |
-| `natives_sys.rs` | 22 (process, time, system properties) |
-| `gc.rs` | 19 (the collector itself) |
+| `rt.rs` | 28 (nesne ve dizi oluşturma, dizge literalleri, sınıf aynaları) |
+| `natives_sys.rs` | 22 (süreç, zaman, sistem özellikleri) |
+| `gc.rs` | 19 (toplayıcının kendisi) |
 | `natives_net.rs` | 18 |
 | `natives_reflect.rs` | 15 |
 | `natives_io.rs` | 14 |
@@ -19,65 +18,45 @@ Call sites of `alloc_obj`, `alloc_arena`, `alloc_recyclable`, `new_str`, `new_ar
 | `natives_jni.rs` | 8 |
 | `natives_rhi.rs` | 5 |
 | `natives_nio.rs` | 2 |
-| total | 141 |
+| toplam | 141 |
 
-Most natives allocate a Java `String` or an array for a return value. Those values are owned by the caller
-and die with it, which is the easy case for an ownership model. The hard cases are objects that are stored in
-other objects or in statics.
+Yerel metotların çoğu, dönüş değeri için bir Java `String` ya da dizi tahsis eder. Bu değerlerin sahibi çağıranıdır ve onunla birlikte ölür; sahiplik modeli için kolay durum budur. Zor durumlar, başka nesnelerin içinde ya da statiklerde saklanan nesnelerdir.
 
-## Roots the collector scans
+## Toplayıcının taradığı kökler
 
-- Static slots: `register_static_slot` (rt.rs:632), one per Java static field of reference type.
-- Array classes: `register_array_class` (rt.rs:724), so their element classes stay alive.
-- Pinned references: `pin_ref` (rt.rs:615 for class statics, rt.rs:1314 for a shadow-stack exception that
-  must survive until `init_failure` is reported).
-- Thread stacks: scanned conservatively between `register_thread` and `unregister_thread` (gc.rs:424, 451);
-  thread objects are set with `set_thread_obj` (rt.rs:1024, sync.rs:259).
+- Statik yuvalar: `register_static_slot` (rt.rs:632), referans tipli her Java statik alan için bir tane.
+- Dizi sınıfları: `register_array_class` (rt.rs:724); eleman sınıfları canlı kalsın diye.
+- Sabitlenmiş referanslar: `pin_ref` (sınıf statikleri için rt.rs:615; `init_failure` bildirilene kadar yaşamak zorunda olan bir gölge yığın istisnası için rt.rs:1314).
+- İş parçacığı yığınları: `register_thread` ile `unregister_thread` arasında muhafazakâr biçimde taranır (gc.rs:424, 451); iş parçacığı nesneleri `set_thread_obj` ile ayarlanır (rt.rs:1024, sync.rs:259).
 
-## What a replacement has to decide
+## Bir yerine koyma neye karar vermek zorunda
 
-1. Ownership of Java objects: who frees an object that is referenced from a field and no longer from any stack.
-   Options: reference counting with `Arc`-like handles (cycles leak unless broken explicitly), an arena per
-   class-loader lifetime (never freed, but bounded by program size), or handles into a slab with explicit
-   release at the points the Java semantics name (`WeakReference` clearing, `Cleaner`, `finalize` is not supported).
-2. Stack roots: the conservative stack scan goes away only if every reference held in a Rust local is owned by a
-   handle type, which the generated code does not do today.
-3. Escape analysis (`--escape`) keeps non-escaping objects in frame slots (`rt::stack_obj`), and non-escaping arrays in
-   the method's arena (`rt::new_array_arena`, `rt::new_obj_array_arena`, released by `rt::ArenaGuard` when the method
-   returns). Neither reaches the collector. Loop allocations whose object survives one iteration but not the method
-   are not put in the arena yet: an arena lives until the method returns, so a long loop would keep every iteration's
-   object alive. Those need a per-iteration or per-scope reset first.
+1. Java nesnelerinin sahipliği: bir alandan referans verilen ama artık hiçbir yığından referans verilmeyen bir nesneyi kim serbest bırakır?
+   Seçenekler: `Arc` benzeri tutamaçlarla referans sayımı (döngüler, açıkça kırılmazsa sızar), sınıf yükleyici ömrü başına bir arena (asla serbest bırakılmaz ama program boyutuyla sınırlı), ya da Java anlambilimin adlandırdığı noktalarda açık serbest bırakmayla bir slab'e tutamaçlar (`WeakReference` temizlenmesi, `Cleaner`; `finalize` desteklenmiyor).
+2. Yığın kökleri: muhafazakâr yığın taraması, Rust yerel değişkenlerinde tutulan her referans bir tutamaç tipine sahipse kalkar; üretilen kod bugün bunu yapmıyor.
+3. Kaçış analizi (`--escape`), kaçmayan nesneleri çerçeve yuvalarında (`rt::stack_obj`), kaçmayan dizileri metodun arenasında tutar (`rt::new_array_arena`, `rt::new_obj_array_arena`; metot dönünce `rt::ArenaGuard` ile serbest bırakılır). İkisi de toplayıcıya ulaşmaz. Bir döngü tahsisi, bir tur boyunca yaşayıp metot boyunca yaşamıyorsa henüz arenaya konmuyor: arena metot dönene kadar yaşar, yani uzun bir döngü her turun nesnesini canlı tutardı. Bunlar önce tur başına ya da kapsam başına bir sıfırlama gerektirir.
 
-## Measured: generated code for `Stack1` with `--escape --inline`
+## Ölçüm: `--escape --inline` ile `Stack1` için üretilen kod
 
-Counted in the emitted Rust (static sites, not runtime counts):
+Üretilen Rust'ta sayıldı (statik çağrı noktaları, çalışma zamanı sayıları değil):
 
-| allocation | sites | route |
+| tahsis | nokta | yol |
 |---|---|---|
-| `rt::stack_obj` | 78 | frame slot, never reaches the collector |
-| `rt::new_array_arena` | 14 | method arena, released at return |
-| `rt::new_obj_array_arena` | 38 | method arena, released at return |
-| `rt::alloc` | 4972 | collected heap |
-| `rt::new_array` | 977 | collected heap |
-| `rt::new_obj_array` | 930 | collected heap |
-| `rt::alloc_recyclable` | 18 | collected heap, recycled per class |
+| `rt::stack_obj` | 78 | çerçeve yuvası, toplayıcıya asla ulaşmaz |
+| `rt::new_array_arena` | 14 | metot arenası, dönüşte serbest |
+| `rt::new_obj_array_arena` | 38 | metot arenası, dönüşte serbest |
+| `rt::alloc` | 4972 | toplanan heap |
+| `rt::new_array` | 977 | toplanan heap |
+| `rt::new_obj_array` | 930 | toplanan heap |
+| `rt::alloc_recyclable` | 18 | toplanan heap, sınıf başına geri dönüştürülen |
 
-Counts from the generated `Stack1` output (`--escape --inline`, `--opt 1`, one run). The earlier note that the
-arena is not emitted was wrong for arrays: 52 arena sites are already emitted. Objects have no arena route: the
-`new` path emits `stack_obj` or the heap, never `alloc_arena`.
+Sayılar, üretilen `Stack1` çıktısından (`--escape --inline`, `--opt 1`, tek koşu). Daha önceki "arena üretilmiyor" notu dizilerde yanlıştı: 52 arena noktası zaten üretiliyor. Nesnelerin arena yolu yok: `new` yolu `stack_obj` ya da heap üretir, asla `alloc_arena` üretmez.
 
-About 98% of emitted allocation sites (6897 of 7027) are still on the collected heap, even with escape analysis on. The generator message
-under `--escape` reports 223 frame or arena sites (it counts all analysed methods, including ones the output does
-not reach). The loop region candidates on the closure without `--inline` were 4 of 1513 classified sites; they
-have not been counted with `--inline` yet. Escaping sites are the bulk, so the ownership model for escaping
-objects is the real work.
+`--escape` ile bile, üretilen tahsis noktalarının yaklaşık %98'i (7027'den 6897'si) hâlâ toplanan heap'te. `--escape` altındaki üreteç mesajı 223 çerçeve ya da arena noktası bildiriyor (analiz edilen tüm metotları sayar, çıktıya ulaşmayanları da). `--inline` olmadan kapanıştaki döngü bölgesi adayları 1513 sınıflandırılmış noktadan 4 idi; `--inline` ile henüz sayılmadı. Kaçan noktalar çoğunluk; bu yüzden asıl iş, kaçan nesneler için sahiplik modelidir.
 
-## Next steps (not started)
+## Sonraki adımlar (başlanmadı)
 
-- Measure how many escaping allocations a typical Minecraft-sized program makes (`--escape` statistics). The
-  `--escape` message now prints the frame and arena site count (it was a count of everything not escaping, which
-  included loop sites that are not frame-local).
-- Count the loop region candidates (survive an iteration, not the method) with `--inline` on Stack1 and on a
-  Minecraft-sized program, before deciding whether a per-iteration reset is worth building.
-- Choose the ownership model for escaping objects and write it down before changing `gc.rs`.
-- Replace the collector behind `heap.rs` one allocation class at a time, each with `tests/run_tests.py` green.
+- Tipik bir Minecraft büyüklüğündeki programın kaç kaçan tahsis yaptığını ölçün (`--escape` istatistikleri). `--escape` mesajı artık çerçeve ve arena noktası sayısını yazar (önceden çerçeve dışı döngü noktaları dahil her şeyi sayıyordu).
+- `--inline` ile `Stack1` ve Minecraft büyüklüğündeki bir programda döngü bölgesi adaylarını (bir tur yaşayan, metot yaşamayan) sayın; tur başına sıfırlamanın değip değmeyeceğine karar vermeden önce.
+- Kaçan nesneler için sahiplik modelini seçin ve `gc.rs` değişmeden önce yazılı hâle getirin.
+- `heap.rs` arkasındaki toplayıcıyı bir seferde bir tahsis sınıfı için değiştirin; her biri `tests/run_tests.py` yeşilken.

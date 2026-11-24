@@ -1,73 +1,47 @@
-# Monolith: Rust back end
+# Monolith: Rust arka ucu
 
-Monolith's only back end is Rust (the Zig back end was removed). Same front end (class loading, reachability, indy desugaring, class library
-overlay), Rust output. Entry point: `python3 -m monolith.rustgen --cp <dir> --main <Class> -o <out> [--run] [--strict]`.
-Tests: `python3 monolith/run_tests.py` (each `monolith/tests/*.java` runs on HotSpot and as Rust; stdout and exit
-code must be identical).
+Monolith'in tek arka ucu Rust'tır (Zig arka ucu kaldırıldı). Ön uç aynı kaldı (sınıf yükleme, erişilebilirlik, indy desugar, sınıf kütüphanesi kaplaması), çıktı Rust. Giriş noktası: `python3 -m monolith.rustgen --cp <dizin> --main <Sınıf> -o <çıktı> [--run] [--strict]`.
+Testler: `python3 monolith/run_tests.py` (her `monolith/tests/*.java` HotSpot'ta ve Rust olarak çalışır; stdout ve çıkış kodu aynı olmalı).
 
-## Layout
-- `monolith/rustgen.py`: bytecode -> Rust. Whole-world: the entry point pulls in every reachable class and method of the
-  application, the overlay and the JDK. Control flow is `loop { match pc { .. } }`, exceptions are `Result` with `?`,
-  handlers re-dispatch on the faulting pc.
-- `monolith/rt/rt.rs`: object model (16-byte header, `Class` tables: vtable, itab, interfaces, field table), arrays,
-  strings, class mirrors, class initialization with locking, throw hooks.
-- `monolith/rt/natives.rs`: native methods of the overlay (`n_<class>__<method>`).
-- `monolith/rt/vh.rs`: VarHandle access modes. `monolith/rt/sync.rs`: monitors, threads, park, sleep, interrupt.
+## Yerleşim
+- `monolith/rustgen.py`: bytecode'dan Rust'a. Tüm dünya: giriş noktası uygulamanın, kaplamanın ve JDK'nın erişilebilir her sınıfını ve metodunu çeker. Akış kontrolü `loop { match pc { .. } }`, istisnalar `?` ile `Result`, işleyiciler hata veren pc'ye göre yeniden dağıtılır.
+- `monolith/rt/rt.rs`: nesne modeli (16 bayt başlık, `Class` tabloları: vtable, itab, arayüzler, alan tablosu), diziler, dizgiler, sınıf aynaları, kilitli sınıf başlatma, fırlatma kancaları.
+- `monolith/rt/natives.rs`: kaplamanın yerel metotları (`n_<sınıf>__<metot>`).
+- `monolith/rt/vh.rs`: VarHandle erişim modları. `monolith/rt/sync.rs`: monitörler, iş parçacıkları, park, uyku, kesme.
 
-## Verified (identical to HotSpot)
-Arithmetic and control flow, objects, inheritance, interfaces and default methods, arrays, static init, exceptions
-(catch, finally, nested, causes), real `String`/`StringBuilder`/`PrintStream` from the class library, indy string
-concat, lambdas, records, enums, sealed switch, collections, streams, `String.format`, number parsing, threads,
-`synchronized` (blocks and methods), wait/notify, interrupt. Hello world compiles 187 classes / 793 methods;
-a collections/streams program 1308 classes / 6031 methods.
+## Doğrulananlar (HotSpot ile birebir aynı)
+Aritmetik ve akış kontrolü, nesneler, kalıtım, arayüzler ve default metotlar, diziler, statik başlatma, istisnalar (catch, finally, iç içe, nedenler), sınıf kütüphanesinden gerçek `String`/`StringBuilder`/`PrintStream`, indy dize birleştirme, lambdalar, record'lar, enum'lar, sealed switch, koleksiyonlar, akışlar, `String.format`, sayı ayrıştırma, iş parçacıkları, `synchronized` (blok ve metotlar), wait/notify, interrupt. Merhaba dünya 187 sınıf / 793 metot derliyor; bir koleksiyon/akış programı 1308 sınıf / 6031 metot.
 
-## Known gaps (the generator lists untranslatable code and missing natives on stderr; reaching them stops the
-process with exit 70 and a message, nothing is silently skipped)
-- Memory: nothing is ever freed (no GC, no regions yet). Not usable for a long gameplay session.
-- Reflection: `Class.newField0`, `fields0`, `methods0`, annotations, constant pool, `getCallerClass` is approximated by a
-  per-call-site hint (only for methods that call it). Blocks `ExecutorService`, `CompletableFuture`, `ConcurrentHashMap`
-  merge paths (see `monolith/pending/Mono7.java`).
-- Stack traces: `Throwable.backtrace0` returns null (no frames).
-- Reference arrays share one runtime class: no `ArrayStoreException`, `checkcast` to `T[]` is loose.
-- ServiceLoader provider table, MemorySegment VarHandles, JNI, NIO, files, sockets, zip, management natives.
-- Graphics/audio layer (RHI, GL shim, SDL shim) and the Android launcher entry are not ported.
-- Class loader, module and resource handling of the old Zig runtime are not ported to the Rust runtime.
+## Bilinen boşluklar (üreteç çevrilemeyen kodu ve eksik yerel fonksiyonları stderr'e yazar; bunlara ulaşılırsa süreç 70 çıkış koduyla ve bir mesajla durur, hiçbir şey sessizce atlanmaz)
+- Bellek: hiçbir şey serbest bırakılmaz (henüz GC ya da bölge yok). Uzun bir oyun oturumu için kullanılamaz.
+- Yansıma: `Class.newField0`, `fields0`, `methods0`, açıklamalar, sabit havuzu; `getCallerClass` çağrı noktası başına bir ipucuyla yaklaşıktır (yalnızca bunu çağıran metotlar için). `ExecutorService`, `CompletableFuture`, `ConcurrentHashMap` birleştirme yollarını engeller (bkz. `monolith/pending/Mono7.java`).
+- Yığın izleri: `Throwable.backtrace0` null döndürür (çerçeve yok).
+- Referans dizileri tek bir çalışma zamanı sınıfını paylaşır: `ArrayStoreException` yok, `T[]` için `checkcast` gevşek.
+- ServiceLoader sağlayıcı tablosu, MemorySegment VarHandle'ları, JNI, NIO, dosyalar, soketler, zip, yönetim yerel fonksiyonları.
+- Grafik/ses katmanı (RHI, GL shim, SDL shim) ve Android launcher girişi taşınmadı.
+- Eski Zig çalışma zamanının sınıf yükleyici, modül ve kaynak yönetimi Rust çalışma zamanına taşınmadı.
 
-## Native surface still to port
-613 native entry points exist in the original (Zig-era) runtime; about 130 are done in Rust. Largest groups: `NativeRhi` 159, UnixNativeDispatcher 49,
-`sun.nio.ch.Net` 40, Class 25, Unsafe 24 (most done), UnixFileDispatcherImpl 19, UnixFileSystem 14, zip 20.
+## Taşınacak yerel yüzey
+Orijinal (Zig dönemi) çalışma zamanında 613 yerel giriş noktası var; yaklaşık 130'u Rust'ta yapıldı. En büyük gruplar: `NativeRhi` 159, UnixNativeDispatcher 49, `sun.nio.ch.Net` 40, Class 25, Unsafe 24 (çoğu yapıldı), UnixFileDispatcherImpl 19, UnixFileSystem 14, zip 20.
 
-## Android library (`--android`)
-`python3 -m monolith.rustgen --cp <jars> --main <Class> --no-lwjgl --android --shards 32 --shard-jobs 3 --opt 2 -o <dir>`
-builds `libminecraft_mono.so` for `aarch64-linux-android`: `mono_rt.rlib`, one object per shard, `libmc_main.rlib`
-(`pub fn mono_run`), and a generated `link_stub.rs` (cdylib root) that exports `mono_android_entry(user, gameDir,
-assetsDir, input)`. The entry starts the game on its own 256 MiB thread and returns at once, so the Android UI thread
-never blocks. The TouchCore host (`libtouchcore_mono.so`) supplies EGL, input and the surface through the `tc_android_*`
-symbols that `natives_rhi.rs` resolves. JNA needs libffi, which is built once as a static library from the official
-release (checksum pinned). `tools/mcbuild_rust.py --android` wraps jar, library and asset download plus this command.
+## Android kütüphanesi (`--android`)
+`python3 -m monolith.rustgen --cp <jar'lar> --main <Sınıf> --no-lwjgl --android --shards 32 --shard-jobs 3 --opt 2 -o <dizin>`
+`aarch64-linux-android` için `libminecraft_mono.so` derler: `mono_rt.rlib`, shard başına bir nesne, `libmc_main.rlib` (`pub fn mono_run`) ve `mono_android_entry(user, gameDir, assetsDir, input)` fonksiyonunu dışa aktaran üretilmiş bir `link_stub.rs` (cdylib kökü). Giriş, oyunu kendi 256 MiB iş parçacığında başlatır ve hemen döner; böylece Android UI iş parçacığı asla bloke olmaz. TouchCore ana makinesi (`libtouchcore_mono.so`), EGL, girdi ve yüzeyi, `natives_rhi.rs`'nin çözdüğü `tc_android_*` sembolleri üzerinden sağlar. JNA, libffi gerektirir; bu, resmi sürümden (sağlama toplamı sabitlenmiş) bir kez statik kütüphane olarak derlenir. `tools/mcbuild_rust.py --android`, jar, kütüphane ve asset indirmesini bu komutla birlikte sarar.
 
-## Patches (game logic in Rust)
-`patches/rust/manifest.json` replaces translated methods with hand-written Rust, see `patches/README.md`. 7 patches ship
-(`SimpleBitStorage` get/set/cellIndex and the world-height chain); `python3 monolith/patch_tests.py` checks the
-mechanism against HotSpot, in `MONO_PATCH_VERIFY` mode, and that a wrong patch is caught.
+## Yamalar (oyun mantığı Rust'ta)
+`patches/rust/manifest.json`, çevrilmiş metotları el yazımı Rust ile değiştirir, bkz. `patches/README.md`. 7 yama gönderiliyor (`SimpleBitStorage` get/set/cellIndex ve dünya yüksekliği zinciri); `python3 monolith/patch_tests.py` mekanizmayı HotSpot'a karşı, `MONO_PATCH_VERIFY` modunda denetler ve yanlış bir yamanın yakalandığını doğrular.
 
-## Allocation profile (leaving the GC)
-`MONO_ALLOC_PROFILE=<file> ./run.sh` records, per class, how much is allocated and how long it lives (collections
-survived: 0, 1, 2, 3+), plus sampled allocation sites; `python3 tools/alloc_report.py <file> --exe <prog>` classifies every
-class as TEMP (dies young), MIXED or LONG and lists the methods that allocate the most. `docs/ALLOC_BASELINE.md` is the
-first measurement (4 minutes of play, Minecraft 26.3). Limits: the sampler records physical frames, so a method that
-the compiler inlined is charged to its caller; the allocation hook is a single relaxed load when profiling is off.
+## Tahsis profili (GC'den çıkış)
+`MONO_ALLOC_PROFILE=<dosya> ./run.sh`, sınıf başına ne kadar tahsis edildiğini ve ne kadar yaşadığını kaydeder (atlatılan toplama sayısı: 0, 1, 2, 3+), ayrıca örneklenen tahsis noktalarını. `python3 tools/alloc_report.py <dosya> --exe <program>` her sınıfı TEMP (genç ölür), MIXED veya LONG olarak sınıflandırır ve en çok tahsis eden metotları listeler. `docs/ALLOC_BASELINE.md` ilk ölçümdür (4 dakika oyun, Minecraft 26.3). Sınırlar: örnekleyici fiziksel çerçeveleri kaydeder; derleyicinin satır içine aldığı bir metodun tahsisi çağıranına yazılır; tahsis kancası, profilleme kapalıyken tek bir gevşek yüklemedir.
 
-## Memory without a collector: where it stands
-Measured on 4 minutes of play (see `docs/ALLOC_BASELINE.md`, `tools/alloc_report.py --base` for the steady state): 98% of
-the bytes the game allocates are short-lived. The steps, each verified against HotSpot (`monolith/*_tests.py`) and in the game:
+## Toplayıcı olmadan bellek: durum
+4 dakikalık oyun üzerinde ölçüldü (bkz. `docs/ALLOC_BASELINE.md`, kararlı durum için `tools/alloc_report.py --base`): oyunun tahsis ettiği baytların %98'i kısa ömürlü. Her adım HotSpot'a karşı doğrulandı (`monolith/*_tests.py`) ve oyunda ölçüldü:
 
-| Step | Effect measured in the game |
+| Adım | Oyunda ölçülen etki |
 |---|---|
-| `DataFixers.optimize` skipped (patch `datafix.rs`) | live heap 1,387 -> 543 MiB, longest GC pause 8.1 s -> 2.1 s |
-| for-each iterators are given back when the loop ends (`find_iterator_scopes`, `gc.rs` recycling) | iterator heap allocation -89..98%, steady allocation 44.0 -> 36.5 MiB/s |
-| `ServerLevel.tickChunk` without BlockPos garbage (patch `tick_chunk.rs`) | about a fifth of the BlockPos volume |
-| `--inline --escape`: small callees inlined, non-escaping objects kept in the caller's frame (`inline.py`, `escape.py`, `rt::stack_obj`) | see `docs/ALLOC_BASELINE.md` after the next measurement |
+| `DataFixers.optimize` atlandı (yama `datafix.rs`) | canlı heap 1 387 -> 543 MiB, en uzun GC duraklaması 8,1 sn -> 2,1 sn |
+| for-each yineleyicileri döngü bitince geri verilir (`find_iterator_scopes`, `gc.rs` geri dönüşümü) | yineleyici heap tahsisi %89-98 azaldı, kararlı tahsis 44,0 -> 36,5 MiB/sn |
+| BlockPos çöpü olmadan `ServerLevel.tickChunk` (yama `tick_chunk.rs`) | BlockPos hacminin yaklaşık beşte biri |
+| `--inline --escape`: küçük çağrılanlar satır içine alınır, kaçmayan nesneler çağıranın çerçevesinde tutulur (`inline.py`, `escape.py`, `rt::stack_obj`) | bir sonraki ölçümden sonra `docs/ALLOC_BASELINE.md`'ye bakın |
 
-Safety nets: `MONO_ARENA_CHECK=abort` makes every collection verify that no heap object or static points into a frame or
-arena; `MONO_ARENA=0` and `MONO_RECYCLE=0` switch the mechanisms off for comparison; `MONO_PATCH_VERIFY=1` checks patches.
+Güvenlik ağları: `MONO_ARENA_CHECK=abort` her toplamada, hiçbir heap nesnesinin ya da statiğin bir çerçeveye ya da arenaya işaret etmediğini doğrular; `MONO_ARENA=0` ve `MONO_RECYCLE=0` karşılaştırma için mekanizmaları kapatır; `MONO_PATCH_VERIFY=1` yamaları denetler.
