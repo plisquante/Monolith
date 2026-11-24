@@ -1,653 +1,409 @@
-# Status
+# Durum
 
-Last updated: 2026-11-15. Toolchain: rustc (stable), OpenJDK 25 (Temurin 25.0.5) class library (JDK 21 also supported).
+Son güncelleme: 2026-11-15. Araç zinciri: rustc (stable), OpenJDK 25 (Temurin 25.0.5) sınıf kütüphanesi (JDK 21 de destekleniyor).
 
 > **Kronolojik kayıt.** Bu dosyadaki "Zig" ifadeleri, Zig arka ucunun kaldırılmasından önceki durumu anlatır (arka uç
 > kaldırıldı; güncel durum `docs/PROJE_OZETI.md` ve `.claude/ARCHITECTURE_MAP.md`'de). Güncel plan: `MASTER_PLAN_TR.md`.
 
-## 1. Differential test results
+## 1. Fark testi sonuçları
 
-`python3 tests/run_tests.py` compiles each `tests/java/*.java` with javac, runs it on the JVM
-and as a monolith native executable, and requires identical stdout, first stderr line and exit
-code. Last run: **10/10 passed against the JDK 25 class library** (Debug builds, i.e. with Zig safety checks enabled).
+`python3 tests/run_tests.py`, her `tests/java/*.java` dosyasını javac ile derler, JVM üzerinde ve bir monolith yerel çalıştırılabilir dosyası olarak çalıştırır; stdout, ilk stderr satırı ve çıkış kodunun aynı olmasını ister. Son koşu: **JDK 25 sınıf kütüphanesine karşı 10/10 geçti** (Debug derlemeler, yani Zig güvenlik denetimleri açık).
 
-| test | covers |
+| test | kapsadığı |
 |---|---|
-| `Arith` | int/long/float/double arithmetic edge cases, conversions, NaN/±0/∞, 2 000 random doubles/floats through `toString`/`parseDouble`, `StrictMath` (fdlibm), `Integer`/`Long` bit operations, `Math.*Exact` |
-| `Strings` | concat (indy), `StringBuilder`, search/replace/split/regex, case mapping incl. Unicode, `intern`, string `switch`, text blocks, charsets, patterns |
-| `Oop` | inheritance, abstract/default/static interface methods, `super` calls, field hiding, inner/local/anonymous classes, generics + bridges, records, enums with bodies, `EnumMap/EnumSet`, sealed types, pattern `switch` (`typeSwitch`), init order |
-| `Exceptions` | try/catch/finally semantics, runtime exceptions with HotSpot messages, try-with-resources + suppressed, `ExceptionInInitializerError` → `NoClassDefFoundError`, deep recursion, `StackOverflowError`, stack traces with line numbers, uncaught-exception handlers |
-| `Lambdas` | all lambda/method-reference shapes (static, bound, unbound, constructor, array constructor), captures, boxing/widening adaptation, serializable lambdas (`altMetafactory`), `Comparator` combinators, `Optional` |
-| `Collections1` | `ArrayList/LinkedList/HashMap/LinkedHashMap/TreeMap/HashSet/TreeSet/ArrayDeque/PriorityQueue/BitSet`, `Arrays`, `Collections`, streams and collectors, `Random` |
-| `Threads` | `synchronized`, `wait/notify`, atomics, `ReentrantLock`/`Condition` (AQS via Unsafe + park/unpark), `ConcurrentHashMap`, `ExecutorService`, `CountDownLatch`, `CompletableFuture`, interrupts, `volatile`, `ThreadLocal`, daemon / non-daemon shutdown |
-| `GcStress` | allocation churn on 1 and 4 threads (stop-the-world GC with safepoints), large arrays, `HashMap` growth, weak references |
-| `Misc` | `tableswitch/lookupswitch`, labeled loops, multi-dim arrays, `arraycopy` overlap, varargs, overloads, boxing caches, `String.format`, `System.exit` status |
-| `IoZip` | `FileInputStream/FileOutputStream/RandomAccessFile/File`, readers/writers, `CRC32/Adler32`, `Deflater/Inflater`, `GZIP*Stream`, `Zip*Stream` |
+| `Arith` | int/long/float/double aritmetiğinin uç durumları, dönüşümler, NaN/±0/∞, `toString`/`parseDouble` üzerinden 2 000 rastgele double/float, `StrictMath` (fdlibm), `Integer`/`Long` bit işlemleri, `Math.*Exact` |
+| `Strings` | birleştirme (indy), `StringBuilder`, arama/değiştirme/bölme/regex, Unicode dahil büyük-küçük harf eşleme, `intern`, string `switch`, metin blokları, karakter kümeleri, kalıplar |
+| `Oop` | kalıtım, soyut/default/statik arayüz metotları, `super` çağrıları, alan gizleme, iç/yerel/anonim sınıflar, jenerikler + köprüler, record'lar, gövdeli enum'lar, `EnumMap/EnumSet`, sealed tipler, kalıp `switch` (`typeSwitch`), başlatma sırası |
+| `Exceptions` | try/catch/finally anlamları, HotSpot mesajlarıyla çalışma zamanı istisnaları, try-with-resources + bastırılmış istisnalar, `ExceptionInInitializerError` → `NoClassDefFoundError`, derin özyineleme, `StackOverflowError`, satır numaralı yığın izleri, yakalanmamış istisna işleyicileri |
+| `Lambdas` | tüm lambda/metot referansı biçimleri (statik, bağlı, bağsız, kurucu, dizi kurucusu), yakalamalar, kutulama/genişletme uyarlaması, serileştirilebilir lambdalar (`altMetafactory`), `Comparator` birleştiricileri, `Optional` |
+| `Collections1` | `ArrayList/LinkedList/HashMap/LinkedHashMap/TreeMap/HashSet/TreeSet/ArrayDeque/PriorityQueue/BitSet`, `Arrays`, `Collections`, akışlar ve toplayıcılar, `Random` |
+| `Threads` | `synchronized`, `wait/notify`, atomikler, `ReentrantLock`/`Condition` (Unsafe + park/unpark üzerinden AQS), `ConcurrentHashMap`, `ExecutorService`, `CountDownLatch`, `CompletableFuture`, kesmeler, `volatile`, `ThreadLocal`, daemon / daemon olmayan kapanış |
+| `GcStress` | 1 ve 4 iş parçacığında tahsis dalgalanması (güvenli noktalı durdur-dünya GC), büyük diziler, `HashMap` büyümesi, zayıf referanslar |
+| `Misc` | `tableswitch/lookupswitch`, etiketli döngüler, çok boyutlu diziler, `arraycopy` örtüşmesi, değişken argümanlar, aşırı yüklemeler, kutulama önbellekleri, `String.format`, `System.exit` durumu |
+| `IoZip` | `FileInputStream/FileOutputStream/RandomAccessFile/File`, okuyucular/yazıcılar, `CRC32/Adler32`, `Deflater/Inflater`, `GZIP*Stream`, `Zip*Stream` |
 
-## 2. Minecraft Java Edition 26.3 (client) analysis
+## 2. Minecraft Java Edition 26.3 (istemci) analizi
 
-Inputs: `client.jar` (11 383 classes, class file version 69 / Java 25) + 66 Linux libraries.
-Nothing derived from these files is stored in this repository.
+Girdiler: `client.jar` (11 383 sınıf, sınıf dosyası sürümü 69 / Java 25) + 66 Linux kütüphanesi.
+Bu dosyalardan türetilmiş hiçbir şey bu depoda saklanmaz.
 
-| metric | value |
+| metrik | değer |
 |---|---|
-| classes in client.jar | 11 383 (1 793 interfaces), 98 739 methods, 1.91 M instructions |
-| `jsr/ret` (unsupported) | 0 |
-| invokedynamic sites | 24 014 lambda, 5 941 record `ObjectMethods`, 2 201 string concat, 79 pattern switch — all handled by `indy.py` |
-| reflection call sites (client.jar) | 30 |
-| libraries | 31 789 classes, 3 903 native methods (LWJGL OpenGL alone: 2 278) |
-| **RTA closure from `net.minecraft.client.main.Main`** | **53 996 classes loaded, 38 885 instantiated, 240 868 reachable methods, 3.93 M instructions** (50 s) |
-| Zig generated for the whole closure | 53 977 modules, 542 MB of Zig, **0 code generation errors** (108 s) |
-| reachable native methods | 781, of which 682 not yet implemented |
-| link errors / missing classes | 137 / 20 — mostly JDK 22–25 APIs (`java.lang.classfile`, `Math.powExact`, …) because the build used JDK 21's `java.base`; Minecraft 26.3 requires Java 25 |
-| unsupported `MethodHandle.invoke*` sites | 36 |
+| client.jar içindeki sınıflar | 11 383 (1 793 arayüz), 98 739 metot, 1,91 M komut |
+| `jsr/ret` (desteklenmiyor) | 0 |
+| invokedynamic noktaları | 24 014 lambda, 5 941 record `ObjectMethods`, 2 201 dize birleştirme, 79 kalıp switch — hepsi `indy.py` tarafından ele alınıyor |
+| yansıma çağrı noktaları (client.jar) | 30 |
+| kütüphaneler | 31 789 sınıf, 3 903 yerel metot (yalnızca LWJGL OpenGL: 2 278) |
+| **`net.minecraft.client.main.Main`'den RTA kapanışı** | **53 996 sınıf yüklendi, 38 885 örneklendi, 240 868 erişilebilir metot, 3,93 M komut** (50 sn) |
+| tüm kapanış için üretilen Zig | 53 977 modül, 542 MB Zig, **0 kod üretim hatası** (108 sn) |
+| erişilebilir yerel metotlar | 781, bunların 682'si henüz gerçekleştirilmedi |
+| link hataları / eksik sınıflar | 137 / 20 — çoğu JDK 22–25 API'leri (`java.lang.classfile`, `Math.powExact`, …), çünkü derleme JDK 21'in `java.base`'ini kullandı; Minecraft 26.3 Java 25 gerektiriyor |
+| desteklenmeyen `MethodHandle.invoke*` noktaları | 36 |
 
-Missing native methods by area: `org/lwjgl/opengl` 115, `sun/nio/ch` 95, `sun/nio/fs` 59,
-`com/sun/jna` 56, `org/lwjgl/system/libffi` 39, `java/io` 38 (implemented since), netty
-epoll/kqueue/unix 70, `com/mojang/jtracy` 20, `java/util/zip` 17 (implemented since), …
+Alana göre eksik yerel metotlar: `org/lwjgl/opengl` 115, `sun/nio/ch` 95, `sun/nio/fs` 59,
+`com/sun/jna` 56, `org/lwjgl/system/libffi` 39, `java/io` 38 (sonradan gerçekleştirildi), netty
+epoll/kqueue/unix 70, `com/mojang/jtracy` 20, `java/util/zip` 17 (sonradan gerçekleştirildi), …
 
-## 3. What is needed before Minecraft can start natively
+## 3. Minecraft'ın yerel olarak başlayabilmesi için gerekenler
 
-1. **JDK 25 `java.base`** as class-library input (download a JDK 25 jmod; the pipeline is version agnostic).
-2. **JNI bridge for third-party native libraries** (LWJGL, JNA, netty-epoll, jtracy, lz4):
-   generate `extern` declarations for `Java_<class>_<method>` symbols and link the libraries
-   shipped in the `natives-linux` jars, with a `JNIEnv` function table implemented in Zig
-   (LWJGL mostly passes primitives/addresses; `GetDirectBufferAddress`, string and callback
-   functions are the main JNIEnv entry points it uses).
-3. **NIO natives** (`sun.nio.ch` file channels / selectors, `sun.nio.fs` UnixNativeDispatcher):
-   Minecraft reads its resources and worlds through `java.nio.file`.
-4. **Reflection metadata** for the classes reached through `Class.forName`/`newInstance`
-   (Gson type adapters, `ServiceLoader`, log4j plugins) — a build-time configuration plus
-   generated constructor/field accessors.
-5. **MethodHandles** used by libraries (36 sites): direct-method-handle objects backed by
-   generated adapter functions.
-6. **Build scaling**: Zig compiles the program as one LLVM module; 240 k methods require
-   splitting the program into separately compiled units (C-ABI boundaries between packages)
-   to keep optimized builds tractable. Debug builds use Zig's fast self-hosted backend.
-7. Resource access: the class loader overlay serves `getResourceAsStream` from an extracted
-   resource directory (`MONO_RESOURCES`); the assets must be extracted at build time.
+1. Sınıf kütüphanesi girdisi olarak **JDK 25 `java.base`** (bir JDK 25 jmod indirin; boru hattı sürümden bağımsız).
+2. **Üçüncü taraf yerel kütüphaneler için JNI köprüsü** (LWJGL, JNA, netty-epoll, jtracy, lz4):
+   `Java_<sınıf>_<metot>` sembolleri için `extern` bildirimleri üretin ve `natives-linux` jar'larında gelen
+   kütüphanelere bağlayın; `JNIEnv` fonksiyon tablosu Zig'de gerçekleştirilir
+   (LWJGL çoğunlukla ilkel değerler/adresler geçirir; `GetDirectBufferAddress`, dize ve geri çağrı
+   fonksiyonları kullandığı başlıca JNIEnv giriş noktalarıdır).
+3. **NIO yerel metotları** (`sun.nio.ch` dosya kanalları / seçiciler, `sun.nio.fs` UnixNativeDispatcher):
+   Minecraft kaynaklarını ve dünyalarını `java.nio.file` üzerinden okur.
+4. `Class.forName`/`newInstance` ile erişilen sınıflar için **yansıma metaverisi**
+   (Gson tip bağdaştırıcıları, `ServiceLoader`, log4j eklentileri) — derleme zamanı yapılandırması artı
+   üretilmiş kurucu/alan erişimcileri.
+5. Kütüphanelerin kullandığı **MethodHandle'lar** (36 nokta): üretilmiş bağdaştırıcı fonksiyonlarla desteklenen doğrudan metot tutamacı nesneleri.
+6. **Derleme ölçeklendirme**: Zig, programı tek bir LLVM modülü olarak derler; 240 bin metot, optimize edilmiş derlemeleri yönetilebilir tutmak için programın ayrı derlenen birimlere bölünmesini (paketler arası C-ABI sınırları) gerektirir. Debug derlemeleri Zig'in hızlı kendi arka ucunu kullanır.
+7. Kaynak erişimi: sınıf yükleyici kaplaması `getResourceAsStream` isteklerini çıkarılmış bir kaynak dizininden (`MONO_RESOURCES`) karşılar; asset'ler derleme zamanında çıkarılmalıdır.
 
-## 4. Coverage: transpiling every method (not only reachable ones)
+## 4. Kapsam: her metodun çevrilmesi (yalnızca erişilebilir olanlar değil)
 
-`python3 tests/transpile_all.py <archives>` runs the front end and the Zig generator over
-every method of every class:
+`python3 tests/transpile_all.py <arşivler>`, ön ucu ve Zig üretecini her sınıfın her metodu üzerinde çalıştırır:
 
-| input | classes | methods | result |
+| girdi | sınıf | metot | sonuç |
 |---|---|---|---|
-| JDK 21 `java.base.jmod` | 7 555 | 62 235 | 62 235 ok, 0 failures |
-| Minecraft 26.3 `client.jar` + 66 libraries | 43 034 | 546 163 | 546 163 ok, 0 failures (138 classes unloadable: optional dependencies such as Kafka/OSGi/JFR missing from the class path) |
+| JDK 21 `java.base.jmod` | 7 555 | 62 235 | 62 235 başarılı, 0 hata |
+| Minecraft 26.3 `client.jar` + 66 kütüphane | 43 034 | 546 163 | 546 163 başarılı, 0 hata (138 sınıf yüklenemedi: Kafka/OSGi/JFR gibi isteğe bağlı bağımlılıklar sınıf yolunda yok) |
 
-## 5. Performance (first measurements, optimization phase started)
+## 5. Performans (ilk ölçümler, optimizasyon aşaması başladı)
 
-`GcStress` (≈44 M short-lived objects on 1 + 4 threads, 300 k-entry `HashMap`, weak refs),
-ReleaseFast, 4 cores:
+`GcStress` (1 + 4 iş parçacığında ≈44 M kısa ömürlü nesne, 300 bin girdili `HashMap`, zayıf referanslar),
+ReleaseFast, 4 çekirdek:
 
-| | time | peak RSS |
+| | süre | tepe RSS |
 |---|---|---|
-| HotSpot (OpenJDK 21, default G1) | 1.0 s | 640–830 MB |
-| monolith, system allocator per object | 8.6–10.6 s | 710 MB |
-| monolith, segregated-fit allocator | 5.9–6.9 s | 238 MB |
+| HotSpot (OpenJDK 21, varsayılan G1) | 1,0 sn | 640–830 MB |
+| monolith, nesne başına sistem tahsis edicisi | 8,6–10,6 sn | 710 MB |
+| monolith, ayrık-uyumlu (segregated-fit) tahsis edici | 5,9–6,9 sn | 238 MB |
 
-Applied: segregated-fit thread-local allocator, CHA devirtualization, elided class-init
-checks, in-place sweep, `volatile`-only atomics. Evaluated next steps, in expected order of
-impact:
+Uygulananlar: ayrık-uyumlu iş parçacığına özel tahsis edici, CHA devirtualizasyonu, atlanan sınıf başlatma denetimleri, yerinde süpürme, yalnızca `volatile` atomikler. Beklenen etki sırasına göre değerlendirilen sonraki adımlar:
 
-1. **Shadow-stack cost**: every call pushes a frame (TLS access, stack-limit check, safepoint
-   poll) and zero-initializes the `R` reference array; references live in memory instead of
-   registers. Replacing the shadow stack with conservative stack scanning over the
-   segregated-fit heap (object-start lookup by block/size class) lets LLVM keep references in
-   registers and removes the per-call bookkeeping. Leaf methods that cannot allocate, call or
-   throw need no frame at all.
-2. **Generational / bump allocation** for the nursery (most objects die young).
-3. **Inline caches** for megamorphic-looking interface calls; itable lookups are linear.
-4. **SIMD**: `Arrays.fill/equals/mismatch`, `String` scans and `System.arraycopy` are natural
-   `@Vector` candidates (HotSpot uses intrinsics there).
-5. **Parallel marking** on the stopped world (threads are already registered/parked).
-6. **Build scaling**: split the program into separately compiled units so LLVM can optimize
-   the 240 k-method Minecraft closure in parallel.
+1. **Gölge yığın maliyeti**: her çağrı bir çerçeve iter (TLS erişimi, yığın sınırı denetimi, güvenli nokta yoklaması) ve `R` referans dizisini sıfırlar; referanslar yazmaçlar yerine bellekte yaşar. Gölge yığını, ayrık-uyumlu heap üzerinde muhafazakâr yığın taramasıyla (blok/boyut sınıfına göre nesne başlangıcı araması) değiştirmek, LLVM'in referansları yazmaçlarda tutmasını sağlar ve çağrı başına muhasebeyi kaldırır. Tahsis edemeyen, çağrı yapamayan ya da fırlatamayan yaprak metotların hiç çerçeveye ihtiyacı yoktur.
+2. Fidanlık (nursery) için **nesilsel / bump tahsisi** (çoğu nesne genç ölür).
+3. Megamorfik görünen arayüz çağrıları için **satır içi önbellekler**; itable aramaları doğrusaldır.
+4. **SIMD**: `Arrays.fill/equals/mismatch`, `String` taramaları ve `System.arraycopy` doğal `@Vector` adaylarıdır (HotSpot orada intrinsics kullanır).
+5. Durdurulmuş dünyada **paralel işaretleme** (iş parçacıkları zaten kayıtlı/park edilmiş).
+6. **Derleme ölçeklendirme**: programı ayrı derlenen birimlere bölerek LLVM'in 240 bin metotluk Minecraft kapanışını paralel optimize etmesini sağlamak.
 
-## 6. Known semantic differences (documented, intentional)
+## 6. Bilinen anlamsal farklar (belgelenmiş, kasıtlı)
 
-* Locale data: only Locale.US / ROOT symbols (`DecimalFormatSymbols` overlay); CLDR data is not embedded.
-* `NullPointerException` messages are not "helpful" (HotSpot computes them from bytecode at run time).
-* `Object.hashCode()` identity hashes differ from HotSpot's (unspecified by the JLS).
-* Finalizers (`Object.finalize`) never run; soft references are cleared like weak references.
-* `System.gc()` is a no-op unless the program sets `-Dmono.explicit.gc` (Minecraft calls it every tick; a collection
-  stops the game for about half a second). With the property, it runs a complete collection before it returns, and
-  WeakReferences are cleared as in HotSpot (Rust backend, both GC modes; `tests/java/GcStress.java` sets the property).
-  The Zig backend's `GcStress` still keeps one WeakReference referent alive: its conservative stack scan finds a stale
-  reference to it. Open.
-* `Class.getDeclared*` reflection, dynamic class definition, hidden classes, method handles beyond
-  VarHandles and the desugared invokedynamic bootstraps are not available.
+* Yerel ayar (locale) verisi: yalnızca Locale.US / ROOT sembolleri (`DecimalFormatSymbols` kaplaması); CLDR verisi gömülü değil.
+* `NullPointerException` mesajları "yardımcı" değil (HotSpot bunları çalışma zamanında bytecode'dan hesaplar).
+* `Object.hashCode()` kimlik karmaları HotSpot'unkinden farklıdır (JLS'de belirtilmemiş).
+* Sonlandırıcılar (`Object.finalize`) hiç çalışmaz; yumuşak referanslar zayıf referanslar gibi temizlenir.
+* `System.gc()`, program `-Dmono.explicit.gc` ayarlamadıkça işlem yapmaz (Minecraft bunu her tick çağırır; bir toplama oyunu yaklaşık yarım saniye durdurur). Özellik ayarlıysa, dönmeden önce tam bir toplama çalıştırır ve WeakReference'lar HotSpot'taki gibi temizlenir (Rust arka ucu, her iki GC modu; `tests/java/GcStress.java` özelliği ayarlar).
+  Zig arka ucunun `GcStress` testi hâlâ bir WeakReference hedefini canlı tutuyor: muhafazakâr yığın taraması ona bayat bir referans buluyor. Açık.
+* `Class.getDeclared*` yansıması, dinamik sınıf tanımlama, gizli sınıflar, VarHandle'lar ve indirgenmiş invokedynamic bootstrap'leri dışındaki method handle'lar kullanılamaz.
 
-## 7. Minecraft 26.3 native run (milestone)
+## 7. Minecraft 26.3 yerel çalıştırma (kilometre taşı)
 
-The natively compiled client (Debug build, JDK 25 closure, no JVM) starts, creates an OpenGL
-context through LWJGL/SDL3, loads resources and renders the title/first-run screen under
-Xvfb with Mesa llvmpipe. Reproduce headless:
+Yerel olarak derlenmiş istemci (Debug derleme, JDK 25 kapanışı, JVM yok) başlıyor, LWJGL/SDL3 üzerinden bir OpenGL bağlamı oluşturuyor, kaynakları yüklüyor ve Mesa llvmpipe ile Xvfb altında başlık/ilk çalıştırma ekranını çiziyor. Headless olarak yeniden üretmek için:
 
     Xvfb :97 -screen 0 1280x720x24+32 +extension GLX +render &
     SDL_VIDEO_FORCE_EGL=1 DISPLAY=:97 LIBGL_ALWAYS_SOFTWARE=1 MC_GRAPHICS=opengl ./run.sh
 
-`SDL_VIDEO_FORCE_EGL=1` (needs libegl1/libegl-mesa0) is only required on Xvfb: Minecraft asks for an
-sRGB framebuffer, which Xvfb's GLX does not offer; real X servers and Wayland do not need it.
-Expected log noise without network/audio: Mojang services unavailable, OpenAL device, narrator (flite).
-Vulkan backend is selected only where the driver exposes VK_KHR_surface.
+`SDL_VIDEO_FORCE_EGL=1` (libegl1/libegl-mesa0 gerekir) yalnızca Xvfb'de gereklidir: Minecraft bir sRGB çerçeve tamponu ister, Xvfb'nin GLX'i bunu sunmaz; gerçek X sunucuları ve Wayland buna ihtiyaç duymaz.
+Ağ/ses olmadan beklenen günlük gürültüsü: Mojang servisleri kullanılamıyor, OpenAL aygıtı, anlatıcı (flite).
+Vulkan arka ucu yalnızca sürücünün VK_KHR_surface sunduğu yerde seçilir.
 
-## 8. Build modes and measured numbers (Minecraft 26.3 closure, 61 k Zig files, 904 MB of source)
+## 8. Derleme modları ve ölçülen sayılar (Minecraft 26.3 kapanışı, 61 bin Zig dosyası, 904 MB kaynak)
 
-| build | zig time | peak compiler RSS | title screen (Xvfb, llvmpipe) |
+| derleme | zig süresi | tepe derleyici RSS | başlık ekranı (Xvfb, llvmpipe) |
 |---|---|---|---|
-| Debug (self-hosted backend, -fstrip) | ~3 min | ~10 GB | ~5 min |
-| ReleaseFast, self-hosted backend (`--backend native`) | ~3.3 min | ~7 GB | ~3.4 min |
-| ReleaseFast, LLVM | killed by the OOM killer at >15 GB after 4.3 min | >15 GB | n/a |
-| ReleaseSmall, LLVM | killed by the OOM killer at ~13 GB after 4.2 min | >13 GB | n/a |
+| Debug (kendi arka ucu, -fstrip) | ~3 dk | ~10 GB | ~5 dk |
+| ReleaseFast, kendi arka ucu (`--backend native`) | ~3,3 dk | ~7 GB | ~3,4 dk |
+| ReleaseFast, LLVM | 4,3 dk sonra >15 GB'da OOM öldürücü tarafından sonlandırıldı | >15 GB | yok |
+| ReleaseSmall, LLVM | 4,2 dk sonra ~13 GB'da OOM öldürücü tarafından sonlandırıldı | >13 GB | yok |
 
-LLVM optimizes the whole program as one module; a 16 GB machine cannot hold it. `--backend auto`
-(default) therefore picks the LLVM build only when the machine has enough RAM (about 4 GiB per
-10 000 generated files times 1.6) and falls back to the self-hosted backend, also when the LLVM
-build is killed. Small programs (tests) always use LLVM: `GcStress` ReleaseFast runs in 2.8 s
-(HotSpot 0.94 s, previous monolith baseline 6.4 s).
+LLVM tüm programı tek modül olarak optimize eder; 16 GB'lık bir makine bunu tutamaz. Bu yüzden `--backend auto` (varsayılan), LLVM derlemesini yalnızca makinede yeterli RAM varsa (10 000 üretilmiş dosya başına yaklaşık 4 GiB çarpı 1,6) seçer ve LLVM derlemesi öldürüldüğünde de kendi arka ucuna geri düşer. Küçük programlar (testler) her zaman LLVM kullanır: `GcStress` ReleaseFast 2,8 sn'de çalışır (HotSpot 0,94 sn, önceki monolith temeli 6,4 sn).
 
-Optimizations applied this round: leaf methods (no throw/alloc/call/loop) skip the shadow-stack
-frame; allocation counter batched per thread; tiny runtime helpers are force-inlined only on the
-self-hosted backend (forcing them under LLVM was 3.5x slower).
+Bu turda uygulanan optimizasyonlar: yaprak metotlar (fırlatma/tahsis/çağrı/döngü yok) gölge yığın çerçevesini atlar; tahsis sayacı iş parçacığı başına toplu tutulur; küçük çalışma zamanı yardımcıları yalnızca kendi arka ucunda zorla satır içine alınır (LLVM altında zorlamak 3,5 kat daha yavaştı).
 
-Why not shard into separately compiled objects: Zig functions returning error unions cannot be
-exported across objects (`export` requires a C calling convention), and virtual calls go through
-vtables of Zig-ABI function pointers. Sharding needs a C-compatible method ABI (exceptions as a
-thread-local flag instead of error unions) and weak-linked runtime globals; that is a codegen
-redesign, not a build-script change.
+Neden ayrı derlenen nesnelere bölünmedi: hata birleşimleri döndüren Zig fonksiyonları nesneler arasında dışa aktarılamaz (`export` bir C çağrı kuralı gerektirir) ve sanal çağrılar Zig-ABI fonksiyon işaretçilerinin vtable'larından geçer. Bölme, C uyumlu bir metot ABI'si (hata birleşimleri yerine iş parçacığına özel bir bayrak olarak istisnalar) ve zayıf bağlı çalışma zamanı globalleri gerektirir; bu bir kod üretimi yeniden tasarımıdır, bir derleme betiği değişikliği değil.
 
-## 9. Gameplay milestone
+## 9. Oynanış kilometre taşı
 
-The natively compiled Minecraft 26.3 client (no JVM) now: starts, reaches the title screen, opens
-Singleplayer, creates a world (integrated server over netty local channels), loads it and renders
-the world in-game under Xvfb/llvmpipe (OpenGL 4.5 core, Mesa 25.2): terrain, trees, mobs, HUD,
-tutorial toasts, F3 overlay, keyboard/mouse input. Driven headless with xdotool (see section 7).
+Yerel olarak derlenmiş Minecraft 26.3 istemcisi (JVM yok) artık: başlıyor, başlık ekranına ulaşıyor, Singleplayer'ı açıyor, bir dünya oluşturuyor (netty yerel kanalları üzerinden gömülü sunucu), yüklüyor ve Xvfb/llvmpipe altında (OpenGL 4.5 core, Mesa 25.2) oyun içinde çiziyor: arazi, ağaçlar, yaratıklar, HUD, eğitim bildirimleri, F3 kaplaması, klavye/fare girdisi. xdotool ile headless sürüldü (bkz. bölüm 7).
 
-Fixed on the way (all with differential tests where the behaviour is JDK-level): interface
-initialization with default methods, unaligned Unsafe access, http/https URL handlers, named
-boot modules (`java.base` closed to deep reflection but exporting `java.*`/`javax.*`,
-`jdk.unsupported` opening `sun.misc`), JNI `RegisterNatives`, reflective netty channel and cleaner
-classes, JNA structure types.
+Yolda düzeltilenler (davranış JDK düzeyinde olduğu yerde hepsi fark testleriyle): default metotlu arayüz başlatma, hizasız Unsafe erişimi, http/https URL işleyicileri, adlandırılmış önyükleme modülleri (`java.base` derin yansımaya kapalı ama `java.*`/`javax.*` dışa aktarıyor, `jdk.unsupported` `sun.misc`'i açıyor), JNI `RegisterNatives`, yansıtmalı netty kanalı ve temizleyici sınıfları, JNA yapı tipleri.
 
-Measured in-game on this 4-core, llvmpipe-only machine with the self-hosted backend: about 1 fps and
-integrated-server ticks of ~390 ms (vs the 50 ms budget). Both the software GL rasterizer and
-unoptimized generated code contribute; a real GPU removes the first, LLVM Release removes much of
-the second (needs a machine with enough RAM, see section 8).
+Bu 4 çekirdekli, yalnızca llvmpipe olan makinede kendi arka ucuyla oyun içinde ölçüldü: yaklaşık 1 fps ve gömülü sunucu tick'leri ~390 ms (50 ms bütçeye karşı). Hem yazılım GL rasterleyicisi hem de optimize edilmemiş üretilmiş kod katkı yapıyor; gerçek bir GPU birincisini, LLVM Release ise ikincisinin çoğunu ortadan kaldırır (yeterli RAM'li bir makine gerektirir, bkz. bölüm 8).
 
-## 10. Patch system (patches/)
+## 10. Yama sistemi (patches/)
 
-Hand-written Zig replaces hot methods without storing any Mojang code: `patches/manifest.json` names a method
-(class, method, descriptor) and a Zig function in `patches/*.zig`. The transpiler keeps the translated original as
-`<name>_orig` and emits a wrapper; `MONO_PATCH_VERIFY=1` runs both and aborts on a bitwise difference for primitive
-returns. Works unsharded and sharded (patch files are copied into every shard; their `P.C_*` references are
-added to the shard facades). Verified by tests/java/PatchTarget (test-only patches in the manifest, class absent
-from Minecraft builds). Not yet verified: the mismatch abort path, the sharded copy path. See patches/README.md.
+El yazımı Zig, hiçbir Mojang kodunu saklamadan sıcak metotları değiştirir: `patches/manifest.json` bir metodu (sınıf, metot, tanımlayıcı) ve `patches/*.zig` içindeki bir Zig fonksiyonunu adlandırır. Çevirici çevrilmiş orijinali `<ad>_orig` olarak tutar ve bir sarmalayıcı üretir; `MONO_PATCH_VERIFY=1` her ikisini de çalıştırır ve ilkel dönüşlerde bit düzeyinde bir fark olursa durdurur. Parçalı ve parçasız çalışır (yama dosyaları her shard'a kopyalanır; `P.C_*` referansları shard cephelerine eklenir). tests/java/PatchTarget ile doğrulandı (manifestteki yalnızca test yamaları, sınıf Minecraft derlemelerinde yok). Henüz doğrulanmayanlar: uyuşmazlık durdurma yolu, parçalı kopya yolu. Bkz. patches/README.md.
 
-## 11. Performance work log (this branch)
+## 11. Performans çalışma günlüğü (bu dal)
 
-Measured on the same 4 vCPU machine, sharded LLVM ReleaseFast, llvmpipe, world ready (vanilla HotSpot: 21.7 s):
-43.0 s (start of the performance work) -> 42.3 (lazy-frame leaves) -> 36.5 (JDK intrinsics, SimpleBitStorage patch)
--> 33.5 (inline null/bounds checks) -> 33.3 (small-object zeroing, class lookup hash) -> 33.7 (line stored only on the
-throwing path) -> ~31-33 (world height patches, inline checkcast/itable). Run-to-run noise is about 1-2 s.
+Aynı 4 vCPU makinede, parçalı LLVM ReleaseFast, llvmpipe, dünya hazır (vanilla HotSpot: 21,7 sn):
+43,0 sn (performans çalışmasının başlangıcı) -> 42,3 (tembel çerçeveli yapraklar) -> 36,5 (JDK intrinsics, SimpleBitStorage yaması)
+-> 33,5 (satır içi null/sınır denetimleri) -> 33,3 (küçük nesne sıfırlama, sınıf arama karması) -> 33,7 (satır yalnızca fırlatan yolda saklanır)
+-> ~31-33 (dünya yüksekliği yamaları, satır içi checkcast/itable). Koşular arası gürültü yaklaşık 1-2 sn.
 
-Tools: `MONO_PROF=<file>` (in-process 1 kHz CPU sampling), `tools/prof_report.py`, `tools/bench.py`,
-`tools/microbench/CallBench.java`, `MONO_PATCH_VERIFY=1`.
+Araçlar: `MONO_PROF=<dosya>` (süreç içi 1 kHz CPU örneklemesi), `tools/prof_report.py`, `tools/bench.py`, `tools/microbench/CallBench.java`, `MONO_PATCH_VERIFY=1`.
 
-Findings: the game profile is flat (no method above ~3%); call-heavy code is 2.7x to 6.8x slower than HotSpot
-(docs/BENCHMARK.md); 140k futex calls in 15 s are visible during world generation (one hot lock word, not yet
-identified); memory management (allocation, zeroing, GC mark and sweep) is about 10% of CPU samples; software
-rendering threads (llvmpipe) take about 7%.
+Bulgular: oyun profili düz (hiçbir metot ~%3'ün üstünde değil); çağrı ağırlıklı kod HotSpot'tan 2,7 ila 6,8 kat yavaş (docs/BENCHMARK.md); dünya üretimi sırasında 15 sn'de 140 bin futex çağrısı görülüyor (tek sıcak kilit sözcüğü, henüz tanımlanmadı); bellek yönetimi (tahsis, sıfırlama, GC işaretle ve süpür) CPU örneklerinin yaklaşık %10'u; yazılım görüntüleme iş parçacıkları (llvmpipe) yaklaşık %7 alıyor.
 
-Open structural options, none started: structured loops with register-resident locals instead of one labeled
-switch per method; reference slots without the `R[]` memory array (conservative stack scanning, which risks
-weak-reference timing differences); cross-shard inlining (needs fewer, larger shards or LTO, both limited by the
-15 GiB build memory); a smaller object header and lower RSS (6.5-7 GiB vs 2.3 GiB for vanilla).
+Açık yapısal seçenekler, hiçbiri başlamadı: metot başına tek etiketli switch yerine yazmaçta yaşayan yerel değişkenlerle yapılandırılmış döngüler; `R[]` bellek dizisi olmadan referans yuvaları (muhafazakâr yığın taraması; zayıf referans zamanlama farkları riski taşır); shard'lar arası satır içi (daha az, daha büyük shard ya da LTO gerekir, ikisi de 15 GiB derleme belleğiyle sınırlı); daha küçük nesne başlığı ve daha düşük RSS (vanilla için 2,3 GiB'a karşı 6,5-7 GiB).
 
-## 12. GC-free client core, Zero-LWJGL RHI, world culling & GPU instancing
+## 12. GC'siz istemci çekirdeği, Sıfır-LWJGL RHI, dünya elemesi ve GPU örneklemesi
 
-1. **GC-free memory (`runtime/mem_pool.zig`, `runtime/thread_pool.zig`, `runtime/rt.zig`)**:
-   - Eliminated stop-the-world mark-and-sweep GC (`collect`, `markAndSweep`, `traceParallel`, `sweepBlocks`), STW barriers, and loop safepoint overhead (`rt.safepoint()` is now a wait-free no-op).
-   - Replaced with lock-free per-thread bump `ArenaAllocator` (`pushArenaScope` / `popArenaScope`, `beginFrame` / `endFrame`) + segregated `SlabPool` with 3-epoch quiescent deferred reclamation and a low-power wake-on-demand `WorkerPool`.
-   - Closed JDK 25 `MethodHandleNatives` (`registerNatives`, `getNamedCon`, `init`, `expand`), `NativeImageBuffer.getNativeMap`, `MethodHandles.Lookup.IMPL_LOOKUP`/`checkAccess`, `MethodHandles` VarHandle combinators, `VarHandle` (`VarForm`, `AccessType`, `AccessMode`), `Class.getRecordComponents`, and Foreign `MemorySegment` `VarHandle` lowering (`runtime/varhandle.zig`, `monolith/program.py`, `monolith/zigen.py`).
-2. **Custom RHI (`runtime/rhi.zig`, `runtime/rhi_vk.zig`, `runtime/rhi_gl.zig`, `runtime/rhi_bridge.zig`, `runtime/java/mono/rhi/NativeRhi.java`, `tools/mcbuild.py`)**:
-   - Dynamic Vulkan 1.1+ backend (`libvulkan.so.1` probe, `vkCmdDrawIndexed` / `vkCmdDrawIndexedIndirect` command dispatch) with automatic fallback to strict OpenGL 3.3 Core (`rhi_gl.zig`: triple-buffered `GL_TEXTURE_BUFFER` TBO instancing + `glMapBufferRange` unsynchronized streaming + `glDrawElementsInstancedBaseVertex` for Intel HD 5500) and headless command-verification mode, plus `--no-lwjgl` and `--graphics auto|vulkan|opengl` support in `tools/mcbuild.py`.
-3. **Vanilla-safe world render pipeline (`runtime/world_render.zig`)**:
-   - Immutable `SectionSnapshot` culling leaves vanilla tick/redstone/physics/server logic untouched: 6-plane Gribb-Hartmann frustum culling, 6-face CaveCulling portal BFS (`computeSectionPortals`), conservative `HiZPyramid` occlusion, and viewport pixel-coverage LOD culling (`cullAndScheduleWorld`).
-4. **GPU-driven non-block instancing (`runtime/gpu_instancing.zig`)**:
-   - Unified 64-byte `GpuInstance` / 32-byte `GpuParticle` compaction (`InstanceBatcher`) across `BlockDisplay`, `ItemDisplay`, `TextDisplay`, mobs, players, dropped items, chests, signs, and particles into RHI indirect/instanced draw batches.
-5. **End-to-end verification (`tests/run_client_core_e2e.py`)**:
-   - `python3 tests/run_client_core_e2e.py -O Debug --shards 16 --shard-jobs 1`: passed in 594.6s (Zig unit tests `mem_pool` 2/2, `thread_pool` 1/1, `rhi` 3/3, `world_render` 4/4, `gpu_instancing` 6/6, 4-subsystem Zig E2E 8/8, `javac` + `monolith` 5901 classes / 31959 methods / 300 natives with `0 missing-native`, `0 link-error`, `0 unsupported-varhandle`, and native Java-to-Zig E2E run `JAVA_CLIENT_CORE_E2E_OK backend=3 vis=2 inst=6 batches=4 dtMs=5`).
-   - Final `-O ReleaseFast` verification (`python3 tests/run_client_core_e2e.py -O ReleaseFast --shards 32 --shard-jobs 1`): passed all checks in 2398.9s (`JAVA_CLIENT_CORE_E2E_OK backend=3 vis=2 inst=6 batches=4 dtMs=2`, `0 missing-native`, `0 link-error`, `0 unsupported-varhandle`).
-   - Post-GC-removal multithreaded JVM differential regression (`MONO_TEST_SHARDS=16 python3 tests/run_tests.py -O Debug Threads`): `PASS` (`13 lines; jvm 0.78s, native 100.75s, build 534.6s`).
-   - Measured `-O ReleaseFast` subsystem microbenchmarks (`tools/microbench/run_client_core_bench.py`): `ArenaAllocator` `6.68 ns/op` (`149.7 M ops/s`), `SlabPool` 3-epoch `30.08 ns/op` (`0.0 ms` STW pause), `WorldRender` 256-section 3-stage cull `30.0 us/frame`, `InstanceBatcher` 2048-entity/particle cull+batch `264.4 us/frame`.
+1. **GC'siz bellek (`runtime/mem_pool.zig`, `runtime/thread_pool.zig`, `runtime/rt.zig`)**:
+   - Durdur-dünya işaretle-süpür GC'si (`collect`, `markAndSweep`, `traceParallel`, `sweepBlocks`), STW bariyerleri ve döngü güvenli nokta yükü kaldırıldı (`rt.safepoint()` artık bekleme gerektirmeyen bir no-op).
+   - Yerine kilitsiz iş parçacığı başına bump `ArenaAllocator` (`pushArenaScope` / `popArenaScope`, `beginFrame` / `endFrame`) + 3 çağlı sakin ertelenmiş geri kazanımlı ayrık `SlabPool` ve düşük güçlü, talep üzerine uyanan `WorkerPool` getirildi.
+   - JDK 25 `MethodHandleNatives` (`registerNatives`, `getNamedCon`, `init`, `expand`), `NativeImageBuffer.getNativeMap`, `MethodHandles.Lookup.IMPL_LOOKUP`/`checkAccess`, `MethodHandles` VarHandle birleştiricileri, `VarHandle` (`VarForm`, `AccessType`, `AccessMode`), `Class.getRecordComponents` ve Foreign `MemorySegment` `VarHandle` indirgemesi kapatıldı (`runtime/varhandle.zig`, `monolith/program.py`, `monolith/zigen.py`).
+2. **Özel RHI (`runtime/rhi.zig`, `runtime/rhi_vk.zig`, `runtime/rhi_gl.zig`, `runtime/rhi_bridge.zig`, `runtime/java/mono/rhi/NativeRhi.java`, `tools/mcbuild.py`)**:
+   - Dinamik Vulkan 1.1+ arka ucu (`libvulkan.so.1` yoklaması, `vkCmdDrawIndexed` / `vkCmdDrawIndexedIndirect` komut dağıtımı), katı OpenGL 3.3 Core'a otomatik geri düşüşle (`rhi_gl.zig`: üçlü tamponlu `GL_TEXTURE_BUFFER` TBO örnekleme + `glMapBufferRange` eşzamansız akış + Intel HD 5500 için `glDrawElementsInstancedBaseVertex`) ve headless komut doğrulama moduyla, ayrıca `tools/mcbuild.py` içinde `--no-lwjgl` ve `--graphics auto|vulkan|opengl` desteği.
+3. **Vanilla'ya güvenli dünya çizim boru hattı (`runtime/world_render.zig`)**:
+   - Değişmez `SectionSnapshot` eleme, vanilla tick/redstone/fizik/sunucu mantığına dokunmaz: 6 düzlemli Gribb-Hartmann frustum eleme, 6 yüzlü CaveCulling portal BFS (`computeSectionPortals`), muhafazakâr `HiZPyramid` örtme ve görüntü alanı piksel kapsamlı LOD eleme (`cullAndScheduleWorld`).
+4. **GPU yönlendirmeli blok dışı örnekleme (`runtime/gpu_instancing.zig`)**:
+   - Birleşik 64 baytlık `GpuInstance` / 32 baytlık `GpuParticle` sıkıştırma (`InstanceBatcher`); `BlockDisplay`, `ItemDisplay`, `TextDisplay`, yaratıklar, oyuncular, düşen eşyalar, sandıklar, tabelalar ve parçacıklar RHI dolaylı/örneklemeli çizim toplu işlerine aktarılır.
+5. **Uçtan uca doğrulama (`tests/run_client_core_e2e.py`)**:
+   - `python3 tests/run_client_core_e2e.py -O Debug --shards 16 --shard-jobs 1`: 594,6 sn'de geçti (Zig birim testleri `mem_pool` 2/2, `thread_pool` 1/1, `rhi` 3/3, `world_render` 4/4, `gpu_instancing` 6/6, 4 alt sistemli Zig E2E 8/8, `javac` + `monolith` 5901 sınıf / 31959 metot / 300 yerel metot, `0 missing-native`, `0 link-error`, `0 unsupported-varhandle` ve yerel Java'dan Zig'e E2E koşusu `JAVA_CLIENT_CORE_E2E_OK backend=3 vis=2 inst=6 batches=4 dtMs=5`).
+   - Son `-O ReleaseFast` doğrulaması (`python3 tests/run_client_core_e2e.py -O ReleaseFast --shards 32 --shard-jobs 1`): tüm denetimler 2398,9 sn'de geçti (`JAVA_CLIENT_CORE_E2E_OK backend=3 vis=2 inst=6 batches=4 dtMs=2`, `0 missing-native`, `0 link-error`, `0 unsupported-varhandle`).
+   - GC kaldırıldıktan sonra çok iş parçacıklı JVM fark gerilemesi (`MONO_TEST_SHARDS=16 python3 tests/run_tests.py -O Debug Threads`): `PASS` (`13 satır; jvm 0.78s, yerel 100.75s, derleme 534.6s`).
+   - Ölçülen `-O ReleaseFast` alt sistem mikro kıyaslamaları (`tools/microbench/run_client_core_bench.py`): `ArenaAllocator` `6.68 ns/op` (`149.7 M ops/s`), `SlabPool` 3 çağlı `30.08 ns/op` (`0.0 ms` STW duraklaması), `WorldRender` 256 bölümlü 3 aşamalı eleme `30.0 us/kare`, `InstanceBatcher` 2048 varlık/parçacık eleme+toplu iş `264.4 us/kare`.
 
-## 13. Verification on constrained hardware (2 vCPU / 1.9 GiB, 2026-11-16)
+## 13. Kısıtlı donanımda doğrulama (2 vCPU / 1,9 GiB, 2026-11-16)
 
-This checkout was audited and partially verified on a machine far smaller than the one behind sections 5–12 (2 vCPU Intel Xeon @ 2.60 GHz, 1.94 GiB RAM, no swap, 25 GB disk). See [`HARDWARE.md`](HARDWARE.md) for the full task-by-task table. Results, honestly:
+Bu checkout, 5–12. bölümlerin arkasındaki makineden çok daha küçük bir makinede (2 vCPU Intel Xeon @ 2,60 GHz, 1,94 GiB RAM, swap yok, 25 GB disk) denetlendi ve kısmen doğrulandı. Görev görev tam tablo için bkz. [`HARDWARE.md`](HARDWARE.md). Sonuçlar, dürüstçe:
 
-* Verified here: `python3 -m py_compile` on all Python sources (clean), `pyflakes` on all Python sources (clean), `zig ast-check` on `runtime/*.zig` (clean), `bash -n` on all shell scripts (clean), `.claude/hooks/guard.py --self-test` (36/36) and its stdin/exit-2 protocol, `tests/run_tests.py --min-avail-gib` refusal path (exits 3, instant), and one full differential test: **Arith PASS** (JVM vs native identical output; 2 228 lines; jvm 0.16 s, native 0.58 s; zig Debug self-hosted build 495.0 s; load average ~10 during the build, zig peak RSS ~745 MB).
-* During the Arith build the machine was effectively saturated (interactive commands timed out; kswapd active, `MemAvailable` bottomed at ~700 MB). No OOM kill occurred — the self-hosted backend plus `-fstrip` kept it alive. This is exactly the failure mode `docs/HARDWARE.md` and the new memory floors (`MONO_TEST_MIN_AVAIL_GIB`, `MONO_MIN_AVAIL_GIB`, guard.py heavy-job floor) now refuse instead of risking.
-* **Not runnable on this box, not run**: the rest of the differential suite, the Client Core E2E, microbenchmarks, the sharded Minecraft build, and the full-program Zig compile. All claims in sections 5–12 come from the larger machine and were not re-measured here. The "10/10 passed" result in section 1 likewise predates this audit.
-* Fixed in this audit: missing `.claude/hooks/guard.py` (implemented, self-tested), `tests/run_tests.py` had no memory guard (now refuses below a floor and stops the suite), docs referenced a nonexistent `docs/learnings/` and a stale jmod requirement (fixed), unused Python imports/variables and a placeholder f-string (removed; `pyflakes` is clean), `tests/__pycache__` and stale build trees (removed).
+* Burada doğrulananlar: tüm Python kaynaklarında `python3 -m py_compile` (temiz), tüm Python kaynaklarında `pyflakes` (temiz), `runtime/*.zig` üzerinde `zig ast-check` (temiz), tüm kabuk betiklerinde `bash -n` (temiz), `.claude/hooks/guard.py --self-test` (36/36) ve stdin/çıkış-2 protokolü, `tests/run_tests.py --min-avail-gib` reddetme yolu (3 ile çıkar, anında) ve bir tam fark testi: **Arith GEÇTİ** (JVM ve yerel aynı çıktı; 2 228 satır; jvm 0,16 sn, yerel 0,58 sn; zig Debug kendi arka uç derlemesi 495,0 sn; derleme sırasında yük ortalaması ~10, zig tepe RSS ~745 MB).
+* Arith derlemesi sırasında makine fiilen doymuştu (etkileşimli komutlar zaman aşımına uğradı; kswapd aktif, `MemAvailable` en düşük ~700 MB'a indi). OOM öldürmesi olmadı — kendi arka ucu artı `-fstrip` onu ayakta tuttu. `docs/HARDWARE.md` ve yeni bellek tabanları (`MONO_TEST_MIN_AVAIL_GIB`, `MONO_MIN_AVAIL_GIB`, guard.py ağır iş tabanı) tam da bu hata modunu artık riske atmak yerine reddediyor.
+* **Bu kutuda çalıştırılamaz, çalıştırılmadı**: fark paketinin geri kalanı, Client Core E2E, mikro kıyaslamalar, parçalı Minecraft derlemesi ve tam program Zig derlemesi. 5–12. bölümlerdeki tüm iddialar daha büyük makineden geliyor ve burada yeniden ölçülmedi. 1. bölümdeki "10/10 geçti" sonucu da bu denetimden öncesine ait.
+* Bu denetimde düzeltilenler: eksik `.claude/hooks/guard.py` (gerçekleştirildi, kendi kendine test edildi), `tests/run_tests.py` bellek korumasından yoksundu (artık tabanın altında reddeder ve paketi durdurur), dokümanlar var olmayan bir `docs/learnings/` dizinine ve eski bir jmod gereksinimine başvuruyordu (düzeltildi), kullanılmayan Python içe aktarmaları/değişkenleri ve bir yer tutucu f-string (kaldırıldı; `pyflakes` temiz), `tests/__pycache__` ve bayat derleme ağaçları (kaldırıldı).
 
-## 14. Gap audit & hardening pass (2026-11-16, second session)
+## 14. Açık denetimi ve sağlamlaştırma geçişi (2026-11-16, ikinci oturum)
 
-Repository-wide audit for *açıklar* (latent gaps, not features): security, portability, correctness. All
-fixes verified with lightweight checks only; the heavy gates (differential suite, Client Core E2E, sharded
-Minecraft build) remain hardware-blocked on this box — see §13.
+*Açıklar* için depo çapında denetim (gizli boşluklar, özellik değil): güvenlik, taşınabilirlik, doğruluk. Tüm düzeltmeler yalnızca hafif denetimlerle doğrulandı; ağır kapılar (fark paketi, Client Core E2E, parçalı Minecraft derlemesi) bu kutuda donanım nedeniyle bloke — bkz. §13.
 
-Fixed and verified in this pass:
+Bu geçişte düzeltilen ve doğrulananlar:
 
-* **tools/mcbuild.py — network-fetched JDK was extracted without any integrity check.** Now:
-  SHA-256 of the archive is verified *before* extraction (expected digest from the Adoptium asset's
-  `.sha256.txt` companion; the v3 `/checksums` API returns 404 and is not used); mismatch → archive is
-  deleted and the run aborts. `MONO_JDK_NO_CHECKSUM=1` is a documented bypass. Tar extraction uses
-  `filter="data"` on Python ≥ 3.12, otherwise realpath-containment + symlink/hardlink target checks;
-  zip extraction enforces realpath containment (`_safe_extract_zip`). `extract_resources()` (client-JAR /
-  native resources) had a zip-slip: entry names are validated against `dest` and copied by streaming.
-  `fetch()` deletes partial downloads on failure; the version manifest is cached (no `.tmp` race);
-  `ensure_jdk()` locates the installed JDK via `<install>/bin/javac` instead of recursion; the
-  native-library scan now covers `.so` / `.dylib` / `.dll`; `read_jar_version()` fails with a clear
-  message instead of a raw traceback; all network helpers send `User-Agent: monolith-mcbuild/<version>`
-  (the default python-urllib UA is rejected 403 by Adoptium's CDN).
-  **Verified end-to-end on this box:** `ensure_jdk(25)` fresh download → "JDK SHA-256 verified" →
-  Temurin 25.0.5+8 (javac 25.0.5) under `~/.cache/monolith/temurin-25/`.
-* **monolith/classpath.py — `jdk_home()` could not find the mcbuild-installed JDK** (only `MONO_JDK_HOME` /
-  `JAVA_HOME` / `/opt/jdk25` / `/usr/lib/jvm` were probed), so a `mcbuild ensure-jdk` install was
-  invisible to `monolith build`. Now also globs `~/.cache/monolith/temurin-*/**`. module-info parse failures
-  now warn on stderr instead of failing silently.
-* **monolith/__main__.py — auto backend selection.** The sharded path always forced LLVM (Debug builds
-  OOM); it now mirrors the unsharded policy (self-hosted for Debug/ReleaseSafe, or when the machine
-  provably cannot fit LLVM for optimizing builds). The unsharded path no longer pins Debug to LLVM
-  either; both paths route through the same `_mem_total_gib()` estimate. The `fcntl` classlib lock is
-  now optional (`msvcrt.locking` fallback, else proceed — outputs are content-addressed/immutable).
-* **runtime/mem_pool.zig — arena `alloc` returned misaligned pointers for `align > 4096`** (now returns
-  null per `Allocator` contract); removed the redundant `madvise(MADV_DONTNEED)` branch whose both paths
-  freed the chunk identically. `zig ast-check` clean; `zig test -lc -O Debug` 2/2 pass.
-* **monolith/program.py** — dead `synchronized` no-op removed. **tools/bench.py** — `SIGKILL` no longer
-  assumed (falls back to `SIGTERM`). **tests/run_client_core_e2e.py** — no longer hardcodes one
-  machine's JDK path (derives env → `classpath.jdk_home()` → `~/.cache/monolith/temurin-*`); adds a
-  per-step timeout (`MONO_E2E_TIMEOUT`, default 10800 s).
-* **Repo portability** — hardcoded author-machine paths eliminated: `.claude/COMMON_MISTAKES.md` and
-  (paths made machine independent: `/root/...` → `$HOME/...`, `MCOUT` falls back to the repo-local
-  `out/` tree instead of a `/tmp/claude-0/...` path).
-* **Hygiene sweep** — secrets patterns (PEM blocks, AWS/GitHub/Slack tokens, JWTs, hardcoded
-  passwords): 0 hits. No hardcoded user-machine paths remain.
-* **New `.github/workflows/ci.yml`** — syntax/lint, `zig ast-check`, JSON validity, guard self-test,
-  JDK 25 install, and one differential test (Arith). The heavy gates are deliberately not in CI; see
-  `docs/HARDWARE.md`. Authored but NOT yet run on GitHub (no local runner here).
+* **tools/mcbuild.py — ağdan alınan JDK hiçbir bütünlük denetimi olmadan çıkarılıyordu.** Artık: arşivin SHA-256'sı çıkarmadan *önce* doğrulanıyor (beklenen özet, Adoptium varlığının `.sha256.txt` eşinden; v3 `/checksums` API'si 404 döndürür ve kullanılmaz); uyuşmazlık → arşiv silinir ve koşu iptal edilir. `MONO_JDK_NO_CHECKSUM=1` belgelenmiş bir atlama yoludur. Tar çıkarma, Python ≥ 3.12'de `filter="data"` kullanır, aksi hâlde realpath-içerme + sembolik/sabit bağlantı hedefi denetimleri; zip çıkarma realpath içermeyi uygular (`_safe_extract_zip`). `extract_resources()` (istemci JAR'ı / yerel kaynaklar) bir zip-slip açığına sahipti: girdi adları `dest`'e karşı doğrulanır ve akışla kopyalanır. `fetch()` hata durumunda kısmi indirmeleri siler; sürüm manifesti önbelleğe alınır (`.tmp` yarışı yok); `ensure_jdk()` kurulu JDK'yı özyineleme yerine `<install>/bin/javac` ile bulur; yerel kütüphane taraması artık `.so` / `.dylib` / `.dll` kapsar; `read_jar_version()` ham bir traceback yerine açık bir mesajla başarısız olur; tüm ağ yardımcıları `User-Agent: monolith-mcbuild/<version>` gönderir (varsayılan python-urllib UA'sı Adoptium'un CDN'i tarafından 403 ile reddedilir).
+  **Bu kutuda uçtan uca doğrulandı:** `ensure_jdk(25)` taze indirme → "JDK SHA-256 verified" → `~/.cache/monolith/temurin-25/` altında Temurin 25.0.5+8 (javac 25.0.5).
+* **monolith/classpath.py — `jdk_home()` mcbuild ile kurulan JDK'yı bulamıyordu** (yalnızca `MONO_JDK_HOME` / `JAVA_HOME` / `/opt/jdk25` / `/usr/lib/jvm` aranıyordu), bu yüzden bir `mcbuild ensure-jdk` kurulumu `monolith build` için görünmezdi. Artık `~/.cache/monolith/temurin-*/**` de taranır. module-info ayrıştırma hataları artık sessizce başarısız olmak yerine stderr'e uyarı yazar.
+* **monolith/__main__.py — otomatik arka uç seçimi.** Parçalı yol her zaman LLVM'i zorluyordu (Debug derlemeler OOM oluyordu); artık parçasız politikayı yansıtır (Debug/ReleaseSafe için kendi arka ucu ya da makinenin optimize eden derlemeler için LLVM'e sığmayacağı kanıtlandığında). Parçasız yol da artık Debug'ı LLVM'e sabitlemez; iki yol da aynı `_mem_total_gib()` tahmininden geçer. `fcntl` classlib kilidi artık isteğe bağlı (`msvcrt.locking` geri düşüşü, yoksa devam — çıktılar içerik adresli/değişmez).
+* **runtime/mem_pool.zig — arena `alloc`, `align > 4096` için hizasız işaretçiler döndürüyordu** (artık `Allocator` sözleşmesine göre null döndürür); iki yolu da parçayı aynı şekilde serbest bırakan gereksiz `madvise(MADV_DONTNEED)` dalı kaldırıldı. `zig ast-check` temiz; `zig test -lc -O Debug` 2/2 geçti.
+* **monolith/program.py** — ölü `synchronized` no-op'u kaldırıldı. **tools/bench.py** — `SIGKILL` artık varsayılmıyor (`SIGTERM`'e geri düşer). **tests/run_client_core_e2e.py** — artık bir makinenin JDK yolunu sabit kodlamıyor (env → `classpath.jdk_home()` → `~/.cache/monolith/temurin-*` ile türetir); adım başına zaman aşımı ekler (`MONO_E2E_TIMEOUT`, varsayılan 10800 sn).
+* **Depo taşınabilirliği** — yazar makinesine ait sabit yollar ortadan kaldırıldı: `.claude/COMMON_MISTAKES.md` ve (yollar makineden bağımsız yapıldı: `/root/...` → `$HOME/...`, `MCOUT` bir `/tmp/claude-0/...` yolu yerine depo yerel `out/` ağacına geri düşer).
+* **Hijyen taraması** — gizli bilgi kalıpları (PEM blokları, AWS/GitHub/Slack belirteçleri, JWT'ler, sabit kodlanmış parolalar): 0 eşleşme. Sabit kodlanmış kullanıcı makinesi yolu kalmadı.
+* **Yeni `.github/workflows/ci.yml`** — sözdizimi/lint, `zig ast-check`, JSON geçerliliği, guard kendi testi, JDK 25 kurulumu ve bir fark testi (Arith). Ağır kapılar kasıtlı olarak CI'da değil; bkz. `docs/HARDWARE.md`. Yazıldı ama GitHub'da HENÜZ çalıştırılmadı (burada yerel çalıştırıcı yok).
 
-Explicitly NOT done / residual gaps (need the big machine, GitHub CI, or human review):
+Açıkça YAPILMAYAN / kalan boşluklar (büyük makine, GitHub CI ya da insan incelemesi gerektirir):
 
-* Differential suite beyond Arith, Client Core E2E, sharded Minecraft build:
-  not runnable on this box (§13). An attempt this session to re-run Arith was **aborted by the agent**
-  when `MemAvailable` fell to ~34 MB during the zig Debug compile (zig peak RSS ~1.5 GB); the process
-  was killed to protect the interactive session and ~726 MB of stale build output in `tests/build/` was
-  removed. §13's 745 MB peak could not be reproduced under current conditions — heavy verification
-  belongs on a bigger machine or in CI.
-* Patch verification beyond primitive returns (see patches/README.md); the sharded patch-copy path
-  remains untested.
-* `.claude/hooks/guard.py` was not wired into a `.claude/settings.json` then (left as a user decision);
-  it was wired on explicit user request in the following pass — see §15 (item 7).
-* `tests/run_client_core_e2e.py` changes are syntax/lint-verified only (`bash -n`-class checks), not
-  executed — the test needs the documented big-machine profile.
+* Arith ötesindeki fark paketi, Client Core E2E, parçalı Minecraft derlemesi: bu kutuda çalıştırılamaz (§13). Bu oturumda Arith'i yeniden çalıştırma denemesi, zig Debug derlemesi sırasında `MemAvailable` ~34 MB'a düştüğünde **ajan tarafından iptal edildi** (zig tepe RSS ~1,5 GB); etkileşimli oturumu korumak için süreç öldürüldü ve `tests/build/` içindeki ~726 MB bayat derleme çıktısı silindi. §13'teki 745 MB tepe, mevcut koşullarda yeniden üretilemedi — ağır doğrulama daha büyük bir makineye ya da CI'a aittir.
+* Ilkel dönüşlerin ötesinde yama doğrulaması (bkz. patches/README.md); parçalı yama kopya yolu hâlâ test edilmedi.
+* `.claude/hooks/guard.py` o zaman bir `.claude/settings.json` içine bağlanmamıştı (kullanıcı kararına bırakıldı); sonraki geçişte açık kullanıcı isteğiyle bağlandı — bkz. §15 (madde 7).
+* `tests/run_client_core_e2e.py` değişiklikleri yalnızca sözdizimi/lint doğrulamalı (`bash -n` sınıfı denetimler), çalıştırılmadı — test, belgelenmiş büyük makine profilini gerektirir.
 
 
-## 15. Architecture & integration gap pass (2026-11-16, third session)
+## 15. Mimari ve entegrasyon açığı geçişi (2026-11-16, üçüncü oturum)
 
-Goal: find the code that exists only in synthetic tests/isolated modules but is not reachable from the
-real client flow (`net.minecraft.client.*` — render/culling/instancing/RHI/memory lifecycle), and wire it in.
-All analysis was done against this checkout; verification is transpile-only + static checks (1.94 GiB box —
-no full builds). Nothing below claims in-game correctness; see "Not done".
+Amaç: yalnızca yapay testlerde/yalıtılmış modüllerde bulunan ama gerçek istemci akışından (`net.minecraft.client.*` — çizim/eleme/örnekleme/RHI/bellek yaşam döngüsü) erişilemeyen kodu bulmak ve bağlamak. Tüm analiz bu checkout'a karşı yapıldı; doğrulama yalnızca çeviri + statik denetimlerle (1,94 GiB kutu — tam derleme yok). Aşağıdakilerin hiçbiri oyun içi doğruluk iddia etmez; bkz. "Yapılmayanlar".
 
-### Integration gaps found (and what was done about each)
+### Bulunan entegrasyon boşlukları (ve her biri için yapılanlar)
 
-1. **The entire Zero-LWJGL RHI bridge was unreachable from any real build.** `mono.rhi.NativeRhi` (Java JNI
-   facade of `runtime/rhi_bridge.zig`) was compiled only inside `tests/run_client_core_e2e.py`; neither
-   `monolith build` nor `mcbuild.py --no-lwjgl` produced it, so `mono.rhi.NativeRhi` could never be linked from a
-   client — the RHI/culling/instancing stack was dead code on the real path.
-   **Fix:** `monolith/classpath.py: builtin_classes()` compiles `runtime/java/**/*.java` into a content-keyed
-   cache (`~/.cache/monolith/builtin-<sha12>`, locked, stamped, `MONO_NO_BUILTIN=1` disables) and `cmd_build`
-   prepends it to the application class path (before the JDK overlay, so our natives always resolve).
-   The E2E harness now javacs `ClientCoreE2E.java` against it (no more hand-javac of the bridge).
-   **Verified:** fresh compile + cache-hit (~6 ms); `javap` shows all bridge natives; transpile-only of
-   `ClientCoreE2E` yields 5901 classes / 31959 methods / 300 natives with **0 missing-native / 0 link-error**
-   (identical counts to the pre-change E2E ledger), `builtin_rhi: true` in report.json.
-2. **Manifest patches that match nothing were silently dropped** — a typo'd patch entry is invisible
-   forever. **Fix:** `monolith build` now reports them as `issues["unused-patch"]` with the likely cause.
-   **Verified:** transpile-only of `PatchTarget` prints exactly the 9 non-matching mojmap patches; the
-   3 used PatchTarget patches are not listed.
-3. **The generated launcher crashed the vanilla client by design**: `run.sh`/`run.bat` passed
-   `--graphicsBackend <api>` — vanilla `net.minecraft.client.main.Main` rejects unknown arguments.
-   **Fix:** the backend is passed as `-Dmono.graphics.backend=<api>` (ignored by vanilla; read by any
-   mono-aware code). The launcher's argument list is now exactly the vanilla one.
-4. **Arena-scope bridge failure modes were silent.** `NativeRhi.pushArenaScope()` dropped scopes beyond
-   depth 16 and `popArenaScope()` underflowed to a no-op — both hide lifecycle bugs in a long-lived client.
-   **Fix:** both now throw `IllegalArgumentException` with a clear message. `submitSectionSnapshot` is now
-   capped at 65536 submissions per reset with a `droppedSections` counter (the one unbounded growth path
-   in the bridge); `shutdownClientRhi()` performs a final zero-STW `rt.gc()` epoch reclaim.
-5. **No observability for long-lived-object bloat.** Nothing in the runtime answered "how big is the slab
-   pool / the frame arena right now?", so a slowly leaking client was undebuggable from Java.
-   **Fix:** six new bridge natives, exposed as `NativeRhi.arenaBytes()` (calling thread's transient arena),
-   `slabCommittedBytes()`, `slabReclaimedBytes()`, `frameEpoch()`, `threadCount()`, `droppedSections()`.
-   Note (important, by design): the runtime cannot safely free *unreachable* SlabPool objects — nothing can
-   prove them dead without a GC, and `retireObject()` has zero callers. Transient Java work must run inside
-   `NativeRhi.pushArenaScope()/popArenaScope()` (O(1) rewind). Epochs advance only in `rt.beginFrame()`;
-   advancing on every nested scope would reclaim too early and was deliberately NOT wired.
-6. **No client session lifecycle hooks existed** — the bridge could not be brought up/down with the game.
-   **Fix:** `patches/client_frame.zig` (+2 manifest entries): `net/minecraft/client/main/Main.main` and
-   `net/minecraft/client/Minecraft.run` are bracketed with orig-fallback (init RHI before, shutdown after,
-   stats printout with `MONO_RHI_STATS=1`). **Opt-in:** unless `MONO_RHI=1` is set, the hooks are one getenv
-   and call `orig` untouched; RHI init failure degrades to a printed warning, never an abort. On 26.x
-   (unobfuscated production names, the mcbuild default) the `Main.main([Ljava/lang/String;)V` entry matches;
-   on mapping-name mismatch the entry is inert and is now reported as `unused-patch`.
-7. **`.claude/hooks/guard.py` was never wired** — nothing ran it automatically.
-   **Fix:** `.claude/settings.json` created: `PreToolUse` on `Bash|Write|Edit|NotebookEdit` runs
-   `python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py"` (fail-closed). Verified: self-test passes; the
-   exact settings.json command allows `git status` (exit 0), blocks `git push --force` (exit 2), blocks
-   writes to `out/` (exit 2), allows normal writes (exit 0).
+1. **Tüm Sıfır-LWJGL RHI köprüsüne hiçbir gerçek derlemeden erişilemiyordu.** `mono.rhi.NativeRhi` (`runtime/rhi_bridge.zig`'in Java JNI cephesi) yalnızca `tests/run_client_core_e2e.py` içinde derleniyordu; ne `monolith build` ne de `mcbuild.py --no-lwjgl` onu üretiyordu, bu yüzden `mono.rhi.NativeRhi` hiçbir istemciden bağlanamazdı — RHI/eleme/örnekleme yığını gerçek yolda ölü koddu.
+   **Düzeltme:** `monolith/classpath.py: builtin_classes()`, `runtime/java/**/*.java` dosyalarını içerik anahtarlı bir önbelleğe derler (`~/.cache/monolith/builtin-<sha12>`, kilitli, damgalı, `MONO_NO_BUILTIN=1` devre dışı bırakır) ve `cmd_build` bunu uygulama sınıf yolunun başına ekler (JDK kaplamasından önce, böylece yerel metotlarımız her zaman çözülür). E2E düzeneği artık `ClientCoreE2E.java`'yı buna karşı javac ile derler (köprünün elle javac'ı yok).
+   **Doğrulandı:** taze derleme + önbellek isabeti (~6 ms); `javap` tüm köprü yerel metotlarını gösterir; `ClientCoreE2E`'nin yalnızca çevirisi 5901 sınıf / 31959 metot / 300 yerel metot verir, **0 missing-native / 0 link-error** (değişiklik öncesi E2E defteriyle aynı sayılar), report.json'da `builtin_rhi: true`.
+2. **Hiçbir şeyle eşleşmeyen manifest yamaları sessizce düşürülüyordu** — yazım hatalı bir yama girdisi sonsuza dek görünmez. **Düzeltme:** `monolith build` artık bunları olası nedenle `issues["unused-patch"]` olarak bildirir. **Doğrulandı:** `PatchTarget`'ın yalnızca çevirisi tam olarak 9 eşleşmeyen mojmap yamasını yazar; kullanılan 3 PatchTarget yaması listelenmez.
+3. **Üretilen launcher, vanilla istemciyi tasarım gereği çökertiyordu**: `run.sh`/`run.bat` `--graphicsBackend <api>` geçiriyordu — vanilla `net.minecraft.client.main.Main` bilinmeyen argümanları reddeder. **Düzeltme:** arka uç `-Dmono.graphics.backend=<api>` olarak geçirilir (vanilla tarafından yok sayılır; mono farkında herhangi bir kod okur). Launcher'ın argüman listesi artık tam olarak vanillaninkidir.
+4. **Arena kapsamı köprüsü hata modları sessizdi.** `NativeRhi.pushArenaScope()` 16 derinliğin ötesindeki kapsamları düşürüyordu ve `popArenaScope()` no-op'a taşıyordu — ikisi de uzun ömürlü bir istemcide yaşam döngüsü hatalarını gizler. **Düzeltme:** artık ikisi de açık bir mesajla `IllegalArgumentException` fırlatır. `submitSectionSnapshot` artık sıfırlama başına 65536 gönderimle sınırlı ve bir `droppedSections` sayacı var (köprüdeki tek sınırsız büyüme yolu); `shutdownClientRhi()` son bir sıfır-STW `rt.gc()` çağ geri kazanımı yapar.
+5. **Uzun ömürlü nesne şişmesi için gözlemlenebilirlik yoktu.** Çalışma zamanında "slab havuzu / çerçeve arenası şu an ne kadar büyük?" sorusuna yanıt veren hiçbir şey yoktu; bu yüzden yavaşça sızdıran bir istemci Java'dan hata ayıklanamazdı. **Düzeltme:** altı yeni köprü yerel metodu, `NativeRhi.arenaBytes()` (çağıran iş parçacığının geçici arenası), `slabCommittedBytes()`, `slabReclaimedBytes()`, `frameEpoch()`, `threadCount()`, `droppedSections()` olarak sunulur.
+   Not (önemli, tasarım gereği): çalışma zamanı *erişilemeyen* SlabPool nesnelerini güvenle serbest bırakamaz — bir GC olmadan hiçbir şey onların öldüğünü kanıtlayamaz ve `retireObject()`'in hiç çağıranı yok. Geçici Java işi `NativeRhi.pushArenaScope()/popArenaScope()` (O(1) geri sarma) içinde çalışmalıdır. Çağlar yalnızca `rt.beginFrame()` içinde ilerler; her iç içe kapsamda ilerletmek çok erken geri kazanırdı ve kasıtlı olarak BAĞLANMADI.
+6. **İstemci oturum yaşam döngüsü kancaları yoktu** — köprü oyunla birlikte kurulup indirilemiyordu. **Düzeltme:** `patches/client_frame.zig` (+2 manifest girdisi): `net/minecraft/client/main/Main.main` ve `net/minecraft/client/Minecraft.run`, orig-geri düşüşle sarılır (öncesinde RHI başlat, sonrasında kapat, `MONO_RHI_STATS=1` ile istatistik çıktısı). **İsteğe bağlı:** `MONO_RHI=1` ayarlanmadıkça kancalar bir getenv'dir ve `orig`'i dokunmadan çağırır; RHI başlatma hatası bir yazdırılmış uyarıya düşer, asla durdurma olmaz. 26.x'te (gizlenmemiş üretim adları, mcbuild varsayılanı) `Main.main([Ljava/lang/String;)V` girişi eşleşir; eşleme adı uyuşmazlığında girdi etkisizdir ve artık `unused-patch` olarak bildirilir.
+7. **`.claude/hooks/guard.py` hiç bağlanmamıştı** — hiçbir şey onu otomatik çalıştırmıyordu. **Düzeltme:** `.claude/settings.json` oluşturuldu: `Bash|Write|Edit|NotebookEdit` üzerinde `PreToolUse`, `python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py"` çalıştırır (hata durumunda kapalı). Doğrulandı: kendi testi geçer; tam settings.json komutu `git status`'e izin verir (çıkış 0), `git push --force`'u engeller (çıkış 2), `out/` altına yazmaları engeller (çıkış 2), normal yazmalara izin verir (çıkış 0).
 
-### What is still NOT wired (and why — honestly)
+### Hâlâ bağlanmayanlar (ve neden — dürüstçe)
 
-* **In-game render-loop injection** (`LevelRenderer`/`GameRenderer` → `mono.rhi.NativeRhi`, feeding
-  `SectionSnapshot`s and instances per frame): requires the actual client jar in front of a human or a
-  Mojang-mapped client, and a GPU machine to smoke-test. Blind patching of those signatures from this box
-  would ship unverifiable code — worse than useless. The bridge API, the session hooks and the stats are
-  the scaffolding for exactly that work.
-* **`--no-lwjgl` end-to-end in-game**: even with the bridge reachable, the vanilla client calls
-  `org.lwjgl.*` directly (fully reachable from the render path); those classes are stripped by
-  `--no-lwjgl`, and RTA turns unreachable/missing references into `NoSuchMethod` throws. A working
-  zero-LWJGL client needs a Java-side GL→RHI shim (or a GL-ABI shim in Zig routing to `rhi.zig`), i.e.
-  re-implementing the client's GL calls — a project of its own, on a machine with the jar + GPU.
-  The current `--no-lwjgl` flag is therefore documented as *transpile-only* scaffolding, not a runnable game.
-* **Android surface layer**: none exists anywhere in this repository (no ANativeActivity/JNI glue, no GL/EGL
-  or Vulkan surface creation). Implementing one blind would be pure fabrication; documented as absent.
-  A real port needs ndk + a device/emulator + a window/context shim for `rhi_vk.zig`/`rhi_gl.zig`.
-* **RHI frames are never produced by vanilla**: nothing in the client calls `NativeRhi.beginFrame`, so
-  epoch reclamation and `frameEpoch()` stay flat in a vanilla session (the session hooks bracket the
-  client lifetime only). Stats natives report that state truthfully; they do not fake activity.
-* **Full builds** (suite, Client Core E2E, sharded Minecraft build): not runnable on this box (§13/§14).
-  `tests/run_client_core_e2e.py` was simplified to the builtin bridge and is pyflakes-clean; it has NOT
-  been executed.
+* **Oyun içi çizim döngüsü enjeksiyonu** (`LevelRenderer`/`GameRenderer` → `mono.rhi.NativeRhi`, her karede `SectionSnapshot`'ları ve örnekleri besleme): gerçek istemci jar'ının bir insanın önünde ya da Mojang eşlemeli bir istemcinin ve duman testi için bir GPU makinesinin olmasını gerektirir. Bu imzaların bu kutudan körü körüne yamalanması doğrulanamaz kod göndermek olurdu — işe yaramazdan beter. Köprü API'si, oturum kancaları ve istatistikler tam da bu iş için iskeledir.
+* **`--no-lwjgl` oyun içi uçtan uca**: köprüye erişilebilse bile vanilla istemci `org.lwjgl.*`'i doğrudan çağırır (çizim yolundan tamamen erişilebilir); bu sınıflar `--no-lwjgl` ile ayıklanır ve RTA erişilemeyen/eksik referansları `NoSuchMethod` fırlatmalarına çevirir. Çalışan bir sıfır-LWJGL istemcisi, Java tarafında bir GL→RHI shim'ine (ya da `rhi.zig`'e yönlendiren Zig'de bir GL-ABI shim'ine) ihtiyaç duyar; yani istemcinin GL çağrılarını yeniden gerçekleştirmek — jar + GPU olan bir makinede başlı başına bir proje. Mevcut `--no-lwjgl` bayrağı bu yüzden çalıştırılabilir bir oyun değil, *yalnızca çeviri* iskelesi olarak belgelendi.
+* **Android yüzey katmanı**: bu depoda hiçbir yerde yok (ANativeActivity/JNI yapıştırması yok, GL/EGL ya da Vulkan yüzey oluşturma yok). Birini körü körüne gerçekleştirmek düpedüz uydurma olurdu; yok olarak belgelendi. Gerçek bir taşıma ndk + bir cihaz/öykünücü + `rhi_vk.zig`/`rhi_gl.zig` için bir pencere/bağlam shim'i gerektirir.
+* **RHI kareleri vanilla tarafından asla üretilmez**: istemcide hiçbir şey `NativeRhi.beginFrame` çağırmaz, bu yüzden çağ geri kazanımı ve `frameEpoch()` vanilla bir oturumda düz kalır (oturum kancaları yalnızca istemci ömrünü sarar). İstatistik yerel metotları bu durumu doğru bildirir; etkinlik uydurmazlar.
+* **Tam derlemeler** (paket, Client Core E2E, parçalı Minecraft derlemesi): bu kutuda çalıştırılamaz (§13/§14). `tests/run_client_core_e2e.py` yerleşik köprüye göre sadeleştirildi ve pyflakes temiz; ÇALIŞTIRILMADI.
 
-### Verification done here
+### Burada yapılan doğrulama
 
-`py_compile` + `pyflakes` clean (all touched Python); `bash -n` clean; `zig ast-check` clean
-(`runtime/*.zig`, `patches/*.zig`); full `zig test -lc -O Debug` of the patch + runtime graph:
-**11/11 pass** (4 new `client_frame` lifecycle tests + all 7 pre-existing runtime tests);
-4-subsystem Client Core E2E (`tests/e2e_client_core_test.zig`, Debug): **8/8 pass**;
-`zig build-obj` of `rhi_bridge.zig` and `client_frame.zig` against the real output layout: clean; JSON valid
-(`patches/manifest.json`, `.claude/settings.json`, `report.json`); `guard.py --self-test` PASS;
-`builtin_classes()` fresh build + cache hit; transpile-only smokes: `PatchTarget` (unused-patch list OK,
-built-in bridge linked) and `ClientCoreE2E` (`0 missing-native/link-error`, `builtin_rhi: true`);
-kill-switch smoke with `MONO_NO_BUILTIN=1` (`builtin_rhi: false` in the report; analysis aborts with a
-single loud `link-error: class not found: mono/rhi/NativeRhi` — the failure is explicit, never silent).
-No native code was executed beyond the Zig unit tests — the transpiled outputs were analysed, not run.
+`py_compile` + `pyflakes` temiz (dokunulan tüm Python); `bash -n` temiz; `zig ast-check` temiz (`runtime/*.zig`, `patches/*.zig`); yama + çalışma zamanı grafiğinin tam `zig test -lc -O Debug`'ı: **11/11 geçti** (4 yeni `client_frame` yaşam döngüsü testi + önceki 7 çalışma zamanı testinin hepsi); 4 alt sistemli Client Core E2E (`tests/e2e_client_core_test.zig`, Debug): **8/8 geçti**; `rhi_bridge.zig` ve `client_frame.zig`'in gerçek çıktı düzenine karşı `zig build-obj`'i: temiz; JSON geçerli (`patches/manifest.json`, `.claude/settings.json`, `report.json`); `guard.py --self-test` GEÇTİ; `builtin_classes()` taze derleme + önbellek isabeti; yalnızca çeviri duman testleri: `PatchTarget` (unused-patch listesi tamam, yerleşik köprü bağlandı) ve `ClientCoreE2E` (`0 missing-native/link-error`, `builtin_rhi: true`); `MONO_NO_BUILTIN=1` ile kapatma anahtarı duman testi (raporda `builtin_rhi: false`; analiz tek bir yüksek sesli `link-error: class not found: mono/rhi/NativeRhi` ile durur — hata açık, asla sessiz değil).
+Zig birim testlerinin ötesinde hiçbir yerel kod çalıştırılmadı — çevrilmiş çıktılar analiz edildi, çalıştırılmadı.
 
-### Arithmetic differential test on this box (JVM vs native, 1 GiB ceiling)
+### Bu kutuda aritmetik fark testi (JVM'ye karşı yerel, 1 GiB tavan)
 
-Task: run `tests/run_tests.py Arith` live with a hard 1 GiB memory ceiling so the box cannot be
-OOM-killed, and show JVM vs native side by side. What was actually done and measured:
+Görev: bu kutunun OOM tarafından öldürülememesi için sert 1 GiB bellek tavanıyla `tests/run_tests.py Arith`'i canlı çalıştırmak ve JVM ile yerel çıktıyı yan yana göstermek. Gerçekte yapılan ve ölçülen:
 
-* cgroup v2 is read-only and `systemd-run --scope`/`--user` are denied on this box, so
-  `memory.max` cannot be set; `/usr/bin/prlimit` exists. `RLIMIT_AS` (address space) is the only
-  hard ceiling available per-process, and it degrades into clean allocation failures instead of
-  OOM-killer picks. `RLIMIT_RSS` is a no-op on modern Linux.
-* First attempt capped the *whole harness* at 1 GiB (`MONO_TEST_BUILD_AS_GIB=1`): it failed in
-  `tools/gen_jla.py` because `javap` cannot start with <=1 GiB of address space (HotSpot reserves
-  >1 GiB virtually). Wrapping the JVM itself in the same ceiling is not viable on this JDK.
-* The ceiling was therefore applied to every `zig` invocation only (`MONO_ZIG_AS_GIB=1`,
-  implemented as `preexec_fn` `RLIMIT_AS` in `monolith/__main__.py`, all 6 zig call sites; harness
-  `tests/run_tests.py` reverted to no cap).
-* With the cap, the transpiler (~40 s, 5907 classes / 31964 methods / 288 natives) and every
-  sharded `zig build-obj` compiled fine; the **self-hosted link step** (`zig build-exe` of
-  shard0 + all shard objects) reproducibly died with `error: OutOfMemory` under the 1 GiB ceiling,
-  both Debug and `ReleaseSmall`, with 8 and 16 shards. GNU ld links the 474-640 MiB of objects in
-  ~2 s but rejects zig's `extern threadlocal` references (NOTYPE UND) against the STT_TLS
-  definitions in `shared.o`.
-* Fix implemented: `MONO_ZIG_LD=cc` in `_compile_sharded` links with the system C toolchain instead
-  of zig's self-hosted linker, after `tools/fix_tls_syms.py` retypes those four undefined symbols
-  (`cur`, `processing_refs`, `throw_depth`, `attached`) to `STT_TLS` in the generated objects
-  (layout unchanged; one `st_info` byte each). Off by default; zig link is still the default path.
-* Live result (final run, output saved): `PASS Arith [2228 lines; jvm 0.13s, native 0.41s, build 127.0s]`
-  — `1/1 passed`, `MemAvailable` 1560 MB before and 1524 MB after (nothing crashed). A standalone
-  `prlimit --as=1G` run of the native binary and `diff` against the JVM stdout are byte-identical
-  (0 lines), both stderr empty.
-* Not done / not claimed: the 1 GiB ceiling measures *address space*, not RSS — the box's
-  ~1.5 GiB availability was never at risk; the ceiling protects the machine, it is not a proof
-  that zig's linker "fits" in 1 GiB (it does not — hence the GNU-ld path). The unsharded
-  `zig build-exe` path and LLVM remain impossible under the ceiling. All other differential tests
-  were not run. `tests/build` was deleted after the run.
+* cgroup v2 salt okunur ve `systemd-run --scope`/`--user` bu kutuda reddedilir, bu yüzden `memory.max` ayarlanamaz; `/usr/bin/prlimit` var. `RLIMIT_AS` (adres alanı) süreç başına bulunan tek sert tavandır ve OOM öldürücü seçimleri yerine temiz tahsis hatalarına dönüşür. `RLIMIT_RSS` modern Linux'ta no-op'tur.
+* İlk deneme *tüm düzeneği* 1 GiB ile sınırladı (`MONO_TEST_BUILD_AS_GIB=1`): `tools/gen_jla.py` içinde başarısız oldu, çünkü `javap` <=1 GiB adres alanıyla başlayamaz (HotSpot sanal olarak >1 GiB ayırır). JVM'in kendisini aynı tavanla sarmak bu JDK'da uygulanabilir değil.
+* Tavan bu yüzden yalnızca her `zig` çağrısına uygulandı (`MONO_ZIG_AS_GIB=1`, `monolith/__main__.py` içinde `preexec_fn` `RLIMIT_AS` olarak gerçekleştirildi, 6 zig çağrı yerinin hepsi; `tests/run_tests.py` düzeneği tavansıza geri alındı).
+* Tavanla, çevirici (~40 sn, 5907 sınıf / 31964 metot / 288 yerel metot) ve her parçalı `zig build-obj` sorunsuz derlendi; **kendi bağlama adımı** (shard0 + tüm shard nesnelerinin `zig build-exe`'si) 1 GiB tavanı altında, hem Debug hem `ReleaseSmall`, 8 ve 16 shard ile tekrarlanabilir biçimde `error: OutOfMemory` ile öldü. GNU ld 474-640 MiB'lık nesneleri ~2 sn'de bağlar ama zig'in `extern threadlocal` referanslarını (NOTYPE UND) `shared.o` içindeki STT_TLS tanımlarına karşı reddeder.
+* Gerçekleştirilen düzeltme: `_compile_sharded` içinde `MONO_ZIG_LD=cc`, zig'in kendi bağlayıcısı yerine sistem C araç zinciriyle bağlar; ondan önce `tools/fix_tls_syms.py`, üretilen nesnelerde bu dört tanımsız sembolü (`cur`, `processing_refs`, `throw_depth`, `attached`) `STT_TLS` olarak yeniden tiplendirir (yerleşim değişmez; her biri bir `st_info` baytı). Varsayılan olarak kapalı; zig bağlama hâlâ varsayılan yol.
+* Canlı sonuç (son koşu, çıktı kaydedildi): `PASS Arith [2228 lines; jvm 0.13s, native 0.41s, build 127.0s]` — `1/1 geçti`, `MemAvailable` önce 1560 MB, sonra 1524 MB (hiçbir şey çökmedi). Yerel ikilinin tek başına `prlimit --as=1G` koşusu ve JVM stdout'una karşı `diff` bayt bayt aynı (0 satır), ikisinin de stderr'i boş.
+* Yapılmayan / iddia edilmeyen: 1 GiB tavan *adres alanını* ölçer, RSS'i değil — kutunun ~1,5 GiB boş belleği hiç risk altında değildi; tavan makineyi korur, zig'in bağlayıcısının 1 GiB'a "sığdığının" kanıtı değildir (sığmaz — bu yüzden GNU-ld yolu). Parçasız `zig build-exe` yolu ve LLVM tavan altında imkânsız kalır. Diğer tüm fark testleri çalıştırılmadı. `tests/build` koşudan sonra silindi.
 
-## 16. Bugfix, memory-reclamation, register-return & RHI hardening pass (2026-11-16)
+## 16. Hata düzeltme, bellek geri kazanımı, yazmaç dönüşü ve RHI sağlamlaştırma geçişi (2026-11-16)
 
-Audited and resolved the latent bugs and bottlenecks exposed after merging the v2 audit snapshot:
+v2 denetim anlık görüntüsü birleştirildikten sonra ortaya çıkan gizli hatalar ve darboğazlar denetlendi ve çözüldü:
 
-* **SlabPool OS memory reclamation & arena safety (`runtime/mem_pool.zig`, `runtime/rt.zig`)**:
-  - Replaced unlinked 256 KiB slabs (which could never shrink back to the OS) with `128 KiB`-aligned
-    `SlabBlock`s carrying an inline 128B header (`(ptr & ~(SLAB_SIZE - 1))` O(1) lookup): when all slots
-    in a slab return or retire across 3 epochs, excess empty slabs above `MAX_RETAINED_EMPTY_SLABS` (4 = 512 KiB)
-    are unmapped directly back to the OS (`madvise(MADV_DONTNEED)` on the warm reserve; zero-retention RSS
-    bloat). Verified by unit test `"SlabPool returns completely empty slabs across epochs back to the OS"`.
-  - Tuned per-thread cache refill batch (`max 32`) and `scratch_arena` retention (`max 2` chunks = 512 KiB).
-  - Added `arenaSuspend`/`arenaResume` around `rt.intern`, `rt.classMirror`, and `rt.initClass` (`<clinit>`)
-    so process-global objects never allocate inside transient frame/arena scopes.
-  - Added arithmetic-overflow guard, `0xAA` debug safety poison on rewound arena slices, oversized base chunk
-    release on `resetRetainingCapacity`, and LIFO `vtFree` accounting fixes in `ArenaAllocator`.
-* **Register-return ABI (`rt.Res`) & dead shadow-array elimination (`runtime/rt.zig`, `monolith/zigen.py`, `monolith/shard.py`)**:
-  - Implemented register-packed `rt.Res(T)` returns (`u64`/`u128` via `toR`/`unR`) across `_r` wrappers,
-    vtables, itables, reflection `reflectInvoke`, `Class.enumValues0`, `MemorySegment.address()` `VarHandle`
-    lowering, and cross-shard facades.
-  - Eliminated the dead write-only `var R: [K]rt.Ref` stack array and escaping `.refs = &R` pointer from
-    compiled Java methods (`sv`/`lv` use register-promotable locals `s*a`/`l*a`; `F.refs = null` by default).
-  - Removed duplicate `invokestatic` check in `_is_leaf2` (`monolith/zigen.py`).
-* **RHI, GL 3.3 Core, World Culling, GPU Instancing, Render-Loop Hooks & `--no-lwjgl` (`runtime/rhi*.zig`, `patches/`, `runtime/java_nolwjgl/`, `tools/mcbuild.py`)**:
-  - `runtime/rhi_gl.zig`: fixed synthetic pipeline binding (`gl_default_prog` GLSL 330 shader + required GL 3.3
-    Core VAO `gl_default_vao`), `uFirstInstance` uniform fallback when `has_base_instance == false` (Intel HD
-    5500), zero-offset orphan+unsync TBO upload (`size_bytes`), `eglGetProcAddress` fallback, and lazy
-    `tryAttachGlContext()`.
-  - `runtime/world_render.zig`: fixed CaveCulling portal BFS so diamond paths accumulate every entry face
-    (regressed test passed); `runtime/gpu_instancing.zig`: ordered opaque draws before translucent
-    (`particle`/`text_display`) and excluded unregistered meshes from GPU staging uploads and survivor stats.
-  - `runtime/rhi_bridge.zig` & `runtime/java/mono/rhi/NativeRhi.java`: added bridge-owned `frame_arena`, explicit
-    validation/OOM errors, `submitSectionSnapshotEx`, `visibleSectionCount`/`visibleSectionField`, and
-    GL command shims; added per-tick/render lifecycle hooks in `patches/client_frame.zig` and `patches/level_renderer.zig`.
-  - Added opt-in Zero-LWJGL shim (`runtime/java_nolwjgl/org/lwjgl/...`) wired cleanly via `--no-lwjgl` in
-    `monolith/__main__.py` and `tools/mcbuild.py` (fixed `--no-lwjgl` launcher props).
-* **JNA Udev Proxy Folding & `String.coder` (`monolith/program.py`, `classlib/src/java/lang/String.java`, `tests/java/JnaProxyFold.java`)**:
-  - Fixed `_fold_proxy` (`monolith/program.py:637`) to stop at array `aastore` boundaries and filter to interfaces
-    only (fixing `Proxy.newProxyInstance(..., ifaces, ...)` when trailed by `Class.getClassLoader()`).
-  - Hardened `_fold_jna_proxy` for deeper windows and trailing option maps (`Udev extends Library`).
-  - Added `private final byte coder = UTF16;` (0 extra bytes in existing alignment padding) in `String.java`.
-* **Verified live here (`aarch64` 10-core Linux, 7.4 GB RAM):**
-  - `ClientCoreE2E` `-O Debug`: **6/6** `mem_pool`, **1/1** `thread_pool`, **7/7** `rhi`, **9/9** `world_render`,
-    **12/12** `gpu_instancing`, **14/14** 4-subsystem E2E, `1,092` classes / `5,932` methods (`0 missing-native,
-    0 link-error, 0 unsupported-varhandle`), build time reduced from `587.1s` to `37.9s` (**15.5x faster**).
-  - Full 27-test differential JVM suite (`tests/run_tests.py`, `-O Debug`): **27/27 PASS** (`Arith`, `Strings`,
-    `Oop`, `Exceptions`, `Lambdas`, `Collections1`, `Threads`, `GcStress`, `Misc`, `IoZip`, `NioFiles`, `NetIo`,
-    `HttpFetch`, `IfaceInit`, `LazyLeaf`, `Intrinsics`, `PatchTarget`, `Reflect`, `MHandles`, `Annot`,
-    `StackWalk`, `ModuleInfo`, `Platform`, `Jni`, `OptSuite`, `JnaProxyFold`, `ClientCoreE2E`).
-  - `tools/microbench/run_client_core_bench.py` (`-O ReleaseFast`): `arena_alloc_64B` `11.71 ns/op` (`85.4 Mops/s`),
-    `slab_epoch_64B` `72.30 ns/op` (`stw_pause_ms=0.0`), `worker_pool` `146.9 us/batch` (`36.73 ms` total, **108.5x faster**
-    than `3987.72 ms`), `world_cull_256` `40.1 us/frame`, `gpu_instancing_2048` `1499/2048` in `7` batches (`287.0 us/frame`).
+* **SlabPool işletim sistemi bellek geri kazanımı ve arena güvenliği (`runtime/mem_pool.zig`, `runtime/rt.zig`)**:
+  - Bağlantısız, asla işletim sistemine geri küçülemeyen 256 KiB'lık slab'lar, satır içi 128B başlıklı `128 KiB` hizalı `SlabBlock`'larla değiştirildi (`(ptr & ~(SLAB_SIZE - 1))` O(1) arama): bir slab'daki tüm yuvalar 3 çağ boyunca döndüğünde ya da emekli olduğunda, `MAX_RETAINED_EMPTY_SLABS` (4 = 512 KiB) üstündeki fazla boş slab'lar doğrudan işletim sistemine geri bırakılır (sıcak rezervde `madvise(MADV_DONTNEED)`; sıfır tutma RSS şişmesi). `"SlabPool returns completely empty slabs across epochs back to the OS"` birim testiyle doğrulandı.
+  - İş parçacığı başına önbellek yeniden doldurma toplu işi (`max 32`) ve `scratch_arena` tutma (`max 2` parça = 512 KiB) ayarlandı.
+  - `rt.intern`, `rt.classMirror` ve `rt.initClass` (`<clinit>`) çevresine `arenaSuspend`/`arenaResume` eklendi; böylece süreç çapı nesneler asla geçici çerçeve/arena kapsamları içinde tahsis edilmez.
+  - Aritmetik taşma koruması, geri sarılan arena dilimlerinde `0xAA` hata ayıklama güvenlik zehiri, `resetRetainingCapacity` üzerinde aşırı büyük temel parça serbest bırakma ve `ArenaAllocator` içinde LIFO `vtFree` muhasebe düzeltmeleri eklendi.
+* **Yazmaç-dönüş ABI'si (`rt.Res`) ve ölü gölge dizi eliminasyonu (`runtime/rt.zig`, `monolith/zigen.py`, `monolith/shard.py`)**:
+  - `_r` sarmalayıcıları, vtable'lar, itable'lar, yansıma `reflectInvoke`, `Class.enumValues0`, `MemorySegment.address()` `VarHandle` indirgemesi ve shard'lar arası cepheler boyunca yazmaç paketli `rt.Res(T)` dönüşleri (`toR`/`unR` ile `u64`/`u128`) gerçekleştirildi.
+  - Derlenmiş Java metotlarından ölü, yalnızca yazılan `var R: [K]rt.Ref` yığın dizisi ve kaçan `.refs = &R` işaretçisi elendi (`sv`/`lv` yazmaca terfi edilebilir yerel değişkenler `s*a`/`l*a` kullanır; `F.refs = null` varsayılan).
+  - `_is_leaf2` içindeki yinelenen `invokestatic` denetimi kaldırıldı (`monolith/zigen.py`).
+* **RHI, GL 3.3 Core, dünya elemesi, GPU örnekleme, çizim döngüsü kancaları ve `--no-lwjgl` (`runtime/rhi*.zig`, `patches/`, `runtime/java_nolwjgl/`, `tools/mcbuild.py`)**:
+  - `runtime/rhi_gl.zig`: sabit sentetik boru hattı bağlama (`gl_default_prog` GLSL 330 gölgelendiricisi + gereken GL 3.3 Core VAO `gl_default_vao`), `has_base_instance == false` olduğunda `uFirstInstance` uniform geri düşüşü (Intel HD 5500), sıfır ofsetli orphan+eşzamansız TBO yüklemesi (`size_bytes`), `eglGetProcAddress` geri düşüşü ve tembel `tryAttachGlContext()`.
+  - `runtime/world_render.zig`: CaveCulling portal BFS düzeltildi; elmas yolları her giriş yüzünü biriktirir (gerileyen test geçti); `runtime/gpu_instancing.zig`: opak çizimler yarı saydamlardan (`particle`/`text_display`) önce sıralandı ve kayıtsız ağlar GPU hazırlama yüklemelerinden ve hayatta kalan istatistiklerinden çıkarıldı.
+  - `runtime/rhi_bridge.zig` ve `runtime/java/mono/rhi/NativeRhi.java`: köprüye ait `frame_arena`, açık doğrulama/OOM hataları, `submitSectionSnapshotEx`, `visibleSectionCount`/`visibleSectionField` ve GL komut shim'leri eklendi; `patches/client_frame.zig` ve `patches/level_renderer.zig` içinde tick/çizim başına yaşam döngüsü kancaları eklendi.
+  - `monolith/__main__.py` ve `tools/mcbuild.py` içinde `--no-lwjgl` ile temiz bağlanan isteğe bağlı Sıfır-LWJGL shim'i (`runtime/java_nolwjgl/org/lwjgl/...`) eklendi (`--no-lwjgl` launcher özellikleri düzeltildi).
+* **JNA Udev Proxy katlama ve `String.coder` (`monolith/program.py`, `classlib/src/java/lang/String.java`, `tests/java/JnaProxyFold.java`)**:
+  - `_fold_proxy` (`monolith/program.py:637`), dizi `aastore` sınırlarında durması ve yalnızca arayüzlere filtrelemesi için düzeltildi (`Proxy.newProxyInstance(..., ifaces, ...)` sonrasında `Class.getClassLoader()` geldiğinde düzeltme).
+  - `_fold_jna_proxy` daha derin pencereler ve sondaki seçenek haritaları için sağlamlaştırıldı (`Udev extends Library`).
+  - `String.java` içine `private final byte coder = UTF16;` eklendi (mevcut hizalama dolgusunda 0 ek bayt).
+* **Burada canlı doğrulanan (`aarch64` 10 çekirdekli Linux, 7,4 GB RAM):**
+  - `ClientCoreE2E` `-O Debug`: **6/6** `mem_pool`, **1/1** `thread_pool`, **7/7** `rhi`, **9/9** `world_render`, **12/12** `gpu_instancing`, **14/14** 4 alt sistemli E2E, `1,092` sınıf / `5,932` metot (`0 missing-native, 0 link-error, 0 unsupported-varhandle`), derleme süresi `587.1s`'den `37.9s`'e düştü (**15,5 kat hızlı**).
+  - Tam 27 testlik fark JVM paketi (`tests/run_tests.py`, `-O Debug`): **27/27 GEÇTİ** (`Arith`, `Strings`, `Oop`, `Exceptions`, `Lambdas`, `Collections1`, `Threads`, `GcStress`, `Misc`, `IoZip`, `NioFiles`, `NetIo`, `HttpFetch`, `IfaceInit`, `LazyLeaf`, `Intrinsics`, `PatchTarget`, `Reflect`, `MHandles`, `Annot`, `StackWalk`, `ModuleInfo`, `Platform`, `Jni`, `OptSuite`, `JnaProxyFold`, `ClientCoreE2E`).
+  - `tools/microbench/run_client_core_bench.py` (`-O ReleaseFast`): `arena_alloc_64B` `11.71 ns/op` (`85.4 Mops/s`), `slab_epoch_64B` `72.30 ns/op` (`stw_pause_ms=0.0`), `worker_pool` `146.9 us/batch` (`36.73 ms` toplam, `3987.72 ms`'e göre **108,5 kat hızlı**), `world_cull_256` `40.1 us/kare`, `gpu_instancing_2048` `7` toplu işte `1499/2048` (`287.0 us/kare`).
 
-## 17. Deep system audit, RTA closure reduction & S24 FE stability pass (2026-11-16)
+## 17. Derin sistem denetimi, RTA kapanış küçültme ve S24 FE kararlılık geçişi (2026-11-16)
 
-* **RTA closure bloat elimination (`5,902` -> `230` classes on base tests; 15x–40x faster builds)**:
-  - `classlib/src/java/lang/Module.java`, `Class.java`, `System.java`: decoupled `BootModule` / `UnsupportedModule`
-    from `ModuleDescriptor.newOpenModule(...)` and eager `ModuleLayer.empty()` in `System.<clinit>`; removed
-    `java.lang.classfile.*`, `ModuleBootstrap`, `ClassLoaders`, `BuiltinClassLoader`, `ServicesCatalog`, and
-    `URL.openStream()` (`JarVerifier` -> `ProviderConfig` -> 1,500+ SSL/JCA/Crypto classes) from `Module.java`;
-    added dynamic host `os.arch` native (`J_java_lang_System__arch0`: `aarch64` / `amd64`).
-  - `classlib/src/java/lang/String.java`: implemented `String.format` / `String.formatted` directly without
-    `java.util.Formatter` or `BigDecimal` (eliminating `Formatter`/`Locale`/`Calendar`/`java.time`/`Pattern`/`ICU`
-    closure bloat from JDK `.toString()` and error paths while passing all `Misc` and `Oop` format tests).
-  - Added lightweight overlays `classlib/src/jdk/internal/loader/ClassLoaders.java`,
-    `classlib/src/jdk/internal/util/ClassFileDumper.java`, `classlib/src/jdk/internal/util/ReferencedKeyMap.java`,
-    `classlib/src/java/util/stream/Tripwire.java`, and
-    `classlib/src/sun/reflect/generics/reflectiveObjects/ParameterizedTypeImpl.java`; updated `tools/gen_jla.py`
-    and `monolith/classpath.py` (`services()` scoped to application sources `[:boot_start]`).
-* **Runtime, reflection, VarHandle & JNI fixes**:
-  - `runtime/thread_pool.zig`: batched queue insertion under a single mutex lock with post-unlock `cv.broadcast()`
-    and single `wg.add(count)` (`15,950.9 us/batch` -> `146.9 us/batch`, **108.5x speedup**).
-  - `runtime/varhandle.zig`: fixed unaligned `MemorySegment` `getSeg`/`setSeg` (`*align(1)`) to prevent alignment
-    panics in `Debug`/`ReleaseSafe`.
-  - `classlib/src/jdk/internal/reflect/MonoFieldAccessor.java`: routed `isVolatile` fields through
-    `Unsafe.get*Volatile` / `put*Volatile`.
-  - `runtime/natives.zig`: added maximally-specific default interface method lookup in `findTarget`.
-  - `runtime/jni.zig` & `runtime/jni_call.zig`: added static-flag check on interface methods in `findMethod` and
-    implemented `DefineClass`, `FromReflectedField`, `ToReflectedMethod`, `ToReflectedField`, and `GetModule`
-    (0 unimplemented JNIEnv slots).
-  - `monolith/zigen.py`: removed dead `_shadow_refs` and `_compact_refs` helpers.
-* **Mobile / Termux LMKD protection (`monolith/__main__.py`, `tests/run_tests.py`, `tests/run_client_core_e2e.py`)**:
-  - Capped child `zig`/`javac`/`java` CPU affinity (`sched_setaffinity({0, 1})`, `nice(10)`), JVM heap (`-Xmx192m`/
-    `-Xmx256m -XX:+UseSerialGC`), automatic sharding above 450 classes, and `cc` linking on `<4.5 GiB` available RAM.
+* **RTA kapanış şişkinliğinin giderilmesi (temel testlerde `5,902` -> `230` sınıf; 15x–40x hızlı derlemeler)**:
+  - `classlib/src/java/lang/Module.java`, `Class.java`, `System.java`: `BootModule` / `UnsupportedModule`, `ModuleDescriptor.newOpenModule(...)`'dan ve `System.<clinit>` içindeki istekli `ModuleLayer.empty()`'den ayrıştırıldı; `Module.java`'dan `java.lang.classfile.*`, `ModuleBootstrap`, `ClassLoaders`, `BuiltinClassLoader`, `ServicesCatalog` ve `URL.openStream()` (`JarVerifier` -> `ProviderConfig` -> 1 500+ SSL/JCA/Crypto sınıfı) kaldırıldı; dinamik ana makine `os.arch` yerel metodu eklendi (`J_java_lang_System__arch0`: `aarch64` / `amd64`).
+  - `classlib/src/java/lang/String.java`: `String.format` / `String.formatted`, `java.util.Formatter` ya da `BigDecimal` olmadan doğrudan gerçekleştirildi (tüm `Misc` ve `Oop` biçim testlerini geçerken JDK `.toString()` ve hata yollarından `Formatter`/`Locale`/`Calendar`/`java.time`/`Pattern`/`ICU` kapanış şişkinliğini ortadan kaldırır).
+  - Hafif kaplamalar eklendi: `classlib/src/jdk/internal/loader/ClassLoaders.java`, `classlib/src/jdk/internal/util/ClassFileDumper.java`, `classlib/src/jdk/internal/util/ReferencedKeyMap.java`, `classlib/src/java/util/stream/Tripwire.java` ve `classlib/src/sun/reflect/generics/reflectiveObjects/ParameterizedTypeImpl.java`; `tools/gen_jla.py` ve `monolith/classpath.py` güncellendi (`services()` uygulama kaynaklarına `[:boot_start]` ile sınırlandı).
+* **Çalışma zamanı, yansıma, VarHandle ve JNI düzeltmeleri**:
+  - `runtime/thread_pool.zig`: tek mutex kilidi altında toplu kuyruk ekleme, kilit sonrası `cv.broadcast()` ve tek `wg.add(count)` (`15,950.9 us/batch` -> `146.9 us/batch`, **108,5 kat hızlanma**).
+  - `runtime/varhandle.zig`: `Debug`/`ReleaseSafe` içinde hizalama panic'lerini önlemek için hizasız `MemorySegment` `getSeg`/`setSeg` düzeltildi (`*align(1)`).
+  - `classlib/src/jdk/internal/reflect/MonoFieldAccessor.java`: `isVolatile` alanları `Unsafe.get*Volatile` / `put*Volatile` üzerinden yönlendirildi.
+  - `runtime/natives.zig`: `findTarget` içine en belirgin default arayüz metodu araması eklendi.
+  - `runtime/jni.zig` ve `runtime/jni_call.zig`: `findMethod` içinde arayüz metotları için statik-bayrak denetimi eklendi ve `DefineClass`, `FromReflectedField`, `ToReflectedMethod`, `ToReflectedField` ve `GetModule` gerçekleştirildi (0 gerçekleştirilmemiş JNIEnv yuvası).
+  - `monolith/zigen.py`: ölü `_shadow_refs` ve `_compact_refs` yardımcıları kaldırıldı.
+* **Mobil / Termux LMKD koruması (`monolith/__main__.py`, `tests/run_tests.py`, `tests/run_client_core_e2e.py`)**:
+  - Çocuk `zig`/`javac`/`java` CPU ilişkisi (`sched_setaffinity({0, 1})`, `nice(10)`), JVM heap'i (`-Xmx192m`/`-Xmx256m -XX:+UseSerialGC`), 450 sınıfın üzerinde otomatik shard'lama ve `<4,5 GiB` boş RAM'de `cc` bağlama sınırlandı.
 
-## 18. TouchCore For Monolith, Android `build-lib` Pipeline & GLES3/GLFW Surface Bridge (2026-11-16)
+## 18. Monolith için TouchCore, Android `build-lib` boru hattı ve GLES3/GLFW yüzey köprüsü (2026-11-16)
 
-* **Android `libminecraft_mono.so` Production Pipeline (`monolith/__main__.py`, `tools/mcbuild.py`, `runtime/rt.zig`, `monolith/zigen.py`, `monolith/shard.py`)**:
-  - Added `build-lib` subcommand and `-dynamic` / `--dynamic` + `--target aarch64-linux-android.26` support to both
-    `monolith` and `tools/mcbuild.py` (using Termux/NDK clang + `ld.lld -shared -z max-page-size=16384` +
-    `libclang_rt.builtins-aarch64-android.a` for `__emutls_get_address`).
-  - Exported `mono_android_entry(...)` from generated `main.zig` (sharded & unsharded) calling `rt.runMainAsync`,
-    spawning the JVM main thread with full stack (`default_stack_size * 4`) and detaching immediately (`rc = 0` in <=1 ms)
-    so the Android UI thread never blocks.
-  - Fixed Android `aarch64` pointer-tagging / TBI (`bit 63 = 1`) panics by converting pointer-to-`i64` casts from
-    `@intCast` to `@bitCast` across `monolith/zigen.py` (`mirrorSet`/`mirrorGet`), `rt.zig` (`eetop`), `natives.zig`,
-    `varhandle.zig`, `io.zig`, and `nio.zig`; fixed cross-shard `getModule` `rt.unR` type handling in `runtime/jni_call.zig`
-    and added `gl_shim.zig` to `shard.py` `RUNTIME_FILES`.
-* **GL Path Decision & Direct GL → `libGLESv3.so` Dispatch (`runtime/gl_shim.zig`, `runtime/rhi_gl.zig`, `runtime/rhi_bridge.zig`, `runtime/java/mono/rhi/NativeRhi.java`, `runtime/java_nolwjgl/`)**:
-  - Chose direct native dispatch to Android `libGLESv3.so` with GL 3.3 Core → GLES 3.0 compatibility shims
-    (GLSL `#version 150`/`330 core`/`4xx` -> `#version 300 es`, `glClearDepth`->`glClearDepthf`,
-    `glDepthRange`->`glDepthRangef`, safe `glPolygonMode` no-op) instead of re-implementing the entire stateful GL
-    pipeline in Java `NativeRhi`.
-  - Updated `runtime/rhi_gl.zig` with Android `libGLESv3.so` + `libEGL.so` probe fallback and `ES 3.00` shaders,
-    and expanded `runtime/java_nolwjgl/org/lwjgl/` (`GLFW`, callback interfaces, `GL11C`, `GL15C`/`GL15`, `GL20C`/`GL20`, `GL30C`/`GL30`).
-  - Wired `GLFW.glfwCreateWindow`, `glfwMakeContextCurrent`, `glfwSwapBuffers`, and `glfwPollEvents` to TouchCore's
-    `ANativeWindow` + `EGL` + `g_tc_input` via `tc_android_has_window`, `tc_android_init_egl`, `tc_android_swap_buffers`,
-    `tc_android_get_size`, and `tc_android_poll_snapshot` (`libtouchcore_mono.so`).
-* **MJLauncher-Style TouchCore APK (`android/touchcore/`, `releases/Monolith.apk`)**:
-  - Fixed startup/pre-game crash hazards: expanded `VkPhysicalDeviceProperties.limits_pad` to `[560]u8` (`runtime/rhi_vk.zig`)
-    to match the 824-byte Vulkan ABI struct, moved 131 KB portal scratch off the pthread stack (`touchcore_core.zig`),
-    added `android:extractNativeLibs="true"`, `gl_ready` + EGL depth/ES2 fallback + 4 MB render-thread stack (`touchcore_android.c`),
-    and deferred `mono_android_entry` off the UI thread until `ANativeWindow` attaches.
-  - Upgraded UI & controls (`HudRenderer.java`, `TouchOverlayView.java`, `ControlsEditorActivity.java`, `GameActivity.java`,
-    `LauncherActivity.java`): frosted glass vector-icon buttons, connected `+` D-Pad & Analog Stick, swipeable attack/use
-    camera drag, virtual cursor (`FARE`), soft keyboard (`KB`), center crosshair, isometric 9-slot hotbar, visual HUD
-    editor with landscape preview + fine nudge pad, explicit **"DEMO MODU (Zig RHI Voxel)"** labeling, and explicit
-    error dialog when an external `libminecraft_mono.so` fails (no silent fallback to Demo Mode).
-* **Verified live on this ARM64 Android phone:**
-  - `python3 tools/build_touchcore_apk.py`: built `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) (`0.98 MiB`), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS, `nm -D` confirms all `Java_com_monolith_touchcore_NativeBridge_*` & `tc_android_*` symbols.
-  - Bionic PIE native tests via `/system/bin/linker64`: verified `libtouchcore_mono.so` (`tc_zig_init`, 10 ticks, `tc_zig_shutdown`), single-shard & 4-shard `--no-lwjgl` `-dynamic` `libminecraft_mono.so` (`mono_android_entry` returned `0` in `1 ms`, `NO_SURFACE_EXPLICIT_THROW=true`, `NativeRhi.pollOsInput` reading `KEY_W=1` across `.so` boundary, `GL11C` GL→GLES3 dispatch, `EXIT=0`).
-  - Regression suites: `tests/run_tests.py Arith IoZip` PASS; `tests/run_client_core_e2e.py` ALL 4 E2E CHECKS PASS (`mem_pool 6/6`, `thread_pool 1/1`, `rhi 7/7`, `world_render 9/9`, `gpu_instancing 12/12`, `4-Subsystem E2E 14/14`, `ClientCoreE2E` native `JAVA_CLIENT_CORE_E2E_OK`).
+* **Android `libminecraft_mono.so` üretim boru hattı (`monolith/__main__.py`, `tools/mcbuild.py`, `runtime/rt.zig`, `monolith/zigen.py`, `monolith/shard.py`)**:
+  - Hem `monolith` hem `tools/mcbuild.py` için `build-lib` alt komutu ve `-dynamic` / `--dynamic` + `--target aarch64-linux-android.26` desteği eklendi (Termux/NDK clang + `ld.lld -shared -z max-page-size=16384` + `__emutls_get_address` için `libclang_rt.builtins-aarch64-android.a` kullanılarak).
+  - Üretilen `main.zig`'den (parçalı ve parçasız) `mono_android_entry(...)` dışa aktarıldı; `rt.runMainAsync` çağırır, JVM ana iş parçacığını tam yığınla (`default_stack_size * 4`) başlatır ve hemen ayrılır (<=1 ms içinde `rc = 0`), böylece Android UI iş parçacığı asla bloke olmaz.
+  - İşaretçiden-`i64`'e dönüşümler `@intCast`'ten `@bitCast`'e çevrilerek Android `aarch64` işaretçi etiketleme / TBI (`bit 63 = 1`) panic'leri düzeltildi: `monolith/zigen.py` (`mirrorSet`/`mirrorGet`), `rt.zig` (`eetop`), `natives.zig`, `varhandle.zig`, `io.zig` ve `nio.zig`; `runtime/jni_call.zig` içinde shard'lar arası `getModule` `rt.unR` tip işleme düzeltildi ve `gl_shim.zig`, `shard.py` `RUNTIME_FILES` listesine eklendi.
+* **GL yol kararı ve doğrudan GL → `libGLESv3.so` dağıtımı (`runtime/gl_shim.zig`, `runtime/rhi_gl.zig`, `runtime/rhi_bridge.zig`, `runtime/java/mono/rhi/NativeRhi.java`, `runtime/java_nolwjgl/`)**:
+  - Tüm durumlu GL boru hattını Java `NativeRhi` içinde yeniden gerçekleştirmek yerine, GL 3.3 Core → GLES 3.0 uyumluluk shim'leriyle (GLSL `#version 150`/`330 core`/`4xx` -> `#version 300 es`, `glClearDepth`->`glClearDepthf`, `glDepthRange`->`glDepthRangef`, güvenli `glPolygonMode` no-op) Android `libGLESv3.so`'ya doğrudan yerel dağıtım seçildi.
+  - `runtime/rhi_gl.zig`, Android `libGLESv3.so` + `libEGL.so` yoklama geri düşüşü ve `ES 3.00` gölgelendiricileriyle güncellendi; `runtime/java_nolwjgl/org/lwjgl/` genişletildi (`GLFW`, geri çağrı arayüzleri, `GL11C`, `GL15C`/`GL15`, `GL20C`/`GL20`, `GL30C`/`GL30`).
+  - `GLFW.glfwCreateWindow`, `glfwMakeContextCurrent`, `glfwSwapBuffers` ve `glfwPollEvents`, TouchCore'un `ANativeWindow` + `EGL` + `g_tc_input` yapısına `tc_android_has_window`, `tc_android_init_egl`, `tc_android_swap_buffers`, `tc_android_get_size` ve `tc_android_poll_snapshot` (`libtouchcore_mono.so`) ile bağlandı.
+* **MJLauncher tarzı TouchCore APK (`android/touchcore/`, `releases/Monolith.apk`)**:
+  - Başlangıç/oyun öncesi çökme tehlikeleri düzeltildi: `VkPhysicalDeviceProperties.limits_pad` 824 baytlık Vulkan ABI yapısına uyması için `[560]u8`'e genişletildi (`runtime/rhi_vk.zig`), 131 KB portal ara belleği pthread yığınından çıkarıldı (`touchcore_core.zig`), `android:extractNativeLibs="true"`, `gl_ready` + EGL derinlik/ES2 geri düşüşü + 4 MB çizim iş parçacığı yığını eklendi (`touchcore_android.c`) ve `mono_android_entry`, `ANativeWindow` bağlanana kadar UI iş parçacığından ertelendi.
+  - UI ve kontroller yükseltildi (`HudRenderer.java`, `TouchOverlayView.java`, `ControlsEditorActivity.java`, `GameActivity.java`, `LauncherActivity.java`): buzlu cam vektör ikonlu düğmeler, bağlı `+` D-Pad ve Analog Çubuk, kaydırılabilir saldırı/kullanma kamera sürükleme, sanal imleç (`FARE`), yazılım klavyesi (`KB`), merkez artı imleç, izometrik 9 yuvalı hotbar, yatay önizleme ve ince itme padli görsel HUD düzenleyici, açık **"DEMO MODU (Zig RHI Voxel)"** etiketleme ve harici bir `libminecraft_mono.so` başarısız olduğunda açık hata iletişim kutusu (Demo Modu'na sessiz geri düşüş yok).
+* **Bu ARM64 Android telefonda canlı doğrulanan:**
+  - `python3 tools/build_touchcore_apk.py`: `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) derlendi (`0.98 MiB`), `apksigner verify` GEÇTİ (v2/v3), `zipalign -c -p 4` GEÇTİ, `nm -D` tüm `Java_com_monolith_touchcore_NativeBridge_*` ve `tc_android_*` sembollerini doğrular.
+  - `/system/bin/linker64` üzerinden Bionic PIE yerel testleri: `libtouchcore_mono.so` doğrulandı (`tc_zig_init`, 10 tick, `tc_zig_shutdown`), tek shard'lı ve 4 shard'lı `--no-lwjgl` `-dynamic` `libminecraft_mono.so` (`mono_android_entry` `1 ms` içinde `0` döndürdü, `NO_SURFACE_EXPLICIT_THROW=true`, `.so` sınırı boyunca `KEY_W=1` okuyan `NativeRhi.pollOsInput`, `GL11C` GL→GLES3 dağıtımı, `EXIT=0`).
+  - Gerileme paketleri: `tests/run_tests.py Arith IoZip` GEÇTİ; `tests/run_client_core_e2e.py` 4 E2E DENETİMİNİN HEPSİ GEÇTİ (`mem_pool 6/6`, `thread_pool 1/1`, `rhi 7/7`, `world_render 9/9`, `gpu_instancing 12/12`, `4-Subsystem E2E 14/14`, `ClientCoreE2E` yerel `JAVA_CLIENT_CORE_E2E_OK`).
 
-## 19. TouchCore Mojang Downloader, Expanded `--no-lwjgl` Stack & Honest Android `client.jar` Status
+## 19. TouchCore Mojang indirici, genişletilmiş `--no-lwjgl` yığını ve dürüst Android `client.jar` durumu
 
-* **Official Mojang Version/Asset Downloader (`android/touchcore/src/com/monolith/touchcore/MojangDownloader.java`, `LauncherActivity.java`)**:
-  - Fetches `https://piston-meta.mojang.com/mc/game/version_manifest_v2.json` directly from Mojang CDNs (no bundled Mojang game files or jars inside the APK).
-  - Downloads the selected release `<id>.json`, `client.jar` (size-checked) -> `<filesDir>/monolith/versions/<id>/client.jar`, and `<assetIndex.id>.json` -> `<assetsDir>/indexes/<assetIndex.id>.json` on a background thread. *(Live HTTPS download from Mojang CDNs has not been tested inside the headless PRoot environment.)*
-* **Expanded `--no-lwjgl` Client Shim Coverage (`runtime/java_nolwjgl/org/lwjgl/`)**:
-  - `system/`: Added `MemoryStack` (try-with-resources frame allocator), `Pointer`, `Configuration`, `Callback`.
-  - `stb/`: Added `STBImage` (`stbi_info_from_memory`, `stbi_load_from_memory` real PNG chunk + `java.util.zip.Inflater` RGBA decoder + filter reconstruction, `stbi_set_flip_vertically_on_load`, `stbi_image_free`).
-  - `opengl/`: Added `GLCapabilities` (`OpenGL11`..`OpenGL33`, ARB flags returned by `GL.createCapabilities()`), `GL31C`/`GL31`, `GL32C`/`GL32`, `GL33C`/`GL33`, plus `GL30C` mipmap/renderbuffer/framebuffer helpers.
-  - `glfw/`: Added `Callbacks.glfwFreeCallbacks`, `GLFWVidMode`, `glfwGetPrimaryMonitor`, `glfwGetVideoMode`, `GLFWErrorCallbackI`, `GLFWCharCallbackI`, `GLFWScrollCallbackI`, `GLFWWindowFocusCallbackI`, `glfwSetClipboardString`/`glfwGetClipboardString`, `glfwSwapInterval`.
-  - `openal/`: Added minimal `ALC`, `ALC10`, `AL`, `AL10`, `ALCCapabilities`, `ALCapabilities` stubs.
-* **Android Multiarch C Header Fix (`monolith/__main__.py`)**:
-  - Added `_android_include_flags()` passing `/data/data/com.termux/files/usr/include/aarch64-linux-android` (`asm/types.h`) to `zig build-obj` and `clang` so `@cImport(@cInclude("zlib.h"))` in `runtime/io.zig` compiles cleanly when building Android `--target aarch64-linux-android.26` `-dynamic` libraries using `java.util.zip.*` / `STBImage`.
-* **Verified after these updates**:
-  - `python3 tools/build_touchcore_apk.py`: built `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) (`0.98 MiB`, 13 Java files, 107 D8 classes), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS.
-  - 4-shard Android `aarch64-linux-android.26` `-dynamic --no-lwjgl` build (`FullNoLwjglTest` -> `libminecraft_mono.so`, `26233 KiB`) executed directly on Android Bionic `/system/bin/linker64`: `mono_android_entry` returned `0` in `0.82 ms`, `STBIMAGE_PNG_OK 2x2 RGBA`, `GL_CAPS_OK OpenGL33=true`, `OPENAL_OK buf=1 src=2`, `GLFW_SURFACE_CHECK_OK vm=1280x720` (plus explicit `UnsupportedOperationException` without attached OS surface), `FULL_NOLWJL_BIONIC_OK`, `Bionic exit=0`.
+* **Resmi Mojang sürüm/asset indirici (`android/touchcore/src/com/monolith/touchcore/MojangDownloader.java`, `LauncherActivity.java`)**:
+  - `https://piston-meta.mojang.com/mc/game/version_manifest_v2.json` dosyasını doğrudan Mojang CDN'lerinden alır (APK içinde paketlenmiş Mojang oyun dosyası ya da jar yok).
+  - Seçilen sürümün `<id>.json`, `client.jar` (boyut denetimli) -> `<filesDir>/monolith/versions/<id>/client.jar` ve `<assetIndex.id>.json` -> `<assetsDir>/indexes/<assetIndex.id>.json` dosyalarını bir arka plan iş parçacığında indirir. *(Mojang CDN'lerinden canlı HTTPS indirmesi headless PRoot ortamında test edilmedi.)*
+* **Genişletilmiş `--no-lwjgl` istemci shim kapsamı (`runtime/java_nolwjgl/org/lwjgl/`)**:
+  - `system/`: `MemoryStack` (try-with-resources çerçeve tahsis edici), `Pointer`, `Configuration`, `Callback` eklendi.
+  - `stb/`: `STBImage` eklendi (`stbi_info_from_memory`, `stbi_load_from_memory` gerçek PNG parçası + `java.util.zip.Inflater` RGBA çözücü + süzgeç yeniden kurulumu, `stbi_set_flip_vertically_on_load`, `stbi_image_free`).
+  - `opengl/`: `GLCapabilities` (`GL.createCapabilities()` tarafından döndürülen `OpenGL11`..`OpenGL33`, ARB bayrakları), `GL31C`/`GL31`, `GL32C`/`GL32`, `GL33C`/`GL33` ve `GL30C` mipmap/renderbuffer/framebuffer yardımcıları eklendi.
+  - `glfw/`: `Callbacks.glfwFreeCallbacks`, `GLFWVidMode`, `glfwGetPrimaryMonitor`, `glfwGetVideoMode`, `GLFWErrorCallbackI`, `GLFWCharCallbackI`, `GLFWScrollCallbackI`, `GLFWWindowFocusCallbackI`, `glfwSetClipboardString`/`glfwGetClipboardString`, `glfwSwapInterval` eklendi.
+  - `openal/`: asgari `ALC`, `ALC10`, `AL`, `AL10`, `ALCCapabilities`, `ALCapabilities` taslakları eklendi.
+* **Android çok mimarili C başlık düzeltmesi (`monolith/__main__.py`)**:
+  - `_android_include_flags()` eklendi; `/data/data/com.termux/files/usr/include/aarch64-linux-android` (`asm/types.h`) yolunu `zig build-obj` ve `clang`'a geçirir, böylece `java.util.zip.*` / `STBImage` kullanan Android `--target aarch64-linux-android.26` `-dynamic` kütüphaneleri derlenirken `runtime/io.zig` içindeki `@cImport(@cInclude("zlib.h"))` temiz derlenir.
+* **Bu güncellemelerden sonra doğrulananlar**:
+  - `python3 tools/build_touchcore_apk.py`: `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) derlendi (`0.98 MiB`, 13 Java dosyası, 107 D8 sınıfı), `apksigner verify` GEÇTİ (v2/v3), `zipalign -c -p 4` GEÇTİ.
+  - Doğrudan Android Bionic `/system/bin/linker64` üzerinde çalıştırılan 4 shard'lı Android `aarch64-linux-android.26` `-dynamic --no-lwjgl` derlemesi (`FullNoLwjglTest` -> `libminecraft_mono.so`, `26233 KiB`): `mono_android_entry` `0.82 ms` içinde `0` döndürdü, `STBIMAGE_PNG_OK 2x2 RGBA`, `GL_CAPS_OK OpenGL33=true`, `OPENAL_OK buf=1 src=2`, `GLFW_SURFACE_CHECK_OK vm=1280x720` (ayrıca ekli işletim sistemi yüzeyi olmadan açık `UnsupportedOperationException`), `FULL_NOLWJL_BIONIC_OK`, `Bionic exit=0`.
   - `zig test -lc runtime/rhi.zig`: `All 7 tests passed.`
   - `python3 tests/run_tests.py Arith IoZip`: `2/2 passed`.
-* **Remaining blockers before vanilla Mojang `client.jar` runs 100% playable on phone**:
-  - Generating an Android `libminecraft_mono.so` from a full Mojang `client.jar` has **not** yet been run (`client.jar` is not present locally, and AOT compiling the ~61k-file Vanilla closure with LLVM requires ~7–15 GiB RAM per `§8`, while `monolith/__main__.py` restricts `--backend native` to `x86_64/AMD64`, meaning large vanilla AOT `.so` builds must be cross-compiled from a high-RAM host or split further).
-  - Real `client.jar` gameplay end-to-end on a live Android SurfaceFlinger GPU/audio session (Blaze3D/Minecraft shader uniform compatibility under GLES3, keyboard/touch gameplay loop inside `GameActivity`, and remaining unimplemented JDK/third-party natives tracked in `§2–3`) has not yet been executed on-device.
+* **Vanilla Mojang `client.jar`'ın telefonda %100 oynanabilir çalışmasından önce kalan engeller**:
+  - Tam bir Mojang `client.jar`'dan bir Android `libminecraft_mono.so` üretimi henüz **çalıştırılmadı** (`client.jar` yerelde yok ve ~61 bin dosyalı Vanilla kapanışını LLVM ile AOT derlemek `§8`'e göre ~7–15 GiB RAM gerektirir; `monolith/__main__.py` ise `--backend native`'i `x86_64/AMD64` ile sınırlar, yani büyük vanilla AOT `.so` derlemeleri yüksek RAM'li bir ana makineden çapraz derlenmeli ya da daha fazla bölünmelidir).
+  - Gerçek `client.jar` oynanışının canlı bir Android SurfaceFlinger GPU/ses oturumunda uçtan uca çalıştırılması (GLES3 altında Blaze3D/Minecraft gölgelendirici uniform uyumluluğu, `GameActivity` içinde klavye/dokunmatik oynanış döngüsü ve `§2–3`'te izlenen kalan gerçekleştirilmemiş JDK/üçüncü taraf yerel metotları) henüz cihazda yapılmadı.
 
-## 20. Full MC `26.3` `--no-lwjgl` SDL3/GLES3/OpenAL Parity, Escape Analysis & SHA-1 Downloader
+## 20. Tam MC `26.3` `--no-lwjgl` SDL3/GLES3/OpenAL eşitliği, kaçış analizi ve SHA-1 indirici
 
-* **Real Minecraft `26.3` (`26.3-client.jar`, 41,483,720 bytes + 42 libraries) Empirical Gap Closure**:
-  - Added full LWJGL 3.4 SDL3 surface/event/input layer (`runtime/java_nolwjgl/org/lwjgl/sdl/` — `SDLVideo`, `SDLEvents`, `SDLKeyboard`, `SDLMouse`, `SDL_Event` + sub-events, `SDLInit`, `SDLTimer`, `SDLClipboard`, `SDLStdinc`, `SDLSurface`, `SDLPixels`, `SDLMessageBox`, `SDLHints`, `SDLLog`, `SDLKeycode`, `SDLScancode`, `SDLVulkan`) wired to `NativeRhi` (`ANativeWindow` + `g_tc_input`).
-  - Expanded OpenGL 3.3 Core -> GLES3 & OpenAL bridge (`runtime/gl_shim.zig`, `runtime/al_shim.zig`, `runtime/rhi_bridge.zig`, `runtime/java/mono/rhi/NativeRhi.java`, `monolith/shard.py`): added FBO blit, buffer copy/range mapping, samplers, queries, `glVertexAttribDivisor`, `glFenceSync`/`glDeleteSync`/`glClientWaitSync`, `glDrawBuffer`, `ARBDirectStateAccess` DSA->bind adapters, `ARBVertexAttribBinding` state emulation onto `GL33C`, dynamic `libopenal.so.1`/`libopenal.so` audio probing with clean fallback, real `STBImageResize` bilinear RGBA scaling, `STBImageWrite` Deflater PNG encoding + `STBIWriteCallback.getData`, `StructBuffer.get()`, `Pointer.Default`, and full `org/lwjgl/vulkan/`, `util/vma/`, `util/shaderc/`, `util/spvc/`, `util/freetype/` (`FT_Init_FreeType = -1` bitmap font fallback) link closure.
-  - Fixed `MethodHandle.invokeBasic` signature-polymorphic lowering (`monolith/program.py`, `classlib/src/java/lang/invoke/MethodHandle.java`) and added `net/minecraft/client/renderer/LevelRenderer.resetLevelRenderData()V` to `patches/manifest.json`.
-  - RTA verification against `26.3-client.jar` (`61,280` loaded classes, `278,867` reachable methods) cut `org/lwjgl/*` link errors from **`345` -> `0`** (all patches including `resetLevelRenderData` matched `true`; `91` non-LWJGL link errors remain, mostly optional Log4j appenders/`NarratorMac` + `9` `MethodHandle`/`Lookup` internals, alongside `103` JDK natives and `257` third-party natives).
-* **Intra-Method Escape Analysis & Auto-`ArenaScope` (`monolith/zigen.py`, `runtime/rt.zig`)**:
-  - Added `rt.arenaMark`, `rt.arenaRestore`, `rt.newObjectArena`, and `rt.newArrayArena` in `runtime/rt.zig` plus forward DAG dataflow escape analysis (`_analyze_local_allocs`, `_safe_ea_callee`) in `monolith/zigen.py` to bump-allocate proven loop-free non-escaping `new`/`newarray`/`anewarray` objects on the thread's `scratch_arena` and rewind at method exit.
-* **TouchCore SHA-1 Library + Asset Object Downloader (`android/touchcore/src/com/monolith/touchcore/MojangDownloader.java`)**:
-  - Upgraded downloader with Linux OS rule filtering, 4-thread `ExecutorService`, and SHA-1 + size verification for `client.jar`, non-native library JARs, `assetIndex`, and individual `resources.download.minecraft.net` asset objects. *(Live HTTPS download still untested inside offline PRoot.)*
-* **Verified after edits**:
-  - `python3 -m py_compile` / AST checks / `.claude/hooks/guard.py --self-test` / `zig ast-check`: PASS; all `276` Java files in `runtime/java/` + `runtime/java_nolwjgl/` compiled cleanly with JDK 25 `javac` (`rc=0`).
+* **Gerçek Minecraft `26.3` (`26.3-client.jar`, 41 483 720 bayt + 42 kütüphane) deneysel açık kapatma**:
+  - Tam LWJGL 3.4 SDL3 yüzey/olay/girdi katmanı eklendi (`runtime/java_nolwjgl/org/lwjgl/sdl/` — `SDLVideo`, `SDLEvents`, `SDLKeyboard`, `SDLMouse`, `SDL_Event` + alt olaylar, `SDLInit`, `SDLTimer`, `SDLClipboard`, `SDLStdinc`, `SDLSurface`, `SDLPixels`, `SDLMessageBox`, `SDLHints`, `SDLLog`, `SDLKeycode`, `SDLScancode`, `SDLVulkan`) ve `NativeRhi`'ye bağlandı (`ANativeWindow` + `g_tc_input`).
+  - Genişletilmiş OpenGL 3.3 Core -> GLES3 ve OpenAL köprüsü (`runtime/gl_shim.zig`, `runtime/al_shim.zig`, `runtime/rhi_bridge.zig`, `runtime/java/mono/rhi/NativeRhi.java`, `monolith/shard.py`): FBO blit, tampon kopyalama/aralık eşleme, örnekleyiciler, sorgular, `glVertexAttribDivisor`, `glFenceSync`/`glDeleteSync`/`glClientWaitSync`, `glDrawBuffer`, `ARBDirectStateAccess` DSA->bind bağdaştırıcıları, `GL33C` üzerine `ARBVertexAttribBinding` durum öykünmesi, temiz geri düşüşle dinamik `libopenal.so.1`/`libopenal.so` ses yoklaması, gerçek `STBImageResize` çift doğrusal RGBA ölçekleme, `STBImageWrite` Deflater PNG kodlama + `STBIWriteCallback.getData`, `StructBuffer.get()`, `Pointer.Default` ve tam `org/lwjgl/vulkan/`, `util/vma/`, `util/shaderc/`, `util/spvc/`, `util/freetype/` (`FT_Init_FreeType = -1` bitmap yazı tipi geri düşüşü) link kapanışı eklendi.
+  - `MethodHandle.invokeBasic` imza-polimorfik indirgemesi düzeltildi (`monolith/program.py`, `classlib/src/java/lang/invoke/MethodHandle.java`) ve `net/minecraft/client/renderer/LevelRenderer.resetLevelRenderData()V`, `patches/manifest.json` dosyasına eklendi.
+  - `26.3-client.jar`'a karşı RTA doğrulaması (`61,280` yüklenen sınıf, `278,867` erişilebilir metot), `org/lwjgl/*` link hatalarını **`345` -> `0`**'a indirdi (`resetLevelRenderData` dahil tüm yamalar `true` eşleşti; `91` LWJGL dışı link hatası kalıyor, çoğu isteğe bağlı Log4j appender'ları/`NarratorMac` + `9` `MethodHandle`/`Lookup` iç yapısı, `103` JDK yerel metodu ve `257` üçüncü taraf yerel metoduyla birlikte).
+* **Metot içi kaçış analizi ve otomatik `ArenaScope` (`monolith/zigen.py`, `runtime/rt.zig`)**:
+  - `runtime/rt.zig` içine `rt.arenaMark`, `rt.arenaRestore`, `rt.newObjectArena` ve `rt.newArrayArena` ile `monolith/zigen.py` içinde ileri DAG veri akışı kaçış analizi (`_analyze_local_allocs`, `_safe_ea_callee`) eklendi; döngüsüz olduğu kanıtlanmış, kaçmayan `new`/`newarray`/`anewarray` nesnelerini iş parçacığının `scratch_arena`'sında bump ile tahsis eder ve metottan çıkışta geri sarar.
+* **TouchCore SHA-1 kütüphane + asset nesnesi indirici (`android/touchcore/src/com/monolith/touchcore/MojangDownloader.java`)**:
+  - İndirici Linux işletim sistemi kural süzmesi, 4 iş parçacıklı `ExecutorService` ve `client.jar`, yerel olmayan kütüphane JAR'ları, `assetIndex` ve tek tek `resources.download.minecraft.net` asset nesneleri için SHA-1 + boyut doğrulamasıyla yükseltildi. *(Canlı HTTPS indirmesi çevrimdışı PRoot içinde hâlâ test edilmedi.)*
+* **Düzenlemelerden sonra doğrulananlar**:
+  - `python3 -m py_compile` / AST denetimleri / `.claude/hooks/guard.py --self-test` / `zig ast-check`: GEÇTİ; `runtime/java/` + `runtime/java_nolwjgl/` içindeki tüm `276` Java dosyası JDK 25 `javac` ile temiz derlendi (`rc=0`).
   - `tests/run_client_core_e2e.py`: `ALL 4 CLIENT CORE E2E CHECKS PASSED (Debug)` (`mem_pool 6/6`, `thread_pool 1/1`, `rhi 7/7`, `world_render 9/9`, `gpu_instancing 12/12`, `4-Subsystem E2E 14/14`, `JAVA_CLIENT_CORE_E2E_OK`, `0 missing-native`, `0 link-error`, `0 unsupported-varhandle`).
-  - 4-shard Android ARM64 `-dynamic --no-lwjgl` Bionic `/system/bin/linker64` test (`BionicSdlCheck`, `17438 KiB` `.so`): emitted `rt.arenaMark`/`newObjectArena`/`newArrayArena`, printed `HOST_ENTRY_RC=0`, `EA_ARENA_OK=1002502500`, `SDL_NO_SURFACE_GUARD_OK=true`, `GL_SHIM_OK=true`, `OPENAL_SHIM_OK=true`, `STB_PNG_OK=true`, `FREETYPE_FALLBACK_OK=-1`, `BIONIC_SDL_E2E_PASS`, `BIONIC_EXIT=0`.
-  - Differential tests (`tests/run_tests.py`): `Arith` (`1/1 PASS`), `MHandles` (`1/1 PASS`); `GcStress` matched `churn`/`big arrays`/`threads`/`map 200000 262501012965` while `WeakReference` returned `weak cleared=false` under GC-free `SlabPool`.
-  - TouchCore APK (`python3 tools/build_touchcore_apk.py`): built `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) (`0.98 MiB`, 13 Java files, 109 D8 classes), `zipalign -c -p 4` PASS, `apksigner verify` v2/v3 PASS.
-* **Remaining external/hardware blockers**:
-  - Full `26.3-client.jar` LLVM `.so` compilation (~`7–15 GiB` RAM) must run on GitHub Actions ([`build-so.yml`](../.github/workflows/build-so.yml)) or an `x86_64` host; live on-device `SurfaceFlinger` rendering + shader compatibility + HTTPS Mojang downloads await testing on the physical phone with the compiled `.so` loaded into TouchCore APK.
+  - 4 shard'lı Android ARM64 `-dynamic --no-lwjgl` Bionic `/system/bin/linker64` testi (`BionicSdlCheck`, `17438 KiB` `.so`): `rt.arenaMark`/`newObjectArena`/`newArrayArena` üretti, `HOST_ENTRY_RC=0`, `EA_ARENA_OK=1002502500`, `SDL_NO_SURFACE_GUARD_OK=true`, `GL_SHIM_OK=true`, `OPENAL_SHIM_OK=true`, `STB_PNG_OK=true`, `FREETYPE_FALLBACK_OK=-1`, `BIONIC_SDL_E2E_PASS`, `BIONIC_EXIT=0` yazdırdı.
+  - Fark testleri (`tests/run_tests.py`): `Arith` (`1/1 GEÇTİ`), `MHandles` (`1/1 GEÇTİ`); `GcStress`, GC'siz `SlabPool` altında `WeakReference` `weak cleared=false` döndürürken `churn`/`big arrays`/`threads`/`map 200000 262501012965` ile eşleşti.
+  - TouchCore APK (`python3 tools/build_touchcore_apk.py`): `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) derlendi (`0.98 MiB`, 13 Java dosyası, 109 D8 sınıfı), `zipalign -c -p 4` GEÇTİ, `apksigner verify` v2/v3 GEÇTİ.
+* **Kalan dış/donanım engelleri**:
+  - Tam `26.3-client.jar` LLVM `.so` derlemesi (~`7–15 GiB` RAM), GitHub Actions ([`build-so.yml`](../.github/workflows/build-so.yml)) ya da bir `x86_64` ana makinesinde çalıştırılmalı; canlı cihaz içi `SurfaceFlinger` çizimi + gölgelendirici uyumluluğu + HTTPS Mojang indirmeleri, derlenmiş `.so`'nun TouchCore APK'ya yüklendiği fiziksel telefonda test edilmeyi bekliyor.
 
 
-## 2026-11-18: Android launcher and engine verification
+## 2026-11-18: Android launcher ve motor doğrulaması
 
-- Environment: Zig 0.15.2, Android NDK r27c, JDK 25.0.5, Android SDK platform 34 / build-tools 34.0.0, 4 cores, 15 GiB RAM.
-- Full `libminecraft_mono.so` (Minecraft 26.3, ReleaseFast, `aarch64-linux-android.26`, 16 shards) built: 437 MB stripped, 16 KB page aligned, `mono_android_entry` exported.
-  One shard needs up to 7.5 GiB, so the machine builds one shard at a time. An interrupted build resumes with the `--only-shards K,K` option of the Minecraft build tool.
-- Crash causes fixed: `exit()` racing HWUI/GPU-driver destructors (now `exit_group` on Android); engine stdio invisible (now forwarded to logcat tag `MonolithEngine`);
-  glibc-only `__errno_location`, `copy_file_range` and `posix_spawn*` imports that made `dlopen` fail on bionic (errno via `std.c._errno`, raw syscall, weak imports);
-  EGL context destroyed on every Surface change (the context is kept, only the window surface is rebound).
-- Launcher: the duplicate hotbar and crosshair drawn over the game HUD are gone; touch slots map onto the real hotbar.
-- Differential tests: 26 of 27 default tests pass. `GcStress` (WeakReference not cleared after `System.gc()`) is open. `ClientCoreE2E` has its own runner.
-- D8 8.2.2 (build-tools 34) crashes on JDK 25 class files: use R8 9.5.33 as `~/.cache/monolith/android-sdk/r8.jar`.
-- Not verified here: running the `.so` on a device or emulator.
+- Ortam: Zig 0.15.2, Android NDK r27c, JDK 25.0.5, Android SDK platform 34 / build-tools 34.0.0, 4 çekirdek, 15 GiB RAM.
+- Tam `libminecraft_mono.so` (Minecraft 26.3, ReleaseFast, `aarch64-linux-android.26`, 16 shard) derlendi: 437 MB ayıklanmış, 16 KB sayfa hizalı, `mono_android_entry` dışa aktarılmış.
+  Bir shard 7,5 GiB'a kadar ister, bu yüzden makine bir seferde bir shard derler. Yarıda kesilen bir derleme, Minecraft derleme aracının `--only-shards K,K` seçeneğiyle devam eder.
+- Düzeltilen çökme nedenleri: `exit()`, HWUI/GPU sürücüsü yıkıcılarıyla yarışıyordu (artık Android'de `exit_group`); motor stdio'su görünmezdi (artık logcat etiketi `MonolithEngine`'e yönlendiriliyor);
+  glibc'ye özgü `__errno_location`, `copy_file_range` ve `posix_spawn*` içe aktarmaları bionic'te `dlopen`'ı başarısız kılıyordu (errno `std.c._errno` ile, ham sistem çağrısı, zayıf içe aktarmalar);
+  EGL bağlamı her Surface değişikliğinde yok ediliyordu (bağlam korunur, yalnızca pencere yüzeyi yeniden bağlanır).
+- Launcher: oyun HUD'unun üzerine çizilen yinelenen hotbar ve artı imleç kalktı; dokunma yuvaları gerçek hotbar'a eşlenir.
+- Fark testleri: 27 varsayılan testin 26'sı geçiyor. `GcStress` (`System.gc()` sonrası WeakReference temizlenmedi) açık. `ClientCoreE2E`'nin kendi çalıştırıcısı var.
+- D8 8.2.2 (build-tools 34) JDK 25 sınıf dosyalarında çöker: `~/.cache/monolith/android-sdk/r8.jar` olarak R8 9.5.33 kullanın.
+- Burada doğrulanmayan: `.so`'nun bir cihazda ya da öykünücüde çalıştırılması.
 
-### 2026-11-19: engine start-up verified on x86_64 with a desktop mock of the Android host
+### 2026-11-19: x86_64'te motor başlangıcı, Android ana makinesinin masaüstü sahtesiyle doğrulandı
 
-- `tools/mock_android_host.c` stands in for `libtouchcore_mono.so` (EGL pbuffer, GLES 3 through Mesa): window, GL context and the
-  whole `Minecraft.<init>` path run without a phone. Debug engine start-up reaches shader loading.
-- Fixed on the way: STBImage failure reason (null, not "ok"), `ModuleLayer.boot()`, JNI `GetEnv`/`AttachCurrentThread` for threads that
-  already have a ThreadState (JNA deadlock), `class$` forName helper in the RTA, VarHandle ordinary methods kept, NumberFormat without
-  locale providers, no-LWJGL Vulkan/GL/memory stubs the game reflects on.
-- **Open (blocks rendering): shader compilation.** Minecraft 26.3 compiles GLSL to SPIR-V with shaderc and, for the GL backend, translates it
-  with SPIRV-Cross (`renderpearl` `GlslCompiler.compileToSpv`). `runtime/java_nolwjgl/org/lwjgl/util/shaderc` and `.../spvc` are stubs that
-  report "shaderc disabled in --no-lwjgl build", so the first critical pipeline (`minecraft:pipeline/gui`) fails and the game ends with a crash report.
-  Needed: shaderc (glslang, SPIRV-Tools; sources ship with the NDK under `sources/third_party/shaderc`) and SPIRV-Cross compiled for aarch64,
-  Java natives for the calls `renderpearl` makes, GLSL ES 3.x output, and linking into `libminecraft_mono.so`.
+- `tools/mock_android_host.c`, `libtouchcore_mono.so`'nun yerini tutar (EGL pbuffer, Mesa üzerinden GLES 3): pencere, GL bağlamı ve
+  tüm `Minecraft.<init>` yolu bir telefon olmadan çalışır. Debug motor başlangıcı gölgelendirici yüklemeye ulaşır.
+- Yolda düzeltilenler: STBImage hata nedeni (null, "ok" değil), `ModuleLayer.boot()`, zaten bir ThreadState'i olan iş parçacıkları için JNI `GetEnv`/`AttachCurrentThread` (JNA kilitlenmesi), RTA'da `class$` forName yardımcısı, VarHandle sıradan metotları korundu, yerel ayar sağlayıcıları olmadan NumberFormat, oyunun yansıttığı LWJGL dışı Vulkan/GL/bellek taslakları.
+- **Açık (çizimi engelliyor): gölgelendirici derleme.** Minecraft 26.3, GLSL'i shaderc ile SPIR-V'ye derler ve GL arka ucu için SPIRV-Cross ile çevirir (`renderpearl` `GlslCompiler.compileToSpv`). `runtime/java_nolwjgl/org/lwjgl/util/shaderc` ve `.../spvc` taslaktır; "shaderc disabled in --no-lwjgl build" bildirir, bu yüzden ilk kritik boru hattı (`minecraft:pipeline/gui`) başarısız olur ve oyun bir çökme raporuyla biter.
+  Gerekenler: shaderc (glslang, SPIRV-Tools; kaynaklar NDK ile `sources/third_party/shaderc` altında gelir) ve aarch64 için derlenmiş SPIRV-Cross, `renderpearl`'ın yaptığı çağrılar için Java yerel metotları, GLSL ES 3.x çıktısı ve `libminecraft_mono.so` içine bağlama.
 
-## 21. Release-gate verification on this machine (2026-11-24)
+## 21. Bu makinede sürüm kapısı doğrulaması (2026-11-24)
 
-- Environment: 4 vCPU, 16 GiB RAM, JDK 25.0.5.1+2 (`~/.cache/monolith/temurin-25`), rustc/cargo, Python 3.13. No device, no GPU, no display.
-- Passed (commands as in `docs/RELEASE.md` section 2 where listed):
-  - `pyflakes monolith tools tests/run_tests.py`: no output. `compileall` on `monolith tools tests`: exit 0.
+- Ortam: 4 vCPU, 16 GiB RAM, JDK 25.0.5.1+2 (`~/.cache/monolith/temurin-25`), rustc/cargo, Python 3.13. Cihaz yok, GPU yok, ekran yok.
+- Geçenler (listelenen yerlerde komutlar `docs/RELEASE.md` bölüm 2'deki gibi):
+  - `pyflakes monolith tools tests/run_tests.py`: çıktı yok. `monolith tools tests` üzerinde `compileall`: çıkış 0.
   - `rustc --test tests/rust/audio_main.rs`: 12/12.
-  - `monolith.crc_tests`, `netty_tests`, `recycle_tests`, `patch_tests`, `stack_tests`: `ALL PASSED` each.
-  - `tests/run_tests.py GcStress Oop Threads Lambdas Strings Collections1` with `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`: 6/6, plain and `MONO_GC_CONCURRENT=1`.
+  - `monolith.crc_tests`, `netty_tests`, `recycle_tests`, `patch_tests`, `stack_tests`: her biri `ALL PASSED`.
+  - `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort` ile `tests/run_tests.py GcStress Oop Threads Lambdas Strings Collections1`: 6/6, normal ve `MONO_GC_CONCURRENT=1`.
   - `tests/run_tests.py Arith`: 1/1.
-  - `tools/rt_typecheck.py`: PASS.
+  - `tools/rt_typecheck.py`: GEÇTİ.
   - `android/touchcore/native` `cargo test`: 29/29.
-- Correction: `GcStress` is no longer open. §18 and §16 lines about it are historical; this run passed both GC modes.
-- Not run here (hardware or time limit): full Minecraft build, `tools/headless_play.sh` game start, 60 min leak soak, Android device run, Client Core E2E.
+- Düzeltme: `GcStress` artık açık değil. Bununla ilgili §18 ve §16 satırları tarihîdir; bu koşu her iki GC modunu da geçti.
+- Burada çalıştırılmayan (donanım ya da zaman sınırı): tam Minecraft derlemesi, `tools/headless_play.sh` oyun açılışı, 60 dk sızıntı soak'ı, Android cihaz koşusu, Client Core E2E.
 
-## 22. Code changes of 2026-11-24 and what is still unverified
+## 22. 2026-11-24 kod değişiklikleri ve hâlâ doğrulanmayanlar
 
-Done, with the check that was run:
-- `monolith/rt/crash.rs`: panic hook and Linux fatal-signal handlers (SEGV, BUS, ILL, FPE, ABRT) write `mono-crash-<pid>.txt` (dir: `MONO_CRASH_DIR`). Replaces the SIGSEGV-only stderr handler in `rt.rs`. `tests/rust/crash_main.rs`: 5/5 (real panic and real SIGSEGV in child processes). `tools/rt_typecheck.py`: PASS.
-- `tools/check_link_errors.py` and `docs/LINK_ERRORS_TR.md`: all 446 link errors of the Minecraft 26.3 transpile fall into five explained groups; a new unexplained one fails the gate (positive and negative case run).
-- Patch fingerprints (`monolith/patches.py`, `tools/patch_fingerprints.py`): all 10 patches pin their method body; `monolith.patch_fp_tests` 9/9.
-- WS7: 34 unused Java overlay files deleted from `runtime/java_nolwjgl` (277 to 243); the remaining tree compiles with the same `javac` call the pipeline uses (295 classes). A 35th deletion (`SDL_LogOutputFunction`) was wrong: no overlay source and no generated symbol named it, `javac` passed, but Minecraft's own bytecode (`SdlDebug.<clinit>`) does. The link-error gate (`tools/check_link_errors.py`) caught it as the one unexplained link error of the first full pipeline run after the deletion; the file was restored. `docs/WS7_ENVANTER_TR.md`.
-- `docs/JNI_ENVANTER_TR.md`: 259 JNI/JNA emulation natives by group; the Tracy natives are not called in normal play (bytecode checked).
-- Zig leftovers: dead `touchcore_core.zig` removed, stale `.zig` file references in comments point at the Rust modules.
-- Runtime bugs fixed (`monolith/rt/sync.rs`, `gc.rs`, `rt.rs`), each with a test that ran: a lost interrupt in `Object.wait` (`WaitInterrupt`, 3000 rounds); a lock-order deadlock between `interrupt` and a timed `wait`; stale interrupt flags and park permits inherited by a new `Thread` at a reused address; `holdsLock` and `notify` creating monitors; monitors of dead objects never released (now dropped by the collector between marking and sweeping, `MonitorChurn`); `MONO_TRACE_EX` and `MONO_TRACE_PARK` read on every exception or monitor wait instead of once. Both GC modes with `MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`, 12 repeats each: no failure.
-- `rustgen.py`: the compiled-object cache `/tmp/monolith_shard_cache` had no limit and reached 42 GB (the disk was full in the middle of the differential suite, 14 tests failed with `No space left on device`, not from code). Now capped at 8 GiB, oldest first (`MONO_SHARD_CACHE_GB`); `monolith.cache_tests` 7/7. After the cap the 14 tests were re-run: 14/14.
-- Differential suite `tests/run_tests.py`: 27 passed, 3 skipped (`ClientCoreE2E`, `HttpFetch`, `Jni`), each skip with its measured reason. `NetIo` runs and passes (its skip was out of date).
-- `MONO_COUNT_NATIVES` (`monolith/rt/ncount.rs`): the meter for the JNI/JNA = 0 goal; checked on a small program that calls JNA-style natives (7 calls, 3 natives counted correctly); `tests/rust/ncount_main.rs`.
-- Signals (`monolith/rt/signals.rs`, `classlib/.../MonoSignals.java`, `Runtime.addShutdownHook`): SIGTERM, SIGINT and SIGHUP had no handler, so a `kill`, Ctrl-C or system shutdown ended the process at once and the shutdown hooks never ran (Minecraft saves the world in its hook). Now they run `Runtime.exit(128 + signal)` through a `Signal Dispatcher` thread, as on HotSpot. `SignalExit` differential test: same output and exit status 143 as HotSpot. Linux only; Windows and macOS keep the default action.
-- Full pipeline run with all of the above (26.3, 16 shards, one job, about 70 minutes on 4 vCPU / 16 GB): 61 749 classes, 446 link errors (`tools/check_link_errors.py`: 0 unexplained), 0 missing natives, 10 patches applied with their fingerprints. Then `tools/headless_play.sh --seconds 60 --clean-exit` from an empty game directory under Xvfb with software GL: title, first-run screen, Singleplayer, Create New World (Creative), 60 s of walking, SIGTERM; the shutdown hooks ran, the world was saved, exit status 143, no `mono-crash` file. `MONO_COUNT_NATIVES` during that run: 139 JNI/JNA emulation calls, all JNA and the Flite narrator (`docs/JNI_ENVANTER_TR.md`). Not run: the 60 minute leak soak, concurrent GC with the game, multiplayer, a real GPU.
-- 60 minute leak soak (`tools/leak_soak.sh`, same build, game idle in the world, plain stop-the-world GC): no crash, no crash report; `tools/leak_budget.py --warmup-s 1800 --budget-mb-per-min 1`: live growth after warm-up **+0.180 MiB/min, within budget**. The same profile shows the open problem: 100 collections, mean pause **1.1 s**, longest **1.8 s** (live heap 625 MiB at the end, resident set about 5.8 GiB and flat after the first 25 minutes). The pause is the stutter a player would feel; reducing it is WS1 (GC_PLAN), not started.
-- Download hardening (found by reading the code, then tested): in the TouchCore downloader (`MojangDownloader.java`, `DownloadGuard.java`, 48 checks) and the Python tools (`mcbuild_common.py`, `fetch_client_jar.py`, `monolith.fetch_guard_tests`) a version id, library path or asset hash from a manifest could name a file outside the game directories, any URL scheme was accepted, `client.jar` was accepted without a SHA-1 on the Android side, and a mirror jar without checksum on the desktop side. Now: https only (Android: only mojang.com and minecraft.net hosts), paths and ids must stay inside their directory, hashes must be 40 hex digits, a client jar always needs its SHA-1, failed downloads leave no `.part` file. `MojangDownloader` compiled at `--release 8` against stub `org.json`; it was not run on a device.
-- Docs: `docs/KULLANICI_REHBERI_TR.md` (settings checked against the runtime code), `docs/PLAN_4_GUN_TR.md`, `docs/JNI_ENVANTER_TR.md`.
+Yapılanlar, çalıştırılan denetimle birlikte:
+- `monolith/rt/crash.rs`: panic kancası ve Linux ölümcül sinyal işleyicileri (SEGV, BUS, ILL, FPE, ABRT) `mono-crash-<pid>.txt` yazar (dizin: `MONO_CRASH_DIR`). `rt.rs` içindeki yalnızca SIGSEGV'li stderr işleyicisinin yerini alır. `tests/rust/crash_main.rs`: 5/5 (alt süreçlerde gerçek panic ve gerçek SIGSEGV). `tools/rt_typecheck.py`: GEÇTİ.
+- `tools/check_link_errors.py` ve `docs/LINK_ERRORS_TR.md`: Minecraft 26.3 çevirisinin 446 link hatasının tamamı açıklanmış beş gruba düşüyor; yeni açıklanmamış bir hata kapıyı başarısız kılar (olumlu ve olumsuz durum çalıştırıldı).
+- Yama parmak izleri (`monolith/patches.py`, `tools/patch_fingerprints.py`): 10 yamanın hepsi metot gövdesini sabitler; `monolith.patch_fp_tests` 9/9.
+- WS7: `runtime/java_nolwjgl` içinden 34 kullanılmayan Java kaplama dosyası silindi (277'den 243'e); kalan ağaç, boru hattının kullandığı aynı `javac` çağrısıyla derleniyor (295 sınıf). 35. silme (`SDL_LogOutputFunction`) yanlıştı: hiçbir kaplama kaynağı ve hiçbir üretilmiş sembol onu adlandırmıyordu, `javac` geçti, ama Minecraft'ın kendi bytecode'u (`SdlDebug.<clinit>`) onu adlandırıyor. Link hatası kapısı (`tools/check_link_errors.py`), silmeden sonraki ilk tam boru hattı koşusunun tek açıklanmamış link hatası olarak bunu yakaladı; dosya geri yüklendi. `docs/WS7_ENVANTER_TR.md`.
+- `docs/JNI_ENVANTER_TR.md`: gruba göre 259 JNI/JNA öykünme yerel metodu; Tracy yerel metotları normal oyunda çağrılmaz (bytecode denetlendi).
+- Zig artıkları: ölü `touchcore_core.zig` kaldırıldı, yorumlardaki bayat `.zig` dosya referansları Rust modüllerine işaret ediyor.
+- Çalışma zamanı hataları düzeltildi (`monolith/rt/sync.rs`, `gc.rs`, `rt.rs`), her biri çalıştırılan bir testle: `Object.wait` içinde kaybolan bir kesme (`WaitInterrupt`, 3000 tur); `interrupt` ile zaman aşımlı `wait` arasında bir kilit sırası kilitlenmesi; yeniden kullanılan bir adreste yeni bir `Thread`'in miras aldığı bayat kesme bayrakları ve park izinleri; monitör oluşturan `holdsLock` ve `notify`; ölü nesnelerin hiç serbest bırakılmayan monitörleri (artık işaretleme ile süpürme arasında toplayıcı tarafından düşürülüyor, `MonitorChurn`); her istisna ya da monitör beklemesinde bir kez yerine her seferinde okunan `MONO_TRACE_EX` ve `MONO_TRACE_PARK`. `MONO_GC_POISON=1 MONO_ARENA_CHECK=abort` ile her iki GC modu, her biri 12 tekrar: hata yok.
+- `rustgen.py`: derlenmiş nesne önbelleği `/tmp/monolith_shard_cache` sınırsızdı ve 42 GB'a ulaştı (disk fark paketinin ortasında doldu, 14 test koddan değil `No space left on device` ile başarısız oldu). Artık 8 GiB ile sınırlı, en eski önce (`MONO_SHARD_CACHE_GB`); `monolith.cache_tests` 7/7. Sınırdan sonra 14 test yeniden çalıştırıldı: 14/14.
+- Fark paketi `tests/run_tests.py`: 27 geçti, 3 atlandı (`ClientCoreE2E`, `HttpFetch`, `Jni`), her atlama ölçülmüş nedeniyle. `NetIo` çalışıyor ve geçiyor (atlaması eskimişti).
+- `MONO_COUNT_NATIVES` (`monolith/rt/ncount.rs`): JNI/JNA = 0 hedefi için sayaç; JNA tarzı yerel metotları çağıran küçük bir programda denetlendi (7 çağrı, 3 yerel metot doğru sayıldı); `tests/rust/ncount_main.rs`.
+- Sinyaller (`monolith/rt/signals.rs`, `classlib/.../MonoSignals.java`, `Runtime.addShutdownHook`): SIGTERM, SIGINT ve SIGHUP'un işleyicisi yoktu, bu yüzden bir `kill`, Ctrl-C ya da sistem kapanışı süreci anında bitiriyordu ve kapanış kancaları hiç çalışmıyordu (Minecraft dünyayı kancasında kaydeder). Artık HotSpot'taki gibi bir `Signal Dispatcher` iş parçacığı üzerinden `Runtime.exit(128 + sinyal)` çalıştırıyorlar. `SignalExit` fark testi: HotSpot ile aynı çıktı ve 143 çıkış durumu. Yalnızca Linux; Windows ve macOS varsayılan eylemi korur.
+- Yukarıdakilerin hepsiyle tam boru hattı koşusu (26.3, 16 shard, bir iş, 4 vCPU / 16 GB'da yaklaşık 70 dakika): 61 749 sınıf, 446 link hatası (`tools/check_link_errors.py`: açıklanmamış 0), 0 eksik yerel metot, parmak izleriyle 10 yama uygulandı. Ardından Xvfb altında yazılım GL ile boş bir oyun dizininden `tools/headless_play.sh --seconds 60 --clean-exit`: başlık, ilk çalıştırma ekranı, Singleplayer, Create New World (Creative), 60 sn yürüme, SIGTERM; kapanış kancaları çalıştı, dünya kaydedildi, çıkış durumu 143, `mono-crash` dosyası yok. O koşu sırasında `MONO_COUNT_NATIVES`: 139 JNI/JNA öykünme çağrısı, hepsi JNA ve Flite anlatıcısı (`docs/JNI_ENVANTER_TR.md`). Çalıştırılmayan: 60 dakikalık sızıntı soak'ı, oyunla eşzamanlı GC, çok oyunculu, gerçek GPU.
+- 60 dakikalık sızıntı soak'ı (`tools/leak_soak.sh`, aynı derleme, oyun dünyada boşta, normal durdur-dünya GC): çökme yok, çökme raporu yok; `tools/leak_budget.py --warmup-s 1800 --budget-mb-per-min 1`: ısınmadan sonra canlı büyüme **+0,180 MiB/dk, bütçe içinde**. Aynı profil açık sorunu gösteriyor: 100 toplama, ortalama duraklama **1,1 sn**, en uzun **1,8 sn** (sonda canlı heap 625 MiB, resident set yaklaşık 5,8 GiB ve ilk 25 dakikadan sonra düz). Duraklama, bir oyuncunun hissedeceği takılmadır; azaltılması WS1'dir (GC_PLAN), başlanmadı.
+- İndirme sağlamlaştırma (kod okunarak bulundu, sonra test edildi): TouchCore indiricide (`MojangDownloader.java`, `DownloadGuard.java`, 48 denetim) ve Python araçlarında (`mcbuild_common.py`, `fetch_client_jar.py`, `monolith.fetch_guard_tests`) bir manifestten gelen sürüm kimliği, kütüphane yolu ya da asset karması oyun dizinlerinin dışındaki bir dosyayı adlandırabiliyordu, her URL şeması kabul ediliyordu, Android tarafında `client.jar` SHA-1 olmadan kabul ediliyordu ve masaüstü tarafında sağlama toplamsız bir ayna jar'ı kabul ediliyordu. Artık: yalnızca https (Android: yalnızca mojang.com ve minecraft.net ana makineleri), yollar ve kimlikler kendi dizinlerinde kalmalı, karmalar 40 onaltılık hane olmalı, bir istemci jar'ının her zaman SHA-1'i olmalı, başarısız indirmeler `.part` dosyası bırakmaz. `MojangDownloader`, taslak `org.json`'a karşı `--release 8` ile derlendi; bir cihazda çalıştırılmadı.
+- Dokümanlar: `docs/KULLANICI_REHBERI_TR.md` (ayarlar çalışma zamanı koduna karşı denetlendi), `docs/PLAN_4_GUN_TR.md`, `docs/JNI_ENVANTER_TR.md`.
 
-Not verified (needs a full Minecraft pipeline run and a game start, left to the end on request):
-- That the transpile after the overlay deletion still reports 446 link errors with 0 unexplained and 0 missing natives.
-- That a game started from the new runtime (crash reporter installed at `init_hooks`) behaves as before.
-- That the pipeline accepts the 10 fingerprints (the tool and `validate()` use the same function on the same classes; the pipeline itself was not run after the change).
-- The 16-shard desktop run was stopped at 7 of 16 shards, on request, to free the machine for code work.
+Doğrulanmayan (tam bir Minecraft boru hattı koşusu ve bir oyun açılışı gerektirir, istek üzerine sona bırakıldı):
+- Kaplama silme sonrasındaki çevirinin hâlâ 446 link hatası, 0 açıklanmamış ve 0 eksik yerel metot bildirdiği.
+- Yeni çalışma zamanından başlatılan bir oyunun (çökme raporlayıcı `init_hooks` içinde kurulu) eskisi gibi davrandığı.
+- Boru hattının 10 parmak izini kabul ettiği (araç ve `validate()` aynı sınıflar üzerinde aynı fonksiyonu kullanıyor; boru hattının kendisi değişiklikten sonra çalıştırılmadı).
+- 16 shard'lı masaüstü koşusu, makineyi kod çalışması için boşaltmak üzere istek üzerine 16 shard'ın 7'sinde durduruldu.
