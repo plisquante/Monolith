@@ -241,7 +241,6 @@ pub fn interrupt(t: Ref) -> Res<()> {
     }
     // `waiting` korumasının, monitör kilidi alınmadan önce düşmesi gerekir: `wait` önce `st`'yi, sonra `waiting`'i alır.
     // Bir `if let` içinde yaşayan bir koruma tersi sırayı yaratır (zaman aşımlı bekleme biterken iş parçacığı kesilirse kilitlenme).
-    // while the thread is interrupted).
     let waiting = ts.waiting.lock().unwrap().clone();
     if let Some(m) = waiting {
         let _g = m.st.lock().unwrap();

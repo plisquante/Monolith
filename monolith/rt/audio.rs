@@ -584,7 +584,6 @@ impl Context {
 
     /// Çıktıya MIX_RATE hızında `out.len()/2` stereo çerçeve çizer (sırayla L, R). Çalmayan kaynaklar
     /// hiçbir katkı yapmaz. Bitmiş tamponlar `processed`'a taşınır; kuyruğu boş kalan kaynak durur.
-    /// contribute nothing. Finished buffers move to `processed`; a source with an empty queue stops.
     pub fn mix(&mut self, out: &mut [f32]) {
         for v in out.iter_mut() {
             *v = 0.0;

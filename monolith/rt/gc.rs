@@ -279,7 +279,6 @@ fn clear_dead_referents() {
 
 /// Atomik bir işlemle (Unsafe CAS/put, VarHandle store/CAS) üzerine yazılacak bir referans yuvası için yazma bariyeri.
 /// İşaretleme açıksa, yuvanın şu anki değeri SATB günlüğüne gider.
-/// VarHandle store/CAS): the value it holds now goes to the SATB log while marking is on.
 #[inline(always)]
 /// # Güvenlik
 /// `slot`, üzerine yazılacak, referans boyutunda ve hizalı bir alanın geçerli işaretçisi olmalıdır.
@@ -905,8 +904,6 @@ pub fn collect() {
 
 /// System.gc(): dönmeden önce tam bir toplama yapar (HotSpot gibi), böylece zayıf referanslar çağıran devam etmeden temizlenmiş olur.
 /// Çalışan bir eşzamanlı döngü önce beklenir; bekleme güvenli noktalarda yapılır, çünkü o döngünün son toplaması bu iş parçacığını durdurmalıdır.
-/// by the time the caller continues. A running concurrent cycle is waited for first; the wait stays at safepoints
-/// because that cycle's final collection has to stop this thread.
 pub fn collect_explicit() {
     while G.cycle.load(Ordering::Acquire) {
         safepoint();

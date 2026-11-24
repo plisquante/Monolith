@@ -200,7 +200,7 @@ pub fn get_and_set<T: Vt>(vh: Ref, obj: Ref, idx: i32, nc: u8, n: T::St) -> Res<
         if T::bits_eq(unsafe { T::cas(p, old, nn_) }, old) { return Ok(old.to_st()); }
     }
 }
-/// op: 0 add, 1 or, 2 and, 3 xor
+/// op: 0 toplama, 1 veya, 2 ve, 3 xor
 pub fn get_and_op<T: Vt>(op: u8, vh: Ref, obj: Ref, idx: i32, nc: u8, d: T::St) -> Res<T::St> {
     let p = address::<T>(vh, obj, idx, nc)?;
     let dv = T::from_st(d);
