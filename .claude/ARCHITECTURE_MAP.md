@@ -8,6 +8,6 @@
 - `tools/mcbuild_rust.py` Minecraft pipeline (desktop and `--android`); `build.sh` and `build.bat` wrappers
 - `tools/rt_typecheck.py` runtime type-check gate; `rt_deps/` vendored crates and the `check` crate
 - `classlib/src/` Java overlays of JDK classes; `runtime/java_nolwjgl/` Java runtime without LWJGL (input to the transpiler)
-- `android/touchcore` TouchCore Android launcher. Its native core (`jni/touchcore_core.zig`) still depends on Zig runtime modules that were removed: the APK build is broken until that core is ported to Rust
-- `tests/rust/` Rust unit tests; `monolith/stack_tests.py` Rust codegen differential tests against a JDK 25 reference; `tests/run_tests.py` is the old Zig differential harness and fails loudly until it is re-targeted
+- `android/touchcore` TouchCore Android launcher. Its native core is Rust (`android/touchcore/native`, `cargo test` 28/28), linked by `tools/build_touchcore_apk.py` with the NDK; the APK builds and its `.so` exports `tc_init`, `tc_tick_frame`, `tc_shutdown`. Not run on a device yet
+- `tests/rust/` Rust unit tests; `monolith/stack_tests.py` Rust codegen differential tests against a JDK 25 reference; `tests/run_tests.py` is the differential harness for the Rust back end (`SKIP` lists the programs that need a display, network or JNI library)
 - `.claude/hooks/guard.py` PreToolUse guard
