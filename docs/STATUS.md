@@ -636,6 +636,11 @@ Done, with the check that was run:
 - WS7: 35 unused Java overlay files deleted from `runtime/java_nolwjgl` (277 to 242); the remaining tree compiles with the same `javac` call the pipeline uses (295 classes). `docs/WS7_ENVANTER_TR.md`.
 - `docs/JNI_ENVANTER_TR.md`: 259 JNI/JNA emulation natives by group; the Tracy natives are not called in normal play (bytecode checked).
 - Zig leftovers: dead `touchcore_core.zig` removed, stale `.zig` file references in comments point at the Rust modules.
+- Runtime bugs fixed (`monolith/rt/sync.rs`, `gc.rs`, `rt.rs`), each with a test that ran: a lost interrupt in `Object.wait` (`WaitInterrupt`, 3000 rounds); a lock-order deadlock between `interrupt` and a timed `wait`; stale interrupt flags and park permits inherited by a new `Thread` at a reused address; `holdsLock` and `notify` creating monitors; monitors of dead objects never released (now dropped by the collector between marking and sweeping, `MonitorChurn`); `MONO_TRACE_EX` and `MONO_TRACE_PARK` read on every exception or monitor wait instead of once. Both GC modes with `MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`, 12 repeats each: no failure.
+- `rustgen.py`: the compiled-object cache `/tmp/monolith_shard_cache` had no limit and reached 42 GB (the disk was full in the middle of the differential suite, 14 tests failed with `No space left on device`, not from code). Now capped at 8 GiB, oldest first (`MONO_SHARD_CACHE_GB`); `monolith.cache_tests` 7/7. After the cap the 14 tests were re-run: 14/14.
+- Differential suite `tests/run_tests.py`: 27 passed, 3 skipped (`ClientCoreE2E`, `HttpFetch`, `Jni`), each skip with its measured reason. `NetIo` runs and passes (its skip was out of date).
+- `MONO_COUNT_NATIVES` (`monolith/rt/ncount.rs`): the meter for the JNI/JNA = 0 goal; checked on a small program that calls JNA-style natives (7 calls, 3 natives counted correctly); `tests/rust/ncount_main.rs`.
+- Docs: `docs/KULLANICI_REHBERI_TR.md` (settings checked against the runtime code), `docs/PLAN_4_GUN_TR.md`, `docs/JNI_ENVANTER_TR.md`.
 
 Not verified (needs a full Minecraft pipeline run and a game start, left to the end on request):
 - That the transpile after the overlay deletion still reports 446 link errors with 0 unexplained and 0 missing natives.
