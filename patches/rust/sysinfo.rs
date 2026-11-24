@@ -9,7 +9,7 @@
 // Differences from oshi, all in report text only, none in game behaviour:
 // - Graphics cards and memory slots are not listed (oshi needs lshw/dmidecode for them on Linux and usually gets nothing
 //   without root either). The renderer's own GL/Vulkan report lines are unaffected.
-// - On macOS and Windows only the logical CPU count is known for now; the other values read "unknown".
+// - On Windows only the logical CPU count is known for now; the other values read "unknown".
 // - Process Loads is the process's CPU time over its run time, as oshi's cumulative load.
 
 use std::collections::HashSet;

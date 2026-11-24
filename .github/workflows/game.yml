@@ -126,34 +126,3 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  boot-macos:
-    runs-on: macos-latest
-    timeout-minutes: 300
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Istemci jar'i (resmi manifest, SHA-1 dogrulamali)
-        run: python3 tools/fetch_client_jar.py --version 26.3 --out "$RUNNER_TEMP/client.jar"
-
-      - name: ImageMagick
-        run: brew install imagemagick
-
-      - name: Oyunu derle (Apple clang, JDK ve kutuphaneler otomatik)
-        run: |
-          python3 tools/mcbuild_rust.py "$RUNNER_TEMP/client.jar" -o build/minecraft-26.3 --shards 32 --shard-jobs 1
-
-      - name: Oyunu ac ve dogrula (120 sn)
-        run: sh tools/ci_game_boot.sh build/minecraft-26.3 --seconds 120 --out build/minecraft-26.3/boot
-
-      - name: Ekran goruntusu ve gunluk
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: game-boot-macos
-          path: build/minecraft-26.3/boot
-          if-no-files-found: warn
-          retention-days: 14

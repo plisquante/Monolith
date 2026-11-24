@@ -6,7 +6,7 @@ Tek geçerli plan bu dosyadır; uygulanabilir görev listesi ve kapalı kararlar
 ## 1. Ürün tanımı
 
 Monolith, Minecraft Java 26.3 istemcisini (bayt kodu) AOT olarak yerel koda çevirir. Çalışma zamanında JVM yok, GC duraklaması yok.
-Sürümler "Monolith Rust+ Edition" adıyla çıkar. Hedef platformlar: Linux x86_64, Windows x86_64, macOS arm64, Android arm64.
+Sürümler "Monolith Rust+ Edition" adıyla çıkar. Hedef platformlar: Linux x86_64, Windows x86_64, Android arm64 (macOS kapsam dışı, proje kararı).
 Sürüm politikası: bir sürüm tek bir Minecraft sürümünü destekler (şu an 26.3). Yeni Minecraft sürümü = yeniden çeviri + yama doğrulaması.
 
 "Java'dan kalma her şey Rust'a" şu anlama gelir (kapsam sınırı net olsun diye):
@@ -32,7 +32,7 @@ Tek arka uç = tek doğruluk kaynağı.
 ## 3. Durum (kodda doğrulanan)
 
 Çalışıyor: Linux masaüstü oyun (menü, dünya, giriş; Xvfb+llvmpipe), yama sistemi (9 yama), tahsis profil aracı, DataFixer yaması, kaçış analizi+satır-içi (birim testli; gerçek oyunda doğrulama sürüyor), iterator geri dönüşümü, başlatıcı, marka.
-Yok veya doğrulanmadı: gerçek GPU testi (yalnız yazılım GL denendi), ses çıkışı, TLS/çevrimiçi, Windows, macOS, Android'in yeni çekirdekle cihazda çalışması, GC yenilemesi, JNI/JNA'nın kaldırılması, sınıf seviyesi yama, dağıtım hattı.
+Yok veya doğrulanmadı: gerçek GPU testi (yalnız yazılım GL denendi), ses çıkışı, TLS/çevrimiçi, Windows, Android'in yeni çekirdekle cihazda çalışması, GC yenilemesi, JNI/JNA'nın kaldırılması, sınıf seviyesi yama, dağıtım hattı.
 
 ## 4. İş akışları (workstream)
 
@@ -52,14 +52,14 @@ Büyüklük: S ≈ bir tur, M ≈ birkaç tur, L ≈ çok tur, XL ≈ çok tur +
 ### WS3 Grafik ve pencere (L2), XL
 * Masaüstü: OpenGL 4.5 çekirdek (Linux/Windows), Android: GLES 3.2. Vulkan 1.0 sonrasına bırakıldı (kaplama taslakları var, ana yol değil).
 * Gölgelendirici derleme: shaderc + SPIRV-Cross (sistem paketi) yerine saf Rust `naga` ya da gömülü derleyici; sistem bağımlılığı sıfır.
-* Pencere/giriş: X11 (var, xdotool testi), Wayland (XWayland yeterli, yerli Wayland sürüm sonrası), Windows: Win32+WGL, macOS: Cocoa. Yerleşik ortak soyutlama `Platform` trait'i.
-* **macOS (karar kapandı, bkz. IMPL_SPEC D3):** OpenGL 3.3 core. Bağlam zaten 3.3 core isteniyor, oyunun gölgelendiricileri `#version 330`, macOS 4.1 core'a kadar destekler. Vulkan/MoltenVK yok.
+* Pencere/giriş: X11 (var, xdotool testi), Wayland (XWayland yeterli, yerli Wayland sürüm sonrası), Windows: Win32+WGL. Yerleşik ortak soyutlama `Platform` trait'i.
+* **macOS:** kapsam dışı (proje kararı).
 * Gerçek GPU: llvmpipe dışında en az bir gerçek GPU (Mesa/NVIDIA/AMD) ve bir mobil GPU (Adreno/Mali) ile görsel+kare süresi testi.
 Çıkış: her platformda menü + dünya + 10 dk gezinme, gerçek GPU'da görüntü hatası yok, karşılaştırma ekran görüntüsü farkı eşik altında.
 
 ### WS4 Ses: Rust Audio (L2), L
 * OpenAL API alt kümesini Rust'ta gerçekle (kaynak, tampon, dinleyici, mesafe modeli, akış tamponları, HRTF yok). Oyun yalnız bu alt kümeyi kullanıyor; kapsam envanterle çıkarılır.
-* Çıkış aygıtları: Linux (ALSA/PulseAudio/PipeWire dlopen), Windows (WASAPI), macOS (CoreAudio), Android (AAudio).
+* Çıkış aygıtları: Linux (ALSA/PulseAudio/PipeWire dlopen), Windows (WASAPI), Android (AAudio).
 * Ogg çözme: oyun JOrbis (saf Java, zaten çevriliyor) kullanıyor; Rust çözücü şimdilik gerekmez.
 * Bağımlılık politikası: bölüm 7.
 Çıkış: tüm ses olayları (müzik, blok, çevre, 3B konum) çalar, 30 dk oynanışta underrun sayacı ~0, ses kodu `libopenal` bağımlılığı olmadan çalışır.
@@ -96,13 +96,13 @@ Mevcut kayıt: headless başlatma ~50 sn bekleme gerekiyor; masaüstü hedefi me
 ### WS10 Derleme ve CI (L6), M
 * Tam derleme ~10 dk çeviri + ~55 dk derleme, ~12 GB bellek. CI: GitHub barındırılan koşucu yetmeyebilir; seçenek: kendi barındırılan koşucu/bulut derleyici. Karar ve kurulum bu akışın ilk işi.
 * Çıktılar önbelleğe alınır (shard önbelleği anahtarı: çalışma zamanı karması + kaynak karması). Tekrarlanabilir yapı (aynı girdi = aynı ikili).
-* Çapraz derleme: Windows (x86_64-pc-windows-gnu/msvc), Android (NDK), macOS (macOS koşucusu).
+* Çapraz derleme: Windows (x86_64-pc-windows-gnu/msvc), Android (NDK).
 Çıkış: bir etiket (tag) iterek tüm platformların yapıları otomatik üretilir.
 
 ### WS11 Launcher ve dağıtım (L5/L6), M
 * Masaüstü: `launcher.py`+`ui.html`; sürümde Python'sız paketlenir (gömülü yorumlayıcı ya da küçük Rust sunucusu). Kararı: v1 paketlenmiş Python, v2 Rust'a yazılması sürüm sonrasına bırakıldı.
 * Oyun dosyaları (asset'ler) ilk açılışta kullanıcının hesabıyla Mojang'dan indirilir, depoda ve paketlerde bulunmaz.
-* Paketler: Linux (tar + AppImage), Windows (zip + kurucu), macOS (.app/.dmg), Android (APK). İmzalama ve sürüm numarası (`0.x` alfa/beta, `1.0`).
+* Paketler: Linux (tar + AppImage), Windows (zip + kurucu), Android (APK). İmzalama ve sürüm numarası (`0.x` alfa/beta, `1.0`).
 * Güncelleme: launcher yeni sürümü kontrol eder (sürüm manifesti, SHA-256).
 Çıkış: temiz makinede "indir → aç → oyna" 5 dakika altında, el ile komut yok.
 
@@ -126,7 +126,7 @@ Eski belgeler (`STATUS.md`, `YOL_HARITASI_TR.md`, `ARCHITECTURE.md` eski bölüm
 | **M0** iç alfa (Linux) | WS9 oyun testi + mevcut yapının doğrulanması, WS10 CI kurulumu | 30 dk betikli oynanış çökmeden; launcher ile başlıyor; etiket `v0.1` |
 | **M1** ses + ağ | WS4 Rust ses, WS5 TLS, WS2 JNI/JNA sayacı sıfır | çevrimiçi sunucuya katıl + sesli oynanış; `v0.3` |
 | **M2** bellek | WS1 faz 3–6 (rölanti toplayıcı, çöp azaltma, sahipli bellek), WS8 ölçümleri | duraklama <1 ms, soak geçti; `v0.5` |
-| **M3** Windows + macOS | WS3 pencere/GL, WS4/WS5 aygıt arka uçları, WS10 çapraz derleme, macOS kararı | iki platformda M0 testi; `v0.7` |
+| **M3** Windows | WS3 pencere/GL, WS4/WS5 aygıt arka uçları, WS10 çapraz derleme | Windows'ta M0 testi; `v0.7` |
 | **M4** Android | WS12 | iki cihazda oynanış; `v0.9` |
 | **M5** adaylık | WS6/WS7 Java kaynağı sıfır, WS8 hedefleri, WS9 matrisi, WS11 paketler, WS14, WS13 kararı | bölüm 8 kutuları; `1.0-rc` → `1.0` |
 
@@ -153,7 +153,7 @@ Hedef JVM'den ve Java'dan çıkmaktır; harici kütüphane yasağı yoktur. İyi
 
 ## 8. Sürüm 1.0 onay listesi (hepsi ölçülmüş olmalı)
 
-- [ ] 4 platformda: menü → yeni dünya → 30 dk betikli oynanış, çökme yok (her platformda en az bir gerçek GPU/cihaz).
+- [ ] 3 platformda (Linux, Windows, Android): menü → yeni dünya → 30 dk betikli oynanış, çökme yok (her platformda en az bir gerçek GPU/cihaz).
 - [ ] Çalışma zamanında JVM, JNI, JNA, libffi yok; `classlib/` ve `java_nolwjgl/` içinde Java kaynağı yok (istisnalar yazılı).
 - [ ] GC: duraklama <1 ms ya da GC kapalı + 60 dk soak <1 MiB/dk büyüme.
 - [ ] Ses tam, kopma/underrun yok; çevrimiçi sunucuya TLS ile katılma.
@@ -175,7 +175,6 @@ HotSpot karşılaştırması: aynı dünya, aynı makine; ilk menüye süre, dü
 | Risk | Etki | Karşılık |
 |---|---|---|
 | Gerçek GPU'da görüntü/uyumluluk hatası (yalnız llvmpipe denendi) | yüksek | WS3'te erken gerçek GPU testi (kullanıcı cihazları dahil) |
-| macOS GL 4.1 sınırı | orta/yüksek | probe + karar (WS3) |
 | Derleme maliyeti (65 dk, 12 GB) | hız | iki hat, toplu değişiklik, önbellek, güçlü CI makinesi. Ölçüm: küçük programda 4 shard/4 iş 3,1x hızlı (`docs/BUILD_PERF.md`); Minecraft ölçülmedi |
 | Eksik bariyer / yanlış sahiplik → bellek bozulması | yüksek | tek saklama API'si, verify modu, zehirleme modu, soak |
 | TLS'nin JDK yerine Rust'a taşınması | orta | sınıf seviyesi yama, gerçek sunucu testi |

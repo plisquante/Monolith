@@ -12,7 +12,8 @@ reached, exactly where the JVM would. Groups that are expected (see docs/LINK_ER
   netty-log4j       netty's optional log4j 1.x logger adapter
   commons-compress  optional codecs (zstd, xz) of commons-compress
   lambdaform        the JDK's LambdaForm / ClassSpecializer machinery, replaced by the monolith MethodHandle overlay
-  macos-objc        macOS-only code (MacosUtil, NarratorMac) that uses the ca.weblite.objc bridge, a macOS-only library
+  macos-objc        Minecraft's own macOS-only classes (MacosUtil, NarratorMac) that use the ca.weblite.objc bridge; the jar
+                    ships them, the runtime does not run them (macOS is not a supported target)
 
 Exit status 1 and the offending lines if anything else appears: a new link error is a regression until it is explained.
 """

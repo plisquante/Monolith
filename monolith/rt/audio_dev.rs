@@ -2,7 +2,7 @@
 //!
 //! Devices: ALSA on Linux (libasound.so.2 opened at run time with dlopen; nothing is linked or needed at build time),
 //! and a silent device that paces itself in real time when no output exists (no sound card, or a server without audio).
-//! Windows (WASAPI), macOS (CoreAudio) and Android (AAudio) devices are separate work (docs/IMPL_SPEC.md, B3).
+//! Windows (WASAPI) and Android (AAudio) devices are separate work (docs/IMPL_SPEC.md, B3). macOS is not a target.
 //!
 //! The engine is one mixer thread that renders blocks from the shared `audio::Context` into the device. The game
 //! thread changes the context through the natives; a short lock per block is the only synchronisation.
@@ -165,15 +165,7 @@ pub fn open_device() -> (Box<dyn Sink + Send>, String) {
             Err(e) => (Box::new(PacedSilence), format!("audio: no output device ({e}); playing silently")),
         }
     }
-    #[cfg(target_os = "macos")]
-    {
-        let _ = want;
-        match crate::audio_coreaudio::AudioQueueSink::open() {
-            Ok(s) => (Box::new(s), "audio: AudioQueue default output".to_string()),
-            Err(e) => (Box::new(PacedSilence), format!("audio: no output device ({e}); playing silently")),
-        }
-    }
-    #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
+    #[cfg(not(any(target_os = "linux", windows)))]
     {
         let _ = want;
         (Box::new(PacedSilence), "audio: this platform has no output device (playing silently)".to_string())

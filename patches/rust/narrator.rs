@@ -23,7 +23,7 @@ pub fn load_kal16() -> rt::Res<()> {
 
 // Narrator.getNarrator: picks the platform narrator. The original builds NarratorLinux, NarratorWindows (SAPI through JNA
 // COM) or NarratorMac (AppKit through JNA). Only the Linux one is kept: it already runs without JNA (load_flite above).
-// Windows and macOS get the empty narrator, exactly as the original does when its narrator fails to initialize, until
+// Windows gets the empty narrator, exactly as the original does when its narrator fails to initialize, until
 // their speech back ends are written in Rust (docs/mimari/04 §7). Same exception handling as the original: a
 // FatalException propagates, anything else is logged ("Error while loading the narrator") and gives EMPTY.
 pub fn get_narrator() -> rt::Res<rt::Ref> {

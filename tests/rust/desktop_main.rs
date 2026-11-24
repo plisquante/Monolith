@@ -1,7 +1,7 @@
 // Masaüstü arka ucunun duman testi: pencere açılır, OpenGL temizler ve bir pikseli geri okur, tamponlar değişir,
 // girdi yoklanır, fare yakalama açılıp kapanır ve ses aygıtına bir ton gönderilir (aygıt yoksa sessiz aygıta; bu
 // bildirilir). Her hata 1 koduyla çıkar; hiçbir şey sessizce atlanmaz.
-// .github/workflows/platforms.yml tarafından Linux (Xvfb altında), Windows ve macOS'ta çalıştırılır.
+// .github/workflows/platforms.yml tarafından Linux (Xvfb altında) ve Windows'ta çalıştırılır.
 // Derleme ve çalıştırma: rustc --edition 2021 -O tests/rust/desktop_main.rs -o desktop_smoke && ./desktop_smoke
 #[path = "../../monolith/rt/desk/mod.rs"]
 pub mod desk;
@@ -11,8 +11,6 @@ pub mod audio;
 pub mod audio_dev;
 #[path = "../../monolith/rt/audio_wasapi.rs"]
 pub mod audio_wasapi;
-#[path = "../../monolith/rt/audio_coreaudio.rs"]
-pub mod audio_coreaudio;
 
 use audio::Sink;
 use std::ffi::{c_void, CStr};

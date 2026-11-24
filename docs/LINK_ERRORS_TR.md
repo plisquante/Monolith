@@ -18,14 +18,12 @@ kurulumda çalışmaz" bilgisidir.
 | `netty-log4j` | 84 | netty'nin opsiyonel log4j 1.x günlükçü bağdaştırıcısı (`org.apache.log4j.Logger/Level` yok) | beklenen |
 | `commons-compress` | 37 | zstd (`com.github.luben`) ve xz (`org.tukaani`) codec'leri | beklenen |
 | `lambdaform` | 21 | JDK'nın `LambdaForm`/`ClassSpecializer`/`BoundMethodHandle` düzeni. monolith'te `MethodHandle` bir nesne ağacıdır (`classlib/.../MethodHandle.java`), LambdaForm yok | tasarım gereği |
-| `macos-objc` | 11 | `MacosUtil.disableCloseWindowMenuItem` ve `NarratorMac`: `ca.weblite.objc` köprüsü yalnızca macOS'ta indirilir | Linux'ta beklenen; macOS için aşağıya bak |
+| `macos-objc` | 11 | `MacosUtil.disableCloseWindowMenuItem` ve `NarratorMac`: `ca.weblite.objc` köprüsü yalnızca macOS'ta indirilir | Minecraft'ın macOS'a özgü sınıfları; macOS desteklenmiyor, bu sınıflar çalıştırılmaz |
 
-## macOS notu (M3)
+## macOS
 
-macOS build'inde `ca.weblite.objc` sınıf yoluna girer ve bu kez link error değil, çalışma zamanı JNI/JNA yoluna girer
-(Objective-C köprüsü yerel kütüphane yükler). İki küçük yama gerekir: `MacosUtil.disableCloseWindowMenuItem` boş metot, ve
-`Narrator.getNarrator()` macOS'ta `NarratorMac` yerine boş anlatıcı döndürsün. Bu, WS2'nin (JNI/JNA = 0) parçasıdır; macOS cihazı
-olmadan doğrulanamaz.
+macOS hedef platform olmaktan çıkarıldı (proje kararı). Oyun jar'ındaki macOS'a özgü sınıflar yine çevrilir ve
+bu listede kalır; çalıştırılmazlar. macOS pencere, ses, yama ve CI kodu bu daldan kaldırıldı.
 
 ## Koruma
 

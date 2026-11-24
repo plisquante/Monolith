@@ -41,7 +41,7 @@ every file). The game's own files (saves, options, logs, crash reports) are neve
 - The collector cannot be switched off yet: with `MONO_GC=off` the game reached 13.3 GB resident after 10 min standing
   still on a 16 GB machine (measured, stopped). The profile shows about 19 MB/s of short-lived garbage at idle, not a
   leak (`docs/VERIFICATION.md`). Tiers 1-3 of `GC_PLAN.md` have to shrink allocation first.
-- Android audio and window back ends are not tested on a device. Windows and macOS back ends exist and their smoke test
+- Android audio and window back ends are not tested on a device. The Windows back end exists and its smoke test
   passes on CI runners; the game boots there in CI (`.github/workflows/game.yml`); no hardware run yet.
 - Java overlays (`classlib/`, `runtime/java_nolwjgl/`) and the JNA/Netty emulation are still in place.
 - Android device testing has not been done.
@@ -49,6 +49,6 @@ every file). The game's own files (saves, options, logs, crash reports) are neve
 
 ## 5. Platforms
 
-Only Linux x86_64 is packaged so far. Windows and macOS builds are produced by `tools/mcbuild_rust.py` on their own
+Only Linux x86_64 is packaged so far. Windows builds are produced by `tools/mcbuild_rust.py` on their own
 systems (run.bat, prog.exe); packaging and device tests for them, and Android, are separate releases
 (docs/MASTER_PLAN_TR.md, milestones M3 and M4).

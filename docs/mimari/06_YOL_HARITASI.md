@@ -35,7 +35,7 @@ Gün sınırı yok (sahip kararı). Sıra: bağımlılık ve değer. Her paket k
 | **N4** | netty epoll/kqueue koşullu erişilebilirlik | C4 | Q9 | M |
 | **N5** | kalan native'ler | N1-N4 | `Taklit == 0` | M |
 | **P1** | Windows donanım doğrulama + paket | | Q12 | M |
-| **P2** | macOS donanım doğrulama + paket | | Q12 | M |
+| **P2** | (kaldırıldı: macOS kapsam dışı, proje kararı) | | - | - |
 | **P3** | Android cihaz doğrulama + APK | | Q12 | M |
 | **P4** | Linux arm64 | R1 | Q12 | S |
 | **V1** | `frame_time.py` + HotSpot karşılaştırması (T11, T12) | | Q8 ölçüleri | M |
@@ -71,7 +71,7 @@ Aşamalar kısmen paralel yürür (D ve E bağımsız).
 | R5 | GitHub Actions hesap/runner tarafı bozuk | kapılar CI'da koşmuyor | yerel kapılar `release_check.py`; sahip kararı |
 | R6 | Minecraft güncellemesi yama parmak izlerini kırar | derleme durur | parmak izi kapısı yüksek sesle durur; yama yenileme iş akışı (belge 04 §5) |
 | R7 | görüntü yığını düzeni x64/arm64 farkı | Android | düzen derleme zamanı hedef bilgisinden; `MONO_IMAGE_VERIFY` |
-| R8 | donanım doğrulaması (Windows/macOS/Android) bu ortamdan yapılamaz | M3/M4 sürümü | sahip makinesi ya da CI koşucusu gerekir (AÇIK) |
+| R8 | donanım doğrulaması (Windows/Android) bu ortamdan yapılamaz | M3/M4 sürümü | sahip makinesi ya da CI koşucusu gerekir (AÇIK) |
 | R9 | yanlış kaçış kanıtı sessiz davranış değişikliği | kritik | T5, `MONO_VERIFY_KKA`, şüphede S (P3) |
 
 ## 5. Açık kararlar (sahip ya da ölçüm bekliyor)
@@ -88,7 +88,7 @@ Aşamalar kısmen paralel yürür (D ve E bağımsız).
 
 ## 6. Ürün tanımı (1.0 çıkışı)
 
-1.0: Q1-Q12 hepsi yeşil Linux x86_64'te; Windows, macOS ve Android Q12 geçmiş; E1-E7 ölçüleri belge 00 §1 tablosundaki hedefte ya da AÇIK karar sahibinin imzasıyla kabul edilmiş.
+1.0: Q1-Q12 hepsi yeşil Linux x86_64'te; Windows ve Android Q12 geçmiş; E1-E7 ölçüleri belge 00 §1 tablosundaki hedefte ya da AÇIK karar sahibinin imzasıyla kabul edilmiş.
 
 ## 7. İlerleme (güncellenir)
 

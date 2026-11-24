@@ -6,5 +6,3 @@ pub mod audio;
 pub mod audio_dev;
 #[path = "../../monolith/rt/audio_wasapi.rs"]
 pub mod audio_wasapi;
-#[path = "../../monolith/rt/audio_coreaudio.rs"]
-pub mod audio_coreaudio;

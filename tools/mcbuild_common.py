@@ -176,7 +176,9 @@ def fetch_json(url: str, dest: str, sha1: str | None = None) -> dict:
 
 def mojang_os() -> str:
     s = platform.system().lower()
-    return {"linux": "linux", "darwin": "osx", "windows": "windows"}.get(s, s)
+    if s == "darwin":
+        raise RuntimeError("macOS is not a supported build host (removed from this project); use Linux or Windows")
+    return {"linux": "linux", "windows": "windows"}.get(s, s)
 
 
 def mojang_arch(for_target: bool = False) -> str:
@@ -214,7 +216,7 @@ def native_classifier_ok(name: str) -> bool:
     cls = parts[3]
     if not cls.startswith("natives-"):
         return True
-    want = {"linux": "natives-linux", "osx": "natives-macos", "windows": "natives-windows"}[mojang_os()]
+    want = {"linux": "natives-linux", "windows": "natives-windows"}[mojang_os()]
     if mojang_arch(for_target=True) == "arm64":
         return cls == want + "-arm64"
     return cls == want
@@ -246,8 +248,8 @@ def version_metadata(vid: str, mc_dir: str | None) -> dict:
 
 
 def _jdk_home_under(root: str):
-    """The JDK home below `root`: the directory whose bin/ holds javac (javac.exe on Windows). macOS archives keep
-    it at <jdk>/Contents/Home, so the search goes a few levels deep."""
+    """The JDK home below `root`: the directory whose bin/ holds javac (javac.exe on Windows). The search goes a few
+    levels deep, since archives may wrap the JDK in a versioned directory."""
     if not os.path.isdir(root):
         return None
     base_depth = root.rstrip(os.sep).count(os.sep)
@@ -267,7 +269,7 @@ def ensure_jdk(java_version: int) -> str:
     found = _jdk_home_under(root)
     if found:
         return found
-    osn = {"linux": "linux", "osx": "mac", "windows": "windows"}[mojang_os()]
+    osn = {"linux": "linux", "windows": "windows"}[mojang_os()]
     arch = "aarch64" if mojang_arch() == "arm64" else "x64"
     url = f"https://api.adoptium.net/v3/binary/latest/{java_version}/ga/{osn}/{arch}/jdk/hotspot/normal/eclipse"
     log(f"downloading JDK {java_version} (Eclipse Temurin)")

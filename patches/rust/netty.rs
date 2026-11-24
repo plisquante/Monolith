@@ -1,4 +1,4 @@
-// Netty native transports (epoll on Linux, kqueue on macOS) are not part of this build.
+// Netty native transports (epoll on Linux) are not part of this build.
 //
 // EventLoopGroupHolder.remote(useNativeTransport) picks KQUEUE or EPOLL when netty's native library loads, NIO otherwise.
 // The native transports reach netty's JNI library (about 150 natives, emulated in monolith/rt/natives_jni.rs). Here remote()

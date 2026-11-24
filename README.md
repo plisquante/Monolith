@@ -14,10 +14,10 @@ The first target is Minecraft Java Edition 26.3 (client).
 |---|---|
 | Translation (bytecode to Rust), class and method coverage | works: 6 196 classes of the client closure, 0 untranslatable |
 | Desktop game on Linux x86_64 (menu, world, input, sound) | runs in plain mode; headless tests pass. Headless run (Xvfb, software GL, 26.3 client): title, menu, create and load a world, walking, save and quit, and reload all pass in a scripted run, see [`docs/VERIFICATION.md`](docs/VERIFICATION.md). Multiplayer, Realms and long play are not verified |
-| Known link gaps | 446 link-errors at translation time (CI log, 26.3 client). All are in optional dependency paths the game does not use on its boot path: log4j appenders (ZeroMQ, JMS, mail, Jackson, CSV, zstd), OSGi and netty logging, and the macOS `ca.weblite` bridge. Calls into them throw at run time. The macOS Window menu's "Close" item is not disabled (`patches/rust/macos_util.rs`, logged once) |
+| Known link gaps | 446 link-errors at translation time (CI log, 26.3 client). All are in optional dependency paths the game does not use on its boot path: log4j appenders (ZeroMQ, JMS, mail, Jackson, CSV, zstd), OSGi and netty logging, and the `ca.weblite` bridge of Minecraft's macOS-only code. Calls into them throw at run time. macOS is not a supported target. |
 | Garbage collector | stop-the-world mark and sweep (pauses up to about 1 s at 500 MB live); concurrent mode (`MONO_GC_CONCURRENT=1`, off by default) passes the 120 s Linux boot after the SATB fixes: unbarriered reference overwrites (Unsafe put/CAS, VarHandle store/CAS, `recycle`) now log the old value. `MONO_GC_POISON=1` fills freed slots with `0xDD` for use-after-free checks |
-| Sound | Linux ALSA (`libasound`, loaded at run time), Windows WASAPI, macOS AudioQueue; silent fallback when no device |
-| Windows, macOS | window (Win32+WGL, AppKit+NSOpenGLContext), input and sound back ends are written; CI runs the back-end smoke test on both and a full game boot (`.github/workflows/game.yml`). Not yet tested on real hardware |
+| Sound | Linux ALSA (`libasound`, loaded at run time), Windows WASAPI; silent fallback when no device |
+| Windows | window (Win32+WGL), input and sound back ends are written; CI runs the back-end smoke test and a full game boot (`.github/workflows/game.yml`). Not yet tested on real hardware |
 | Android | a launcher APK exists; the native engine has not been tested on a device |
 | Java class library overlays and JNA/Netty emulation | still in use; being replaced. Today: 243 Java files in `runtime/java_nolwjgl` and 56 in `classlib` ([`docs/WS7_ENVANTER_TR.md`](docs/WS7_ENVANTER_TR.md)), 259 JNI/JNA emulation natives ([`docs/JNI_ENVANTER_TR.md`](docs/JNI_ENVANTER_TR.md)); `MONO_COUNT_NATIVES=1` counts their calls at run time (no measurement of a real game yet) |
 | Continuous integration | the GitHub Actions runs of this repository end in 3 to 4 seconds with a failure before any step runs, also on commits from before 2026-11-24 (no job log exists); the job exists but has no log, which points at the account or the runner (quota, billing, runner start) rather than at the workflow files, but that is not confirmed. No CI result can be relied on until it is fixed. `tools/release_check.py` runs the gates locally |
@@ -79,7 +79,6 @@ mode. It loads an engine library (`libminecraft_mono.so`) built with `python3 to
 | Platform | Start | Notes |
 |---|---|---|
 | Linux | `./launch.sh` | needs python3 >= 3.10 |
-| macOS | `run.sh` in the build directory | back end written, verified by CI only |
 | Windows | `run.bat` in the build directory | back end written, verified by CI only |
 
 The desktop launcher (`launcher/launcher.py`, standard library only) opens a local page in the browser; it starts the

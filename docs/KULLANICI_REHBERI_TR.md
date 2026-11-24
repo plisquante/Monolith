@@ -51,7 +51,7 @@ Hepsi çalışma zamanı kodunda okunur (`monolith/rt/`); belirtilmeyen varsayı
 
 `SIGTERM`, `SIGINT` (terminalde Ctrl-C) ve `SIGHUP`, Java'daki `System.exit(128 + sinyal)` gibi davranır: önce kapanış
 kancaları çalışır (Minecraft dünyayı bu kancada kaydeder), sonra süreç çıkar (`kill` için çıkış kodu 143). Kanca, programda ilk
-kapanış kancası kaydedildiğinde kurulur. Şu an yalnızca Linux'ta; Windows ve macOS'ta sinyaller varsayılan eylemini
+kapanış kancası kaydedildiğinde kurulur. Şu an yalnızca Linux'ta; Windows'ta sinyaller varsayılan eylemini
 korur (süreç hemen biter, kancalar çalışmaz). Test: `tests/java/SignalExit.java`.
 
 ## 4. Sorun giderme
@@ -78,7 +78,7 @@ ayarla; ölçüm için `MONO_GC_PHASES=1` ve `MONO_ALLOC_PROFILE`.
 
 ## 5. Bilinen sınırlar
 
-- Windows, macOS ve Android'de gerçek donanımda test yok (`README.md`).
+- Windows ve Android'de gerçek donanımda test yok (`README.md`).
 - Çevrimiçi sunucuya katılma, Realms ve uzun oyun doğrulanmadı; TLS (WS5) tamamlanmadı.
 - Java sınıf kütüphanesi kaplamaları ve JNA/Netty taklidi hâlâ kullanılıyor (`docs/JNI_ENVANTER_TR.md`, `docs/WS7_ENVANTER_TR.md`).
 - Minecraft içeriği bu depoda ve paketlerde dağıtılmaz; yasal karar (WS13) verilmemiştir, sürümler özel test sürümüdür.

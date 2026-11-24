@@ -22,25 +22,18 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$OUT" ] || OUT="$BUILD/boot"
-# Linux: sanal ekran (Xvfb) ve ImageMagick; macOS: ekran görüntüsü için screencapture (sistemde hazır)
+# Linux only: sanal ekran (Xvfb) ve ImageMagick
 OS=$(uname -s)
-if [ "$OS" = "Darwin" ]; then
-  command -v screencapture >/dev/null || { echo "FAIL: screencapture not found"; exit 1; }
-  command -v convert >/dev/null || { echo "FAIL: convert (ImageMagick) not found"; exit 1; }
-else
-  for t in Xvfb import convert; do command -v "$t" >/dev/null || { echo "FAIL: $t not found"; exit 1; }; done
-fi
+[ "$OS" = "Linux" ] || { echo "FAIL: this boot script runs on Linux only (got $OS)"; exit 1; }
+for t in Xvfb import convert; do command -v "$t" >/dev/null || { echo "FAIL: $t not found"; exit 1; }; done
 EXE="$BUILD/rust/prog"; [ -x "$EXE" ] || EXE="$BUILD/prog"
 [ -x "$EXE" ] || { echo "FAIL: no executable in $BUILD"; exit 1; }
 
 mkdir -p "$OUT" "$BUILD/game"
 rm -rf "$BUILD/game/crash-reports"
-XVFB=""
-if [ "$OS" != "Darwin" ]; then
-  export DISPLAY="$DISP"
-  Xvfb "$DISP" -screen 0 1280x720x24 +extension GLX >"$OUT/xvfb.log" 2>&1 &
-  XVFB=$!
-fi
+export DISPLAY="$DISP"
+Xvfb "$DISP" -screen 0 1280x720x24 +extension GLX >"$OUT/xvfb.log" 2>&1 &
+XVFB=$!
 GAME=""
 cleanup() {
   [ -n "$GAME" ] && kill "$GAME" 2>/dev/null
@@ -55,11 +48,7 @@ MONO_RESOURCES="$BUILD/resources" "$EXE" -Dmono.graphics.backend=opengl --versio
 GAME=$!
 
 sleep "$SECONDS_TOTAL"
-if [ "$OS" = "Darwin" ]; then
-  screencapture -x "$OUT/title.png" 2>>"$OUT/game.log" || true
-else
-  import -window root "$OUT/title.png" 2>>"$OUT/game.log" || true
-fi
+import -window root "$OUT/title.png" 2>>"$OUT/game.log" || true
 
 FAILED=0
 report() { echo "FAIL: $1"; FAILED=1; }

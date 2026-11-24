@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-platform launcher for the natively compiled Minecraft (Windows, Linux, macOS).
+"""Launcher for the natively compiled Minecraft (Windows, Linux).
 
 Zero dependencies (Python >= 3.10 standard library only).
 
@@ -17,14 +17,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERE = os.path.dirname(os.path.abspath(__file__))
 IS_WIN = os.name == "nt"
-OS_NAME = {"Windows": "windows", "Darwin": "macos", "Linux": "linux"}.get(platform.system(), platform.system().lower())
+OS_NAME = {"Windows": "windows", "Linux": "linux"}.get(platform.system(), platform.system().lower())
 
 
 def cfg_path():
     if IS_WIN:
         base = os.environ.get("APPDATA") or os.path.expanduser("~")
-    elif OS_NAME == "macos":
-        base = os.path.expanduser("~/Library/Application Support")
     else:
         base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
     return os.path.join(base, "monolith-launcher", "settings.json")
@@ -75,9 +73,6 @@ def start(build, username, graphics, game_dir):
         env.setdefault("MC_GRAPHICS", "auto")
     if game_dir:
         env["MC_GAME_DIR"] = game_dir
-    if OS_NAME == "macos":  # run.sh only sets LD_LIBRARY_PATH
-        nat = os.path.join(build, "natives")
-        env["DYLD_LIBRARY_PATH"] = nat + (":" + env["DYLD_LIBRARY_PATH"] if env.get("DYLD_LIBRARY_PATH") else "")
     cmd = [script] if IS_WIN else ["/bin/sh", script]
     flags = 0x00000010 if IS_WIN else 0  # CREATE_NEW_CONSOLE
     return subprocess.Popen(cmd, cwd=build, env=env, creationflags=flags)

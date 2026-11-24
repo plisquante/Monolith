@@ -11,7 +11,7 @@
 //!   proc_address(name)          geçerli bağlamın OpenGL giriş noktası (yoksa null)
 //!
 //! Linux: x11.rs (X11 + GLX, kütüphaneler çalışma zamanında açılır). Windows: win32.rs (Win32 + WGL, sistem DLL'leri).
-//! macOS: cocoa.rs (AppKit + NSOpenGLContext, çerçeveler). Diğer hedeflerde pencere yoktur (try_init false döner).
+//! Diğer hedeflerde pencere yoktur (try_init false döner).
 //! Oyun bu durumda yüzeysiz çalışır; yerel katman bunu oyuna dürüstçe bildirir.
 
 use std::ffi::{CStr, CString};
@@ -50,9 +50,6 @@ mod loader {
     }
 
     const RTLD_NOW: c_int = 2;
-    #[cfg(target_os = "macos")]
-    const RTLD_GLOBAL: c_int = 0x8;
-    #[cfg(not(target_os = "macos"))]
     const RTLD_GLOBAL: c_int = 0x100;
 
     pub unsafe fn open(path: &CStr) -> *mut c_void {
@@ -110,7 +107,7 @@ pub fn dl_open_any(names: &[&str]) -> *mut c_void {
 }
 
 /// `name` (NUL ile biten bayt dizisi) kütüphanelerde aranır. Hiçbir kütüphanenin doğrudan dışa aktarmadığı bir GL
-/// giriş noktası (Windows ve macOS'ta 3.x fonksiyonları geçerli bağlamdan gelir) geçerli bağlamdan istenir.
+/// giriş noktası (Windows'ta 3.x fonksiyonları geçerli bağlamdan gelir) geçerli bağlamdan istenir.
 pub fn dl_sym(libs: &[*mut c_void], name: &[u8]) -> *const c_void {
     for &h in libs {
         if !h.is_null() {
@@ -149,12 +146,7 @@ mod win32;
 #[cfg(windows)]
 pub use win32::*;
 
-#[cfg(target_os = "macos")]
-mod cocoa;
-#[cfg(target_os = "macos")]
-pub use cocoa::*;
-
-#[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", windows)))]
 mod none {
     use super::*;
 
@@ -167,15 +159,15 @@ mod none {
     pub fn swap() {}
     pub fn proc_address(_name: &str) -> *const c_void { std::ptr::null() }
 }
-#[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", windows)))]
 pub use none::*;
 
-/// Bu süreçte pencere açılıp açılamayacağı: Linux'ta ekran gerekir; Windows ve macOS'ta her zaman vardır.
+/// Bu süreçte pencere açılıp açılamayacağı: Linux'ta ekran gerekir; Windows'ta her zaman vardır.
 pub fn available() -> bool {
     if cfg!(target_os = "linux") {
         return std::env::var_os("DISPLAY").is_some();
     }
-    cfg!(any(windows, target_os = "macos"))
+    cfg!(windows)
 }
 
 /// Bu platformun OpenGL kütüphanesi (bir kez açılır); açılamazsa null.
@@ -190,11 +182,6 @@ pub fn gl_library() -> *mut c_void {
         #[cfg(windows)]
         {
             let gl = dl_open_any(&["opengl32.dll"]);
-            if !gl.is_null() { return gl as usize; }
-        }
-        #[cfg(target_os = "macos")]
-        {
-            let gl = dl_open_any(&["/System/Library/Frameworks/OpenGL.framework/OpenGL"]);
             if !gl.is_null() { return gl as usize; }
         }
         0

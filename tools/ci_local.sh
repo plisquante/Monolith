@@ -39,8 +39,7 @@ step() {
 OS=$(uname -s)
 case "$OS" in
   Linux) PY=python3; BOOT="sh tools/ci_game_boot.sh";;
-  Darwin) PY=python3; BOOT="sh tools/ci_game_boot.sh";;
-  *) echo "ci_local.sh runs the POSIX steps; use tools/ci_game_boot.ps1 on Windows"; exit 2;;
+  *) echo "ci_local.sh runs the Linux steps; use tools/ci_game_boot.ps1 on Windows"; exit 2;;
 esac
 
 JAR="$OUT/client.jar"

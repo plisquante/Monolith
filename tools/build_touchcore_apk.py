@@ -128,7 +128,7 @@ def find_ndk_prebuilt() -> Path | None:
         pre = ndk / "toolchains" / "llvm" / "prebuilt"
         if not pre.is_dir():
             continue
-        for tag in ("linux-x86_64", "linux-aarch64", "darwin-arm64", "darwin-x86_64"):
+        for tag in ("linux-x86_64", "linux-aarch64"):
             p = pre / tag
             if (p / "sysroot" / "usr" / "include").is_dir():
                 return p

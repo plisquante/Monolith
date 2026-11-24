@@ -51,7 +51,7 @@ def main() -> int:
     ap.add_argument("--ndk", default="")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--target", default="",
-                    help="Rust target triple (default: the host): x86_64-pc-windows-msvc, aarch64-apple-darwin, ...")
+                    help="Rust target triple (default: the host): x86_64-pc-windows-msvc, ...")
     ap.add_argument("--linker", default="", help="linker for a cross build (passed to rustc as -C linker=...)")
     ap.add_argument("--escape", action="store_true",
                     help="whole-program escape analysis (non-escaping objects in frame slots, arrays in the method arena); "
