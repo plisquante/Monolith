@@ -1400,17 +1400,29 @@ public final class LauncherActivity extends Activity {
         if (requestCode == REQ_PICK_SO && resultCode == RESULT_OK && data != null && data.getData() != null) {
             Uri uri = data.getData();
             File dst = config.getNativeImportTarget();
+            // copy to a temporary file and move it over the target at the end: a copy that stops half way must not leave a
+            // truncated library at the path that extLibPath may already point to (the next launch would load it)
+            File tmp = new File(dst.getParentFile(), dst.getName() + ".part");
             try {
                 InputStream in = getContentResolver().openInputStream(uri);
                 if (in == null) throw new IllegalStateException("Dosya okunamadı");
-                FileOutputStream out = new FileOutputStream(dst);
-                byte[] buf = new byte[16384];
-                int n;
-                while ((n = in.read(buf)) > 0) {
-                    out.write(buf, 0, n);
+                try {
+                    FileOutputStream out = new FileOutputStream(tmp);
+                    try {
+                        byte[] buf = new byte[16384];
+                        int n;
+                        while ((n = in.read(buf)) > 0) {
+                            out.write(buf, 0, n);
+                        }
+                    } finally {
+                        out.close();
+                    }
+                } finally {
+                    in.close();
                 }
-                out.close();
-                in.close();
+                if (tmp.length() == 0) throw new IllegalStateException("Dosya boş");
+                if (dst.exists() && !dst.delete()) throw new IllegalStateException("Eski dosya silinemedi");
+                if (!tmp.renameTo(dst)) throw new IllegalStateException("Dosya taşınamadı");
                 dst.setReadable(true, false);
                 dst.setExecutable(true, false);
                 config.extLibPath = dst.getAbsolutePath();
@@ -1419,6 +1431,7 @@ public final class LauncherActivity extends Activity {
                 validateUsernameUi(config.username);
                 Toast.makeText(this, "libminecraft_mono.so içe aktarıldı.", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
+                tmp.delete(); // no half-copied file stays behind
                 Toast.makeText(this, "Dosya kopyalama hatası: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         }

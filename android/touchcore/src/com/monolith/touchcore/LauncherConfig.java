@@ -358,8 +358,11 @@ public final class LauncherConfig {
                     e.printStackTrace(new PrintWriter(sw));
                     File f = new File(ctx.getFilesDir(), "last_crash.txt");
                     FileOutputStream fos = new FileOutputStream(f);
-                    fos.write(("Thread: " + t.getName() + "\n" + sw.toString()).getBytes(StandardCharsets.UTF_8));
-                    fos.close();
+                    try {
+                        fos.write(("Thread: " + t.getName() + "\n" + sw.toString()).getBytes(StandardCharsets.UTF_8));
+                    } finally {
+                        fos.close();
+                    }
                 } catch (Throwable ignored) {}
                 if (prev != null) {
                     prev.uncaughtException(t, e);
