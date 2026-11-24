@@ -21,6 +21,12 @@ pub fn set_current(r: Ref) {
     CUR.with(|c| c.set(r))
 }
 
+/// MONO_TRACE_PARK=1 prints a backtrace at every blocking monitor enter, wait and park. Read once: these are hot paths.
+fn trace_park() -> bool {
+    static V: OnceLock<bool> = OnceLock::new();
+    *V.get_or_init(|| std::env::var_os("MONO_TRACE_PARK").is_some())
+}
+
 // ------------------------------------------------------------------ monitors
 struct MonState {
     owner: u64,
@@ -71,7 +77,7 @@ pub fn enter(r: Ref) -> Res<()> {
             st.count += 1;
             return Ok(());
         }
-        if std::env::var_os("MONO_TRACE_PARK").is_some() {
+        if trace_park() {
             eprintln!("[mono:monitor_enter] owner={} me={}\n{}", st.owner, me, std::backtrace::Backtrace::force_capture());
         }
         st = m.enter_cv.wait(st).unwrap();
@@ -92,15 +98,23 @@ pub fn exit(r: Ref) -> Res<()> {
     }
     Ok(())
 }
+/// The monitor of `o` if one exists. Unlike `mon` it creates nothing: an object that was never locked has no owner.
+fn peek(o: *mut Obj) -> Option<Arc<Mon>> {
+    let a = o as usize;
+    table()[(a >> 4) % SHARDS].lock().unwrap().get(&a).cloned()
+}
 pub fn holds_lock(r: Ref) -> Res<bool> {
     let o = rt::nn(r)?;
-    let m = mon(o);
-    let st = m.st.lock().unwrap();
-    Ok(st.owner == tid())
+    Ok(match peek(o) {
+        Some(m) => m.st.lock().unwrap().owner == tid(),
+        None => false,
+    })
 }
 pub fn notify(r: Ref, all: bool) -> Res<()> {
     let o = rt::nn(r)?;
-    let m = mon(o);
+    let Some(m) = peek(o) else {
+        return rt::throw("java/lang/IllegalMonitorStateException", "current thread is not owner".to_string());
+    };
     let st = m.st.lock().unwrap();
     if st.owner != tid() {
         return rt::throw("java/lang/IllegalMonitorStateException", "current thread is not owner".to_string());
@@ -117,7 +131,7 @@ pub fn wait(r: Ref, millis: i64, nanos: i32) -> Res<()> {
     if ts.interrupted.swap(false, Ordering::SeqCst) {
         return rt::throw("java/lang/InterruptedException", String::new());
     }
-    if std::env::var_os("MONO_TRACE_PARK").is_some() {
+    if trace_park() {
         eprintln!("[mono:wait] millis={} nanos={}\n{}", millis, nanos, std::backtrace::Backtrace::force_capture());
     }
     let _blk = crate::heap::ScopedBlock::enter();
@@ -130,6 +144,14 @@ pub fn wait(r: Ref, millis: i64, nanos: i32) -> Res<()> {
     st.count = 0;
     m.enter_cv.notify_one();
     *ts.waiting.lock().unwrap() = Some(m.clone());
+    // An interrupt that came after the check at the top but before `waiting` was set found nobody to wake. It stored the
+    // flag first, so the flag is visible here: do not start waiting, take the monitor back and report the interrupt.
+    if ts.interrupted.swap(false, Ordering::SeqCst) {
+        *ts.waiting.lock().unwrap() = None;
+        st.owner = me;
+        st.count = saved;
+        return rt::throw("java/lang/InterruptedException", String::new());
+    }
     if millis == 0 && nanos == 0 {
         st = m.wait_cv.wait(st).unwrap();
     } else {
@@ -158,21 +180,32 @@ pub struct TState {
     sleep_cv: Condvar,
     waiting: Mutex<Option<Arc<Mon>>>,
 }
-fn tstate(t: Ref) -> Arc<TState> {
+fn new_tstate() -> Arc<TState> {
+    Arc::new(TState {
+        interrupted: AtomicBool::new(false),
+        permit: Mutex::new(false),
+        park_cv: Condvar::new(),
+        sleep_m: Mutex::new(()),
+        sleep_cv: Condvar::new(),
+        waiting: Mutex::new(None),
+    })
+}
+/// Interrupt flag, park permit and wait state of each thread object, keyed by the object's address.
+fn tstates() -> &'static Mutex<HashMap<usize, Arc<TState>>> {
     static T: OnceLock<Mutex<HashMap<usize, Arc<TState>>>> = OnceLock::new();
-    let mut m = T.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap();
-    m.entry(t.0 as usize)
-        .or_insert_with(|| {
-            Arc::new(TState {
-                interrupted: AtomicBool::new(false),
-                permit: Mutex::new(false),
-                park_cv: Condvar::new(),
-                sleep_m: Mutex::new(()),
-                sleep_cv: Condvar::new(),
-                waiting: Mutex::new(None),
-            })
-        })
-        .clone()
+    T.get_or_init(|| Mutex::new(HashMap::new()))
+}
+fn tstate(t: Ref) -> Arc<TState> {
+    tstates().lock().unwrap().entry(t.0 as usize).or_insert_with(new_tstate).clone()
+}
+/// A thread object that is about to start gets fresh state. Objects are not moved, and the address of a dead Thread can be
+/// handed to a new one: without this a stale `interrupted` flag or park permit of the dead thread would fire on the new one.
+/// (An interrupt before `start` has no effect, as in the JDK.)
+fn reset_tstate(addr: usize) {
+    tstates().lock().unwrap().insert(addr, new_tstate());
+}
+fn drop_tstate(addr: usize) {
+    tstates().lock().unwrap().remove(&addr);
 }
 pub fn interrupt(t: Ref) -> Res<()> {
     let ts = tstate(rt::nn_ref(t)?);
@@ -213,7 +246,7 @@ pub fn sleep(nanos: i64) -> Res<()> {
 }
 pub fn park(absolute: bool, time: i64) {
     let ts = tstate(current_thread());
-    if std::env::var_os("MONO_TRACE_PARK").is_some() {
+    if trace_park() {
         eprintln!("[mono:park] abs={} time={}\n{}", absolute, time, std::backtrace::Backtrace::force_capture());
     }
     let _blk = crate::heap::ScopedBlock::enter();
@@ -252,6 +285,7 @@ pub fn unpark(t: Ref) {
 pub fn start(t: Ref, stack: i64) -> Res<()> {
     let addr = rt::nn_ref(t)?.0 as usize;
     let ss = if stack > 0 { (stack as usize).max(1 << 20) } else { 64 << 20 };
+    reset_tstate(addr);
     let r = std::thread::Builder::new().stack_size(ss).spawn(move || {
         crate::crash::init_thread();
         let _gc_guard = crate::heap::ThreadGuard::enter();
@@ -259,6 +293,7 @@ pub fn start(t: Ref, stack: i64) -> Res<()> {
         set_current(t);
         crate::heap::set_thread_obj(t);
         let _ = (rt::hooks().thread_run)(t);
+        drop_tstate(addr);
     });
     match r {
         Ok(_) => Ok(()),
