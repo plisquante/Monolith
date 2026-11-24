@@ -7,14 +7,17 @@ description: "Efficient handling of long-running commands. Use when running test
 
 ## Overview
 
-Long-running commands (tests, builds, pushes) should run in background and be awaited efficiently.
+Long-running commands (tests, builds, pushes) run in the background. Wait for them with ONE blocking call, not with repeated checks.
 
-**The Iron Law:** Use `TaskOutput(block: true)` to wait. NEVER poll with `sleep && cat`.
+**The Iron Law:** wait with a single blocking wait (an `until` loop in a background Bash, or a Monitor). Never poll with repeated `sleep && cat`, `tail`, or `ps` calls.
+
+**Tool check:** `TaskOutput` is not available in every session. Check first with `ToolSearch` (`select:TaskOutput`). If it reports no match, use the methods below. Do not retry it.
 
 ## When to Use Background Execution
 
 | Command Type | Duration | Use Background? |
 |--------------|----------|-----------------|
+| Full Minecraft build (`build.sh`) | 30-70 min | YES |
 | E2E tests | 2-10 min | YES |
 | Full test suite | 1-5 min | YES |
 | Git push with hooks | 30s-2 min | YES |
@@ -22,53 +25,51 @@ Long-running commands (tests, builds, pushes) should run in background and be aw
 | Single unit test | < 30s | NO |
 | Quick commands | < 10s | NO |
 
-**Rule of thumb:** If it might take > 30 seconds, run in background.
+**Rule of thumb:** if it may take more than 30 seconds, run it in the background.
 
-## The Efficient Pattern
-
-```
-✅ CORRECT - Two tool calls, efficient:
-
-1. Bash(command, run_in_background: true)
-   → Returns: task_id (e.g., "abc123")
-
-2. TaskOutput(task_id: "abc123", block: true, timeout: 300000)
-   → Waits up to 5 min
-   → Returns full output when complete
-```
-
-**That's it. Two calls total.**
-
-## The Anti-Pattern (NEVER DO THIS)
+## Method 1: One completion notification (default)
 
 ```
-❌ WRONG - Wastes tokens polling empty output:
-
-1. Bash(command, run_in_background: true) → task_id
-2. Bash(sleep 60 && tail output)  ← empty, wasted tokens
-3. Bash(cat output)               ← still empty, wasted
-4. Bash(ps aux | grep process)    ← wasted
-5. Bash(sleep 90 && cat output)   ← wasted again
-6. TaskOutput(block: false)       ← still not done
-7. Bash(tail -f output)           ← more waste
-... repeat until done
-
-Result: 6+ tool calls instead of 2
+1. Bash(command, run_in_background: true)        → background task id
+2. Bash(until grep -q '<DONE_MARKER>' "$LOG"; do sleep 5; done; tail -n 40 "$LOG",
+        run_in_background: true, timeout: <ms>)  → one notification when finished
 ```
 
-## TaskOutput Parameters
+- The command writes its own done marker (for example `echo EXIT=$?` at the end of the job, redirected into the log). The `until` loop exits only when that marker appears.
+- Keep the job's own output in a log file. Read only the filtered tail or the matching lines afterwards (`grep -E 'error|FAIL|Traceback'`), never the whole log.
+- Make the wait loop exit on failure too. If the job can die without writing the marker, add a check on its PID (`kill -0 $PID`) to the loop condition.
 
-```typescript
-TaskOutput(
-  task_id: string,      // Required: ID from background Bash
-  block: boolean,       // true = wait for completion (DEFAULT)
-  timeout: number       // Max wait in ms (default: 30000)
+## Method 2: Event stream (progress and failures)
+
+Use Monitor when you want notifications while the job runs, not just at the end:
+
+```
+Monitor(
+  command: "tail -n 0 -F \"$LOG\" | grep -E --line-buffered 'EXIT=|Traceback|Error|FAIL|panicked|No space|Killed'",
+  description: "<job> log: exit and failure signatures",
+  timeout_ms: 1800000
 )
 ```
 
-**Key insight:** `block: true` is the DEFAULT. It waits efficiently without repeated calls.
+- The filter must match every terminal state: success marker and all failure signatures. A filter that matches only success stays silent on a crash, and silence looks like "still running".
+- Monitor expires after `timeout_ms` (max 30 min). Re-arm it if the job is still running.
+- Do not pipe through `head` in a Monitor. It buffers until N lines are seen.
 
-## Timeout Guidelines
+## Parallel background tasks
+
+Start several jobs, each with its own log and done marker, then wait on each with its own `until` loop. Do not run two heavy jobs at once if they compete for memory or CPU (see the monolith guard in `.claude/hooks/guard.py`).
+
+## Non-blocking status
+
+When you need to do other work and only want a snapshot, read the last lines of the log once:
+
+```
+tail -n 5 "$LOG"
+```
+
+Do this once per check, and only when you have other work to do. Do not loop on it.
+
+## Timeout guidelines
 
 | Task Type | Timeout | Rationale |
 |-----------|---------|-----------|
@@ -77,95 +78,16 @@ TaskOutput(
 | E2E single spec | 300000 (5 min) | Browser startup + test |
 | E2E full suite | 600000 (10 min) | Multiple specs |
 | Git push with hooks | 180000 (3 min) | Pre-push tests |
-| Full build | 300000 (5 min) | Compilation |
+| Full build | 3600000 (60 min) | Compilation and shard build |
 
-## Parallel Background Tasks
+## Red flags
 
-Start multiple, then wait for all:
+You are doing it wrong if:
+- A foreground `sleep` is used to wait for a job (foreground sleep is blocked in this environment; use a background `until` loop).
+- `tail -f` or `cat` is run again and again on the output file.
+- `ps aux | grep` is used to see whether a job is still alive.
+- More than 2 or 3 tool calls are spent on one background job.
 
-```typescript
-// Start all in parallel (single message, multiple Bash calls)
-Bash("pnpm test:unit", run_in_background: true)     // → task_a
-Bash("pnpm test:e2e", run_in_background: true)      // → task_b
-Bash("pnpm lint", run_in_background: true)          // → task_c
+## Guard gotchas (monolith)
 
-// Wait for each (can be in same message)
-TaskOutput(task_id: "task_a", block: true, timeout: 120000)
-TaskOutput(task_id: "task_b", block: true, timeout: 300000)
-TaskOutput(task_id: "task_c", block: true, timeout: 60000)
-```
-
-## When to Use Non-Blocking Check
-
-Use `block: false` ONLY for quick status checks when you need to do other work:
-
-```typescript
-// Check if still running (doesn't wait)
-TaskOutput(task_id: "abc123", block: false, timeout: 1000)
-
-// Returns immediately with:
-// - Current output if still running
-// - Full output if complete
-```
-
-**Typical use case:** You started a long task, need to inform the user, then want to check progress.
-
-## Common Scenarios
-
-### Running E2E Tests
-
-```typescript
-// Start in background
-Bash("pnpm test:e2e -- checkout.spec.ts", run_in_background: true)
-// → task_id: "e2e_123"
-
-// Wait for completion
-TaskOutput(task_id: "e2e_123", block: true, timeout: 300000)
-// → Returns test results when done
-```
-
-### Git Push with Pre-Push Hooks
-
-```typescript
-// Push (may run tests via hooks)
-Bash("git push -u origin feature/my-branch", run_in_background: true)
-// → task_id: "push_456"
-
-// Wait for push + hooks to complete
-TaskOutput(task_id: "push_456", block: true, timeout: 180000)
-// → Returns push result
-```
-
-### Full Test Suite
-
-```typescript
-// Start full suite
-Bash("pnpm test", run_in_background: true)
-// → task_id: "test_789"
-
-// Wait with appropriate timeout
-TaskOutput(task_id: "test_789", block: true, timeout: 300000)
-// → Returns all test results
-```
-
-## Red Flags - STOP
-
-You're doing it wrong if:
-- Using `sleep` before checking output
-- Using `tail -f` to monitor progress
-- Using `cat` repeatedly on output file
-- Using `ps aux | grep` to check if running
-- Calling TaskOutput with `block: false` repeatedly
-- More than 2 tool calls for a single background task
-
-## Integration
-
-**Reference this skill from:**
-- `submit-pr` - For git push with hooks
-- `testing-patterns` - For E2E test execution
-- `verification` - For running verification commands
-- `tdd` - For test execution phases
-
-**Pairs with:**
-- `dispatching-parallel-agents` - For parallel task coordination
-- `testing-patterns` - For test execution guidance
+- The PreToolUse guard (`.claude/hooks/guard.py`) blocks any Bash command that matches its heavy-job pattern (`build.sh`, `run_tests.py`, `mcbuild_rust.py`, ...) while another heavy job runs. This includes a commit message or a grep pattern that contains one of those strings. Keep such strings out of commit messages and search patterns while a build runs.
