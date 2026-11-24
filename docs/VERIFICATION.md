@@ -76,9 +76,12 @@ the target for tiers 1-3 of `GC_PLAN.md`.
 
 Build: `tools/mcbuild_rust.py ... --escape --inline` (32 shards, 2 jobs). It finished. The build prints 525 link errors
 (baseline without the flags: 446). The verbose breakdown of the 525 (`MONO_VERBOSE=1`): 374 `NoSuchMethodError`, 90
-`NoClassDefFoundError`, 48 `NoSuchFieldError`, 13 catch-type errors. The largest callers are the optional
-log4j, netty-logging, JMS, Jackson, ZeroMQ and Disruptor paths the README already lists. The baseline breakdown has not
-been produced, so the extra 79 are not yet proven to be the same families.
+`NoClassDefFoundError`, 48 `NoSuchFieldError`, 13 catch-type errors. The baseline run (446, verbose) is a strict subset
+of the 525: no baseline error is missing from the escape build, and the 79 extra are new call sites of the same
+failures. Of the 79: 55 log4j core (SMTP, JMS, async Disruptor, JSON, Jackson), 12 commons-compress, 6 netty logging,
+and 6 JDK method-handle internals (`java/lang/invoke`: `InvokerBytecodeGenerator`, `SimpleMethodHandle`,
+`NativeMethodHandle`, `ClassSpecializer`). The 6 JDK entries are the ones to check: they are not optional
+dependencies, and it is not yet known whether any runs on a real path. The default build does not use the flags.
 
 Idle allocation, 10 min standing still, same saved world, collector on:
 
@@ -87,7 +90,10 @@ Idle allocation, 10 min standing still, same saved world, collector on:
 | without flags (`docs/VERIFICATION.md` leak section, collector off, 624 s) | 11.85 GB | 19.0 MB/s | reference |
 | with `--escape --inline` (721 s) | 19.37 GB | 26.8 MB/s | `ImmutableCollections$ListItr` 294 to 939 MB, `int[]` 1.6 GB new, `Vec3` 355 to 753 MB |
 
-The flags raise idle allocation by about 40 percent, so they are not enabled. They stay opt-in for measurement. The
+The rates above count arena bytes too. Arena bytes are freed at method return and never reach the collector, so the
+number that matters for collection pressure is the heap-only rate: 17.0 MB/s baseline (11,851 MB minus 1,255 MB arena,
+624 s) against 24.0 MB/s with the flags (19,368 MB minus 2,069 MB arena, 721 s). That is still about 40 percent more, so
+the flags are not enabled. They stay opt-in for measurement. The
 first GC-removal step is not this change.
 
 Not covered: multiplayer, Realms, audio output, a second session, long play, repeated boots, FPS and memory figures.

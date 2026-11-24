@@ -99,7 +99,8 @@ The translator owns every reference store, so the barrier is emitted, not patche
 
 1. Finish measuring the inline + escape + `tickChunk` build (in progress). Compare class by class with prof4.
    Measured on the full game build: `--escape --inline` raised idle allocation from 19.0 to 26.8 MB/s, so the flags stay
-   opt-in and are not the fix (`docs/VERIFICATION.md`).
+   opt-in and are not the fix (`docs/VERIFICATION.md`). Open before any enablement: 6 JDK method-handle link errors
+   that appear only with inlining; check whether they are reached.
    Idle profile on the current build (collector off, 10 min, `docs/VERIFICATION.md`): about 19 MB/s allocated, no
    dominant class; the top items are the temporaries of item 2 and item 5 below.
 2. Value-like temporaries still heap-allocated: `Vec3`, `AABB`, `BlockPos` factories beyond `tickChunk`, `MutableBlockPos` copies, `VoxelShape` chains. Measured at idle: `Vec3` 3.0 %, `BlockPos` 2.8 % of the bytes allocated (`docs/VERIFICATION.md`).
