@@ -1,17 +1,17 @@
-//! OpenAL-compatible software mixer (the subset Minecraft uses), in Rust, without dependencies.
+//! OpenAL uyumlu yazılım karıştırıcısı (Minecraft'ın kullandığı alt küme), Rust ile, bağımlılıksız.
 //!
-//! Model: buffers hold decoded PCM; sources play a queue of buffers with gain, pitch, looping and a 3D position
-//! (inverse-distance-clamped attenuation, the OpenAL default). `mix` renders the sources into an interleaved stereo
-//! f32 block; an output device (a `Sink`) takes the blocks. Errors and states follow the OpenAL 1.1 specification.
+//! Model: tamponlar çözülmüş PCM verisi tutar. Kaynaklar, bir tampon kuyruğunu kazanç, perde (pitch), döngü ve 3B konumla çalar
+//! (ters mesafe ile kırpılmış zayıflatma, OpenAL varsayılanı). `mix`, kaynakları birleştirilmiş (interleaved) stereo
+//! f32 bloğuna çizer; bir çıkış aygıtı (`Sink`) bu blokları alır. Hatalar ve durumlar OpenAL 1.1 belirtimini izler.
 //!
-//! This file has no crate dependencies and is compiled both into the runtime (`mod audio` in lib.rs) and on its own
-//! for the tests: `rustc --test monolith/rt/audio.rs -o audio_tests && ./audio_tests`.
+//! Bu dosyanın crate bağımlılığı yoktur. Hem çalışma zamanına (lib.rs içindeki `mod audio`) hem de testler için
+//! tek başına derlenir: `rustc --test monolith/rt/audio.rs -o audio_tests && ./audio_tests`.
 
 #![allow(dead_code)]
 
 use std::collections::{HashMap, VecDeque};
 
-// ----- OpenAL constants (values from al.h / alc.h, 1.1)
+// ----- OpenAL sabitleri (değerler al.h / alc.h, sürüm 1.1)
 pub const AL_NO_ERROR: i32 = 0;
 pub const AL_INVALID_NAME: i32 = 0xA001;
 pub const AL_INVALID_ENUM: i32 = 0xA002;
@@ -63,7 +63,7 @@ pub const AL_FORMAT_MONO16: i32 = 0x1101;
 pub const AL_FORMAT_STEREO8: i32 = 0x1102;
 pub const AL_FORMAT_STEREO16: i32 = 0x1103;
 
-/// Output rate of the mixer. Buffers at other rates are resampled (linear interpolation).
+/// Karıştırıcının çıkış hızı. Başka hızdaki tamponlar yeniden örneklenir (doğrusal enterpolasyon).
 pub const MIX_RATE: u32 = 44_100;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,7 +92,7 @@ impl Format {
     }
 }
 
-/// Izleme (MONO_AUDIO_TRACE): tanınmayan bir parametre kodunu yazar.
+/// İzleme (MONO_AUDIO_TRACE): tanınmayan bir parametre kodunu yazar.
 fn trace_on() -> bool {
     std::env::var_os("MONO_AUDIO_TRACE").is_some()
 }
@@ -106,9 +106,9 @@ fn trace_param(what: &str, value: i32) {
 pub struct Buffer {
     pub format: Format,
     pub freq: u32,
-    /// decoded frames, stereo interleaved (mono is duplicated), f32 in [-1, 1]
+    /// çözülmüş çerçeveler, stereo ve iç içe (mono ise çoğaltılır), [-1, 1] aralığında f32
     pub frames: Vec<f32>,
-    /// the number of sources that have this buffer queued or current (a buffer may not be deleted while in use)
+    /// bu tamponu kuyruğunda ya da şu an çalan olarak tutan kaynak sayısı (kullanımdayken tampon silinemez)
     pub in_use: u32,
 }
 
@@ -118,7 +118,7 @@ impl Buffer {
     }
 }
 
-/// Decodes PCM bytes of an AL buffer into stereo f32 frames.
+/// Bir AL tamponunun PCM baytlarını stereo f32 çerçevelere çözer.
 pub fn decode(format: Format, freq: u32, data: &[u8]) -> Buffer {
     let mut frames = Vec::new();
     match format {
@@ -161,15 +161,15 @@ pub enum State {
 pub struct Source {
     pub state: State,
     pub queue: VecDeque<u32>,
-    /// the buffer currently rendered (front of `queue`) and the position inside it, in frames of the buffer
+    /// şu an işlenen tampon (`queue`'nun önü) ve bu tampon içindeki konum (tampon çerçevesi cinsinden)
     pub pos: f64,
-    /// number of buffers that finished playing and were not unqueued yet (AL_BUFFERS_PROCESSED)
+    /// çalmayı bitirmiş ama henüz kuyruktan çıkarılmamış tampon sayısı (AL_BUFFERS_PROCESSED)
     pub processed: VecDeque<u32>,
     pub gain: f32,
     pub pitch: f32,
     pub looping: bool,
     pub position: [f32; 3],
-    /// AL_SOURCE_RELATIVE: the position is relative to the listener
+    /// AL_SOURCE_RELATIVE: konum dinleyiciye göre bağıldır
     pub relative: bool,
     pub velocity: [f32; 3],
     pub direction: [f32; 3],
@@ -181,7 +181,7 @@ pub struct Source {
     pub cone_inner: f32,
     pub cone_outer: f32,
     pub cone_outer_gain: f32,
-    /// mesafe modeli (AL_INVERSE_DISTANCE_CLAMPED varsayılan); 0 = AL_NONE (kazanç 1)
+    /// mesafe modeli (varsayılan AL_INVERSE_DISTANCE_CLAMPED); 0 = AL_NONE (kazanç 1)
     pub dist_model: i32,
 }
 
@@ -219,9 +219,9 @@ pub struct Context {
     pub listener_pos: [f32; 3],
     pub listener_gain: f32,
     pub listener_vel: [f32; 3],
-    /// dinleyicinin ileri yönü (AL_ORIENTATION, varsayılan -Z); sağ yön ileriden ve yukarıdan türetilir
+    /// dinleyicinin ileri yönü (AL_ORIENTATION, varsayılan -Z); sağ yön ileri ve yukarı vektörlerinden türetilir
     pub listener_fwd: [f32; 3],
-    /// error of the last failed call (AL_NO_ERROR when none); `error()` returns it and clears it
+    /// son başarısız çağrının hatası (hata yoksa AL_NO_ERROR); `error()` bunu döndürür ve temizler
     err: i32,
     next_id: u32,
 }
@@ -232,8 +232,8 @@ impl Context {
     }
 
 
-    /// Records an error (the first one since the last `error()` is kept). Ortam değişkeni MONO_AUDIO_TRACE
-    /// ayarlıysa hatanın çağrı yerini (dosya:satır) stderr'e yazar.
+    /// Bir hata kaydeder (son `error()` çağrısından beri ilk hata saklanır). MONO_AUDIO_TRACE ayarlıysa
+    /// hatanın çağrı yerini (dosya:satır) stderr'e yazar.
     #[track_caller]
     pub fn fail(&mut self, code: i32) -> i32 {
         if trace_on() {
@@ -255,7 +255,7 @@ impl Context {
         id
     }
 
-    // ----- buffers
+    // ----- tamponlar
     pub fn gen_buffers(&mut self, n: usize) -> Vec<u32> {
         (0..n)
             .map(|_| {
@@ -301,7 +301,7 @@ impl Context {
         AL_NO_ERROR
     }
 
-    // ----- sources
+    // ----- kaynaklar
     pub fn gen_sources(&mut self, n: usize) -> Vec<u32> {
         (0..n)
             .map(|_| {
@@ -346,7 +346,7 @@ impl Context {
         AL_NO_ERROR
     }
 
-    /// Removes buffers that finished playing (AL_BUFFERS_PROCESSED); returns them in queue order.
+    /// Çalmayı bitirmiş tamponları kaldırır (AL_BUFFERS_PROCESSED); kuyruk sırasıyla döndürür.
     pub fn unqueue_buffers(&mut self, src: u32, count: usize) -> Result<Vec<u32>, i32> {
         let s = match self.sources.get_mut(&src) {
             Some(s) => s,
@@ -396,7 +396,7 @@ impl Context {
         let Some(s) = self.sources.get_mut(&src) else { return self.fail(AL_INVALID_NAME) };
         if s.state == State::Playing || s.state == State::Paused {
             s.state = State::Stopped;
-            // AL: stop keeps the queue; everything that was played is processed
+            // AL: stop kuyruğu korur; çalınmış her şey işlenmiş sayılır
             let done: Vec<u32> = s.queue.drain(..).collect();
             for b in done {
                 s.processed.push_back(b);
@@ -422,7 +422,7 @@ impl Context {
             AL_SOURCE_RELATIVE => s.relative as i32,
             AL_DISTANCE_MODEL => s.dist_model,
             AL_SOURCE_TYPE => {
-                // one buffer that loops is static; a queue is streaming; nothing queued is undetermined
+                // döngüleyen tek tampon statiktir; kuyruk akıştır; kuyruğa alınmamış bir şey belirsizdir
                 if s.queue.is_empty() && s.processed.is_empty() {
                     AL_UNDETERMINED
                 } else if s.looping && s.queue.len() + s.processed.len() == 1 {
@@ -432,7 +432,7 @@ impl Context {
                 }
             }
             AL_SAMPLE_OFFSET | AL_BYTE_OFFSET | AL_SEC_OFFSET => {
-                // offset inside the current buffer, in frames (sample), bytes (16-bit stereo) or seconds
+                // mevcut tampon içindeki ofset: çerçeve (örnek), bayt (16 bit stereo) ya da saniye cinsinden
                 let freq = s.queue.front().and_then(|b| self.buffers.get(b)).map(|b| b.freq as f64).unwrap_or(MIX_RATE as f64);
                 match param {
                     AL_SAMPLE_OFFSET => s.pos as i32,
@@ -582,7 +582,8 @@ impl Context {
         AL_NO_ERROR
     }
 
-    /// Renders `out.len()/2` stereo frames at MIX_RATE into `out` (interleaved L, R). Sources that are not playing
+    /// Çıktıya MIX_RATE hızında `out.len()/2` stereo çerçeve çizer (sırayla L, R). Çalmayan kaynaklar
+    /// hiçbir katkı yapmaz. Bitmiş tamponlar `processed`'a taşınır; kuyruğu boş kalan kaynak durur.
     /// contribute nothing. Finished buffers move to `processed`; a source with an empty queue stops.
     pub fn mix(&mut self, out: &mut [f32]) {
         for v in out.iter_mut() {
@@ -591,7 +592,7 @@ impl Context {
         let frames = out.len() / 2;
         let ids: Vec<u32> = self.sources.keys().copied().collect();
         for sid in ids {
-            // take the source out so the buffers can be read while it is updated
+            // Tampon okunabilsin ve güncellenebilsin diye kaynağı geçici olarak dışarı al
             let mut s = match self.sources.remove(&sid) {
                 Some(s) => s,
                 None => continue,
@@ -637,8 +638,8 @@ impl Context {
                         if s.looping {
                             s.pos -= n as f64 * (s.pos / n as f64).floor();
                         } else {
-                            // the buffer is done: it is processed at this very frame (OpenAL reports STOPPED right
-                            // away when the last one ends); the fraction carries over to the next buffer
+                            // Tampon bitti: tam bu karede işlenir (OpenAL, son tampon bitince hemen STOPPED bildirir).
+                            // Kesirli kısım bir sonraki tampona taşınır.
                             s.pos -= n as f64;
                             s.queue.pop_front();
                             s.processed.push_back(bid);
@@ -656,10 +657,10 @@ impl Context {
     }
 }
 
-/// Gains (left, right) of a source for the listener: OpenAL 1.1 distance model (inverse clamped, the default):
-/// gain = ref / (ref + rolloff * (clamp(d, ref, max) - ref)), then clamped to [min_gain, max_gain] and multiplied by
-/// the source gain. The pan follows the x axis of the listener with a constant-power law. A source at the origin
-/// without AL_SOURCE_RELATIVE is treated as not positioned (no attenuation, centred).
+/// Bir kaynağın dinleyiciye göre (sol, sağ) kazançları. OpenAL 1.1 mesafe modeli (ters ve kırpılmış, varsayılan):
+/// kazanç = ref / (ref + rolloff * (clamp(d, ref, max) - ref)), sonra [min_gain, max_gain] aralığına kırpılır ve
+/// kaynak kazancıyla çarpılır. Perde (pan), dinleyicinin x ekseni üzerinden sabit güç yasasıyla hesaplanır.
+/// AL_SOURCE_RELATIVE olmayan ve orijinde duran bir kaynak "konumsuz" sayılır (zayıflatma yok, ortada).
 fn source_gains(listener: &[f32; 3], fwd: &[f32; 3], s: &Source, listener_gain: f32) -> (f32, f32) {
     let (dx, dy, dz) = if s.relative {
         (s.position[0], s.position[1], s.position[2])
@@ -709,12 +710,12 @@ fn normalize(v: [f32; 3]) -> [f32; 3] {
     if l < 1e-9 { [1.0, 0.0, 0.0] } else { [v[0] / l, v[1] / l, v[2] / l] }
 }
 
-/// Output of rendered blocks (a device, or a file in tests).
+/// Üretilen blokların çıkışı (bir aygıt ya da testlerde bir dosya).
 pub trait Sink {
     fn write(&mut self, interleaved: &[f32]);
 }
 
-/// Writes 16-bit PCM WAV, 44.1 kHz stereo.
+/// 16 bit PCM WAV yazar, 44.1 kHz stereo.
 pub struct WavSink {
     pub data: Vec<u8>,
 }
@@ -729,7 +730,7 @@ impl WavSink {
     pub fn new() -> WavSink {
         WavSink { data: Vec::new() }
     }
-    /// The file image: RIFF header followed by the samples.
+    /// Dosya görüntüsü: RIFF başlığı, ardından örnekler.
     pub fn wav_bytes(&self) -> Vec<u8> {
         let data_len = self.data.len() as u32;
         let mut h = Vec::with_capacity(44 + self.data.len());
@@ -759,7 +760,7 @@ impl Sink for WavSink {
     }
 }
 
-/// Renders `seconds` of the context into a sink, in blocks of 1024 frames.
+/// Bağlamın `seconds` saniyesini, 1024 çerçevelik bloklarla bir çıkışa çizer.
 pub fn render(ctx: &mut Context, sink: &mut dyn Sink, seconds: f64) {
     let total = (seconds * MIX_RATE as f64) as usize;
     let mut block = vec![0.0f32; 1024 * 2];
@@ -802,7 +803,7 @@ mod tests {
         let mut sink = WavSink::new();
         render(&mut ctx, &mut sink, 1.0);
         let left: Vec<f32> = sink.data.chunks_exact(4).map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32767.0).collect();
-        // 440 Hz: 880 zero crossings per second (+-2 for the edges)
+        // 440 Hz: saniyede 880 sıfır geçişi (kenarlar için ±2)
         let zc = zero_crossings(&left);
         assert!((878..=882).contains(&zc), "zero crossings {zc}");
         assert_eq!(ctx.get_source_i(s, AL_SOURCE_STATE), Ok(AL_STOPPED));
@@ -811,7 +812,7 @@ mod tests {
 
     #[test]
     fn resampling_keeps_pitch() {
-        // 440 Hz recorded at 22050 Hz, played at 44100: one second of the buffer lasts half a second
+        // 22050 Hz'de kaydedilmiş 440 Hz, 44100 Hz'de çalınır: tamponun bir saniyesi yarım saniye sürer
         let mut ctx = Context::new();
         let b = ctx.gen_buffers(1)[0];
         ctx.buffer_data(b, AL_FORMAT_MONO16, &sine_pcm16(440.0, 1.0, 22_050), 22_050);
@@ -837,7 +838,7 @@ mod tests {
         ctx.queue_buffers(s, &bufs);
         assert_eq!(ctx.get_source_i(s, AL_BUFFERS_QUEUED), Ok(3));
         assert_eq!(ctx.get_source_i(s, AL_BUFFERS_PROCESSED), Ok(0));
-        // a queued buffer cannot be replaced or deleted
+        // kuyruğa alınmış bir tampon değiştirilemez ya da silinemez
         assert_eq!(ctx.buffer_data(bufs[0], AL_FORMAT_MONO8, &[1, 2], 8000), AL_INVALID_OPERATION);
         assert_eq!(ctx.delete_buffers(&[bufs[1]]), AL_INVALID_OPERATION);
         assert_eq!(ctx.error(), AL_INVALID_OPERATION);
@@ -852,7 +853,7 @@ mod tests {
         render(&mut ctx, &mut sink, 1.0);
         assert_eq!(ctx.get_source_i(s, AL_SOURCE_STATE), Ok(AL_STOPPED));
         assert_eq!(ctx.unqueue_buffers(s, 2).unwrap(), vec![bufs[1], bufs[2]]);
-        // unqueued buffers are free again
+        // kuyruktan çıkarılan tamponlar yeniden serbesttir
         assert_eq!(ctx.delete_buffers(&bufs), AL_NO_ERROR);
     }
 
@@ -893,7 +894,7 @@ mod tests {
         assert_eq!(ctx.error(), AL_INVALID_VALUE);
         assert_eq!(ctx.set_source_f(s, AL_PITCH, 0.0), AL_INVALID_VALUE);
         assert_eq!(ctx.set_source_f(s, 0x9999, 1.0), AL_INVALID_ENUM);
-        // only the first error since the last read is kept
+        // son okumadan beri yalnızca ilk hata saklanır
         assert_eq!(ctx.error(), AL_INVALID_VALUE);
         assert_eq!(ctx.error(), AL_NO_ERROR);
         assert_eq!(ctx.play(999), AL_INVALID_NAME);
@@ -928,7 +929,7 @@ mod tests {
         let mut ctx = Context::new();
         let s = ctx.gen_sources(1)[0];
         ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 5.0]);
-        // varsayılan yön (-Z): +Z'deki kaynak arkada, pan merkeze yakın; yönü +X yapınca +Z sağa düşer
+        // varsayılan yön (-Z): +Z'deki kaynak arkadadır, perde merkeze yakındır; yönü +X yapınca +Z sağa düşer
         ctx.set_listener_3f(AL_ORIENTATION, [1.0, 0.0, 0.0]);
         assert_eq!(ctx.error(), AL_NO_ERROR);
         let (l, r) = source_gains(&ctx.listener_pos, &ctx.listener_fwd, ctx.sources.get(&s).unwrap(), 1.0);
@@ -945,13 +946,13 @@ mod tests {
         ctx.set_source_f(s, AL_MAX_DISTANCE, 11.0);
         ctx.set_source_f(s, AL_ROLLOFF_FACTOR, 1.0);
         let gain = |ctx: &Context| source_gains(&[0.0; 3], &[0.0, 0.0, -1.0], ctx.sources.get(&s).unwrap(), 1.0).0 * std::f32::consts::SQRT_2;
-        // linear: 1 - (6-1)/(11-1) = 0.5
+        // doğrusal: 1 - (6-1)/(11-1) = 0.5
         ctx.set_source_i(s, AL_DISTANCE_MODEL, AL_LINEAR_DISTANCE_CLAMPED);
         assert!((gain(&ctx) - 0.5).abs() < 1e-4, "linear clamped {}", gain(&ctx));
-        // exponent: (6/1)^-1 = 1/6
+        // üssel: (6/1)^-1 = 1/6
         ctx.set_source_i(s, AL_DISTANCE_MODEL, AL_EXPONENT_DISTANCE_CLAMPED);
         assert!((gain(&ctx) - 1.0 / 6.0).abs() < 1e-4, "exponent {}", gain(&ctx));
-        // none: gain 1 everywhere
+        // yok: her yerde kazanç 1
         ctx.set_source_i(s, AL_DISTANCE_MODEL, 0);
         assert!((gain(&ctx) - 1.0).abs() < 1e-4, "none {}", gain(&ctx));
         assert_eq!(ctx.set_source_i(s, AL_DISTANCE_MODEL, 0x1234), AL_INVALID_VALUE);
@@ -963,13 +964,13 @@ mod tests {
     fn openal_distance_model_and_relative_sources() {
         let mut ctx = Context::new();
         let s = ctx.gen_sources(1)[0];
-        // ref 1, rolloff 1: gain at distance 3 is 1 / (1 + 2) = 1/3 (inverse clamped model)
+        // ref 1, rolloff 1: 3 mesafesindeki kazanç 1 / (1 + 2) = 1/3 (ters kırpılmış model)
         assert_eq!(ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 3.0]), AL_NO_ERROR);
         let src = ctx.sources.get(&s).unwrap();
         let g = source_gains(&[0.0; 3], &[0.0, 0.0, -1.0], src, 1.0).0;
-        // pan 0 (straight ahead): left = gain * cos(pi/4)
+        // perde 0 (tam karşıda): sol = kazanç * cos(pi/4)
         assert!((g - (1.0f32 / 3.0) * std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-4, "gain {g}");
-        // the parameters Minecraft's sound engine sets must not be errors
+        // Minecraft'ın ses motorunun ayarladığı parametreler hata olmamalıdır
         assert_eq!(ctx.set_source_i(s, AL_SOURCE_RELATIVE, AL_TRUE), AL_NO_ERROR);
         assert_eq!(ctx.set_source_f(s, AL_REFERENCE_DISTANCE, 8.0), AL_NO_ERROR);
         assert_eq!(ctx.set_source_f(s, AL_MAX_DISTANCE, 16.0), AL_NO_ERROR);
@@ -980,7 +981,7 @@ mod tests {
         assert_eq!(ctx.get_source_i(s, AL_SOURCE_TYPE), Ok(AL_UNDETERMINED));
         assert_eq!(ctx.get_source_i(s, AL_SOURCE_RELATIVE), Ok(AL_TRUE));
         assert_eq!(ctx.error(), AL_NO_ERROR);
-        // inside the reference distance there is no attenuation
+        // başvuru mesafesinin içinde zayıflatma yoktur
         ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 4.0]);
         let g_in = source_gains(&[0.0; 3], &[0.0, 0.0, -1.0], ctx.sources.get(&s).unwrap(), 1.0).0;
         ctx.set_source_3f(s, AL_POSITION, [0.0, 0.0, 0.5]);

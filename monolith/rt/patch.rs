@@ -1,14 +1,14 @@
-//! API for hand-written patches (`patches/rust/*.rs`).
+//! El yazımı yamalar için API (`patches/rust/*.rs`).
 //!
-//! A patch replaces one translated method with Rust code. It is compiled into the shard of the class it patches,
-//! inside a module that already holds the bindings the manifest asked for (field offsets, statics, class
-//! references, callable methods). This module holds the parts that do not depend on the program: raw field access,
-//! array views, and the `MONO_PATCH_VERIFY` self-check.
+//! Bir yama, çevrilmiş tek bir metodu Rust koduyla değiştirir. Yama, yamaladığı sınıfın yongasında derlenir;
+//! manifestin istediği bağlamaları (alan ofsetleri, statikler, sınıf referansları, çağrılabilir metotlar) zaten içeren bir
+//! modül içinde. Bu modül programa bağlı olmayan parçaları tutar: ham alan erişimi, dizi görünümleri ve `MONO_PATCH_VERIFY` öz denetimi.
+//!
 use crate::rt::{self, Obj, Ref};
 use std::sync::OnceLock;
 
-/// True when `MONO_PATCH_VERIFY` is set: every patched method that returns a primitive runs the original and the
-/// patch, compares the raw bits and aborts on the first difference.
+/// `MONO_PATCH_VERIFY` ayarlıysa: ilkel değer döndüren her yamalı metot hem orijinali hem yamayı çalıştırır,
+/// ham bitleri karşılaştırır ve ilk farkta durdurur.
 pub fn verify() -> bool {
     static V: OnceLock<bool> = OnceLock::new();
     *V.get_or_init(|| std::env::var_os("MONO_PATCH_VERIFY").is_some_and(|v| !v.is_empty() && v != "0"))
@@ -18,7 +18,7 @@ pub fn mismatch(what: &str) -> ! {
     rt::abort(&format!("patch mismatch in {what}: the patch and the translated original disagree"))
 }
 
-/// Equality on the raw bits (so NaNs and -0.0 are compared exactly like the Java result).
+/// Ham bitler üzerinde eşitlik (NaN ve -0.0 Java sonucu gibi tam olarak karşılaştırılır).
 pub trait Same {
     fn same(&self, other: &Self) -> bool;
 }
@@ -27,50 +27,50 @@ same_int!(i32, i64, i8, i16, u16);
 impl Same for f32 { #[inline] fn same(&self, o: &Self) -> bool { self.to_bits() == o.to_bits() } }
 impl Same for f64 { #[inline] fn same(&self, o: &Self) -> bool { self.to_bits() == o.to_bits() } }
 
-/// Reads a field of `o` at byte offset `off` (offsets come from the manifest bindings: `F_<name>`).
-/// Booleans, bytes, chars and shorts are stored in their own width, references as `Ref`.
+/// `o` nesnesinin `off` bayt ofsetindeki bir alanını okur (ofsetler manifest bağlamalarından gelir: `F_<ad>`).
+/// Boolean, byte, char ve short kendi genişliklerinde saklanır; referanslar `Ref` olarak.
 ///
-/// # Safety
-/// `o` must be a non-null object that has a field of type `T` at `off`.
+/// # Güvenlik
+/// `o`, `off` ofsetinde `T` türünde bir alanı olan boş olmayan bir nesne olmalıdır.
 #[inline(always)]
 pub unsafe fn get<T: Copy>(o: Ref, off: usize) -> T {
     *((o.0 as *const u8).add(off) as *const T)
 }
 
-/// # Safety
-/// Same contract as [`get`]. Reference stores need no write barrier: the collector is non-moving and scans stacks and
-/// heap conservatively.
+/// # Güvenlik
+/// [`get`] ile aynı sözleşme. Referans yazmaları için yazma bariyeri gerekmez: toplayıcı taşımaz ve yığınları ile
+/// heap'i muhafazakâr biçimde tarar.
 #[inline(always)]
 pub unsafe fn set<T>(o: Ref, off: usize, v: T) {
     let p = (o.0 as *mut u8).add(off);
-    // a patch may store a reference: the overwritten bytes are logged for the SATB marker (cheap when no cycle runs)
+    // Bir yama referans yazabilir: üzerine yazılan baytlar SATB işaretleyicisi için günlüğe alınır (döngü yoksa ucuzdur)
     crate::heap::satb_log_range(p as *const u8, std::mem::size_of::<T>());
     *(p as *mut T) = v;
 }
 
-/// The class pointer of an object, for identity checks against a `class_<name>()` binding.
+/// Bir nesnenin sınıf işaretçisi; `class_<ad>()` bağlamasına karşı kimlik denetimi için.
 ///
-/// # Safety
-/// `o` must be non-null.
+/// # Güvenlik
+/// `o` boş olmamalıdır.
 #[inline(always)]
 pub unsafe fn class_ptr(o: Ref) -> *const rt::Class {
     (*(o.0 as *const Obj)).class as *const rt::Class
 }
 
-/// Length of an array object.
+/// Bir dizi nesnesinin uzunluğu.
 ///
-/// # Safety
-/// `a` must be a non-null array.
+/// # Güvenlik
+/// `a` boş olmayan bir dizi olmalıdır.
 #[inline(always)]
 pub unsafe fn array_len(a: Ref) -> i32 {
     (*(a.0 as *const rt::Arr)).len
 }
 
-/// The elements of an array object as a slice.
+/// Bir dizi nesnesinin elemanları, dilim olarak.
 ///
-/// # Safety
-/// `a` must be a non-null array whose element type is `T` (`i64` for `long[]`, `i32` for `int[]`, `Ref` for
-/// object arrays...).
+/// # Güvenlik
+/// `a`, eleman türü `T` olan boş olmayan bir dizi olmalıdır (`long[]` için `i64`, `int[]` için `i32`, nesne dizileri için `Ref`
+/// ...).
 #[inline(always)]
 pub unsafe fn array<'a, T>(a: Ref) -> &'a mut [T] {
     std::slice::from_raw_parts_mut((a.0 as *mut u8).add(std::mem::size_of::<rt::Arr>()) as *mut T, array_len(a) as usize)

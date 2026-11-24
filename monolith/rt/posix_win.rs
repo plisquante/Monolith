@@ -1,7 +1,7 @@
-//! POSIX C functions that the runtime declares, implemented for Windows on top of the Win32 API. The natives call them
-//! by their POSIX names; this module provides the definitions so that the Windows executable links. Each function
-//! returns the POSIX error convention and sets errno (ENOSYS, 38) for what Windows does not offer, so a missing
-//! feature fails at the call instead of silently succeeding.
+//! Çalışma zamanının bildirdiği POSIX C fonksiyonları; Win32 API üzerinde Windows için gerçekleştirilmiştir. Yerel kodlar
+//! bunları POSIX adlarıyla çağırır; bu modül tanımları sağlar ki Windows programı bağlansın. Her fonksiyon
+//! POSIX hata kuralını döndürür ve Windows'un sunmadığı işler için errno'yu ayarlar (ENOSYS, 38). Böylece eksik bir özellik
+//! sessizce başarılı olmak yerine çağrıda açıkça başarısız olur.
 
 #![cfg(windows)]
 #![allow(non_camel_case_types, clippy::missing_safety_doc)]
@@ -20,7 +20,7 @@ fn fail_errno(code: c_int) {
     unsafe { _set_errno(code) };
 }
 
-// ----- dynamic loading (dlfcn.h) on LoadLibrary / GetProcAddress
+// ----- dinamik yükleme (dlfcn.h): LoadLibrary / GetProcAddress üzerinden
 
 #[link(name = "kernel32")]
 extern "system" {
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn dlerror() -> *const c_char {
     CStr::from_ptr(DL_ERROR.as_ptr()).as_ptr()
 }
 
-// ----- system configuration (unistd.h, sys/utsname.h)
+// ----- sistem yapılandırması (unistd.h, sys/utsname.h)
 
 const SC_PAGESIZE: c_int = 30; // glibc value; the runtime asks for it by this number
 
@@ -144,7 +144,7 @@ pub unsafe extern "C" fn uname(buf: *mut utsname) -> c_int {
     0
 }
 
-// ----- signals: Windows has no sigaction; the runtime's null-pointer trap is not installed on this platform
+// ----- sinyaller: Windows'ta sigaction yoktur; çalışma zamanının boş-işaretçi tuzağı bu platformda kurulmaz
 
 #[no_mangle]
 pub unsafe extern "C" fn sigaction(_sig: c_int, _act: *const u8, _oldact: *mut u8) -> c_int {
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn sigaction(_sig: c_int, _act: *const u8, _oldact: *mut u
     -1
 }
 
-// ----- memory mapping: anonymous mappings through VirtualAlloc; file mappings are not supported here
+// ----- bellek eşleme: anonim eşlemeler VirtualAlloc ile; dosya eşlemeleri burada desteklenmez
 
 const PROT_READ: c_int = 1;
 const PROT_WRITE: c_int = 2;
@@ -196,8 +196,8 @@ pub unsafe extern "C" fn munmap(addr: *mut c_void, _length: usize) -> c_int {
     }
 }
 
-// ----- Winsock: sockets (sys/socket.h). A POSIX fd is the SOCKET value; Windows handles are multiples of 4 below
-// 2^31, so the value fits the C int the natives use.
+// ----- Winsock: soketler (sys/socket.h). POSIX fd, SOCKET değeridir. Windows tutamaçları 2^31'in altında 4'ün katlarıdır,
+// bu yüzden değer, yerel kodların kullandığı C int'e sığar.
 
 #[link(name = "ws2_32")]
 extern "system" {
@@ -220,7 +220,7 @@ struct WsaPollFd {
     revents: i16,
 }
 
-/// POSIX pollfd (fd as int) as the natives declare it.
+/// POSIX pollfd (fd bir int olarak), yerel kodların bildirdiği biçimde.
 #[repr(C)]
 pub struct PollFd {
     pub fd: c_int,
@@ -230,7 +230,7 @@ pub struct PollFd {
 
 const INVALID_SOCKET: usize = usize::MAX;
 
-/// Starts Winsock 2.2 once for the process; a failure is reported on every socket call.
+/// Winsock 2.2'yi süreç başına bir kez başlatır; başarısızlık her soket çağrısında bildirilir.
 fn winsock_ready() -> Result<(), c_int> {
     static START: std::sync::OnceLock<c_int> = std::sync::OnceLock::new();
     let r = *START.get_or_init(|| {
@@ -240,7 +240,7 @@ fn winsock_ready() -> Result<(), c_int> {
     if r == 0 { Ok(()) } else { Err(r) }
 }
 
-/// Maps a Winsock error code (WSA*) to the closest POSIX errno and sets it.
+/// Bir Winsock hata kodunu (WSA*) en yakın POSIX errno değerine çevirir ve errno'yu ayarlar.
 fn set_winsock_errno() -> c_int {
     let wsa = unsafe { WSAGetLastError() };
     let e = match wsa {
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn closesocket_posix(sockfd: c_int) -> c_int {
     0
 }
 
-// ----- processes: posix_spawnp runs CreateProcessW; waitpid waits on the process handle
+// ----- süreçler: posix_spawnp CreateProcessW'yi çalıştırır; waitpid süreç tutamacını bekler
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -371,10 +371,10 @@ const CREATE_UNICODE_ENVIRONMENT: u32 = 0x0000_0400;
 const WNOHANG: c_int = 1;
 const ECHILD: c_int = 10;
 
-/// pid -> process handle of every child started by posix_spawnp and not yet reaped.
+/// posix_spawnp ile başlatılan ve henüz toplanmamış her alt süreç için pid -> süreç tutamacı tablosu.
 static CHILDREN: std::sync::Mutex<Vec<(c_int, usize)>> = std::sync::Mutex::new(Vec::new());
 
-/// Quotes one argument for the Windows command line (CommandLineToArgvW rules).
+/// Bir argümanı Windows komut satırı için tırnaklar (CommandLineToArgvW kuralları).
 fn quote_arg(a: &str, out: &mut String) {
     if !a.is_empty() && !a.contains([' ', '\t', '"']) {
         out.push_str(a);
@@ -415,8 +415,8 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// Passes file actions as an opaque 8-byte record: the first word is set when an action Windows cannot perform
-/// (dup2, close, chdir) is recorded, so posix_spawnp refuses the spawn instead of ignoring the action.
+/// Dosya eylemlerini 8 baytlık şeffaf bir kayıt olarak geçirir: ilk sözcük, Windows'un yapamadığı bir eylem
+/// (dup2, close, chdir) kaydedildiğinde ayarlanır; böylece posix_spawnp eylemi yok saymak yerine başlatmayı reddeder.
 const FA_UNSUPPORTED: u64 = 1;
 
 #[no_mangle]
@@ -483,7 +483,7 @@ pub unsafe extern "C" fn posix_spawnp(pid: *mut c_int, file: *const c_char, fa: 
     }
     let mut cmd_w = wide(&cmd);
     let prog_w = wide(&program);
-    // envp: a block of NUL-terminated "NAME=value" entries, ended by an extra NUL; NULL means inherit
+    // envp: NUL ile biten "AD=değer" girdilerinden oluşan bir blok; ek bir NUL ile biter. NULL ise miras alınır
     let env_block: Option<Vec<u16>> = if envp.is_null() {
         None
     } else {
@@ -509,7 +509,7 @@ pub unsafe extern "C" fn posix_spawnp(pid: *mut c_int, file: *const c_char, fa: 
     );
     if ok == 0 {
         let code = GetLastError();
-        // ERROR_FILE_NOT_FOUND (2) and ERROR_PATH_NOT_FOUND (3) mean ENOENT
+        // ERROR_FILE_NOT_FOUND (2) ve ERROR_PATH_NOT_FOUND (3), ENOENT anlamına gelir
         fail_errno(if code == 2 || code == 3 { 2 } else { 13 });
         return if code == 2 || code == 3 { 2 } else { 13 };
     }
@@ -551,7 +551,7 @@ pub unsafe extern "C" fn waitpid(pid: c_int, status: *mut c_int, options: c_int)
                 ch.retain(|&(q, _)| q != p);
             }
             if !status.is_null() {
-                // WIFEXITED / WEXITSTATUS encoding: exit code in the second byte
+                // WIFEXITED / WEXITSTATUS kodlaması: çıkış kodu ikinci bayttadır
                 *status = ((code & 0xFF) << 8) as c_int;
             }
             p
@@ -564,7 +564,7 @@ pub unsafe extern "C" fn waitpid(pid: c_int, status: *mut c_int, options: c_int)
     }
 }
 
-// ----- functions with no Windows equivalent in the runtime's use: they fail with ENOSYS
+// ----- çalışma zamanının kullanımında Windows karşılığı olmayan fonksiyonlar: ENOSYS ile başarısız olurlar
 
 macro_rules! unsupported {
     ($( fn $name:ident ( $($arg:ident : $ty:ty),* ) -> $ret:ty; )*) => {
@@ -606,21 +606,21 @@ unsupported! {
     fn sysinfo(info: *mut c_void) -> c_int;
 }
 
-/// realpath: a NULL result with errno ENOSYS (the runtime resolves paths itself on Windows).
+/// realpath: NULL sonuç ve errno ENOSYS (Windows'ta çalışma zamanı yolları kendisi çözer).
 #[no_mangle]
 pub unsafe extern "C" fn realpath(_path: *const c_char, _resolved: *mut c_char) -> *mut c_char {
     fail_errno(ENOSYS);
     std::ptr::null_mut()
 }
 
-/// setmntent: no mount table on Windows; NULL with errno ENOSYS.
+/// setmntent: Windows'ta bağlama tablosu yoktur; NULL ve errno ENOSYS.
 #[no_mangle]
 pub unsafe extern "C" fn setmntent(_filename: *const c_char, _ty: *const c_char) -> *mut c_void {
     fail_errno(ENOSYS);
     std::ptr::null_mut()
 }
 
-// ----- stat family: filled from GetFileInformationByHandle, in the glibc x86_64 struct stat layout the natives use
+// ----- stat ailesi: GetFileInformationByHandle ile doldurulur; yerel kodların kullandığı glibc x86_64 struct stat düzeninde.
 
 #[repr(C)]
 struct ByHandleFileInformation {
@@ -679,7 +679,7 @@ const S_IFDIR: u32 = 0o040000;
 const S_IFREG: u32 = 0o100000;
 const INVALID_HANDLE_VALUE: usize = usize::MAX;
 
-/// FILETIME (100 ns since 1601) to (seconds, nanoseconds since 1970).
+/// FILETIME (1601'den beri 100 ns) değerini (saniye, 1970'ten beri nanosaniye) çiftine çevirir.
 fn filetime_split(ft: u64) -> (i64, i64) {
     let t = ft as i64 - 116_444_736_000_000_000;
     (t.div_euclid(10_000_000), t.rem_euclid(10_000_000) * 100)
@@ -721,7 +721,7 @@ fn fill_stat(info: &ByHandleFileInformation, out: *mut GlibcStat) {
 }
 
 fn set_last_error_errno(code: u32) -> c_int {
-    // ERROR_FILE_NOT_FOUND 2, ERROR_PATH_NOT_FOUND 3 -> ENOENT; ERROR_ACCESS_DENIED 5 -> EACCES; others EIO
+    // ERROR_FILE_NOT_FOUND 2, ERROR_PATH_NOT_FOUND 3 -> ENOENT; ERROR_ACCESS_DENIED 5 -> EACCES; diğerleri EIO
     let e = match code {
         2 | 3 => 2,
         5 => 13,
@@ -757,7 +757,7 @@ pub unsafe extern "C" fn stat(path: *const c_char, buf: *mut GlibcStat) -> c_int
 
 #[no_mangle]
 pub unsafe extern "C" fn lstat(path: *const c_char, buf: *mut GlibcStat) -> c_int {
-    // Windows symbolic links are reported as the file they point to
+    // Windows sembolik bağlantıları, işaret ettikleri dosya olarak bildirilir
     stat(path, buf)
 }
 
@@ -780,13 +780,13 @@ pub unsafe extern "C" fn fstat(fd: c_int, buf: *mut GlibcStat) -> c_int {
     0
 }
 
-/// glibc's errno accessor, implemented over the C runtime's errno.
+/// glibc'nin errno erişimcisi; C çalışma zamanının errno'su üzerinden gerçekleştirilmiştir.
 #[no_mangle]
 pub unsafe extern "C" fn __errno_location() -> *mut c_int {
     _errno()
 }
 
-// ----- Linux-only and network calls without a use on this platform yet: they fail with ENOSYS
+// ----- yalnızca Linux'a özgü ve bu platformda henüz kullanımı olmayan ağ çağrıları: ENOSYS ile başarısız olurlar
 
 unsupported! {
     fn epoll_create(size: c_int) -> c_int;
@@ -834,13 +834,13 @@ unsupported! {
     fn syscall(number: i64, a: i64, b: i64, c: i64) -> i64;
 }
 
-// The GNU target gets pthread_kill from libmingw32 (thread.obj); exporting our own copy there is a duplicate symbol.
+// GNU hedefi pthread_kill'i libmingw32 (thread.obj) içinden alır; kendi kopyamızı orada dışa aktarmak yinelenen sembol olur.
 #[cfg(not(target_env = "gnu"))]
 unsupported! {
     fn pthread_kill(t: usize, sig: c_int) -> c_int;
 }
 
-/// Pointer-returning functions without a Windows equivalent: NULL with errno ENOSYS.
+/// Windows karşılığı olmayan, işaretçi döndüren fonksiyonlar: errno ENOSYS ile NULL.
 #[no_mangle]
 pub unsafe extern "C" fn gai_strerror(_code: c_int) -> *const c_char {
     b"address resolution is not available on this platform\0".as_ptr() as *const c_char
@@ -858,7 +858,7 @@ pub unsafe extern "C" fn getmntent_r(_f: *mut c_void, _ent: *mut c_void, _buf: *
     std::ptr::null_mut()
 }
 
-/// Void functions without a Windows equivalent: they only set errno.
+/// Windows karşılığı olmayan, void fonksiyonlar: yalnızca errno'yu ayarlarlar.
 #[no_mangle]
 pub unsafe extern "C" fn freeaddrinfo(_res: *mut c_void) {
     fail_errno(ENOSYS);
@@ -874,14 +874,14 @@ pub unsafe extern "C" fn backtrace_symbols_fd(_buf: *const *mut c_void, _size: c
     fail_errno(ENOSYS);
 }
 
-/// if_nametoindex: 0 (no such interface) with errno ENOSYS.
+/// if_nametoindex: 0 (böyle bir arayüz yok) ve errno ENOSYS.
 #[no_mangle]
 pub unsafe extern "C" fn if_nametoindex(_name: *const c_char) -> u32 {
     fail_errno(ENOSYS);
     0
 }
 
-// ----- POSIX names the runtime calls that UCRT does not export under those names
+// ----- çalışma zamanının çağırdığı POSIX adları; UCRT bunları o adlarla dışa aktarmaz
 
 extern "C" {
     fn _commit(fd: c_int) -> c_int;
@@ -893,13 +893,13 @@ extern "C" {
     fn _get_dstbias(seconds: *mut c_long) -> c_int;
 }
 
-/// fsync: UCRT _commit writes the file's buffers to disk.
+/// fsync: UCRT _commit, dosyanın tamponlarını diske yazar.
 #[no_mangle]
 pub unsafe extern "C" fn fsync(fd: c_int) -> c_int {
     _commit(fd)
 }
 
-/// Same field order as the runtime's `Tm` (natives_io.rs): nine ints, tm_gmtoff, tm_zone.
+/// Çalışma zamanının `Tm` yapısıyla (natives_io.rs) aynı alan sırası: dokuz tamsayı, tm_gmtoff, tm_zone.
 #[repr(C)]
 pub struct TmOut {
     fields: [c_int; 9],
@@ -907,8 +907,8 @@ pub struct TmOut {
     zone: *const c_char,
 }
 
-/// localtime_r: the local broken-down time. tm_gmtoff is the offset from UTC in seconds (DST included);
-/// tm_zone is NULL because UCRT has no zone name.
+/// localtime_r: yerel parçalanmış zaman. tm_gmtoff, UTC'den saniye cinsinden farktır (yaz saati dahil);
+/// tm_zone NULL'dır, çünkü UCRT bölge adı vermez.
 #[no_mangle]
 pub unsafe extern "C" fn localtime_r(t: *const i64, result: *mut TmOut) -> *mut TmOut {
     if _localtime64_s(result as *mut c_void, t) != 0 {
@@ -927,7 +927,7 @@ pub unsafe extern "C" fn localtime_r(t: *const i64, result: *mut TmOut) -> *mut 
     result
 }
 
-/// getline: reads one line (through '\n') into a buffer grown with realloc. -1 at end of file.
+/// getline: bir satırı ('\n' dahil) realloc ile büyütülen bir tampona okur. Dosya sonunda -1.
 #[no_mangle]
 pub unsafe extern "C" fn getline(lineptr: *mut *mut u8, n: *mut usize, stream: *mut c_void) -> isize {
     if lineptr.is_null() || n.is_null() {
@@ -972,13 +972,13 @@ pub unsafe extern "C" fn getline(lineptr: *mut *mut u8, n: *mut usize, stream: *
     len as isize
 }
 
-/// Windows has no real-time signals: the range is empty.
+/// Windows'ta gerçek zamanlı sinyal yoktur: aralık boştur.
 #[no_mangle]
 pub extern "C" fn __libc_current_sigrtmax() -> c_int {
     0
 }
 
-/// fchmod: Windows files have no POSIX mode bits; fails with ENOSYS instead of pretending.
+/// fchmod: Windows dosyalarında POSIX kip bitleri yoktur; taklit etmek yerine ENOSYS ile başarısız olur.
 unsupported! {
     fn fchmod(fd: c_int, mode: u32) -> c_int;
 }

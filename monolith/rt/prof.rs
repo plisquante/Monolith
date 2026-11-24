@@ -1,35 +1,35 @@
-//! Allocation and lifetime profiler, `MONO_ALLOC_PROFILE=<file>`.
+//! Tahsis ve yaşam süresi profilcisi. Ortam değişkeni: `MONO_ALLOC_PROFILE=<dosya>`.
 //!
-//! Purpose: decide, with data, how to leave the garbage collector. For every class it records how much is allocated,
-//! how long the objects live (the age of each object when it dies or is still alive: number of collections survived,
-//! 0 to 3+) and, by sampling, which code allocates it. `tools/alloc_report.py` turns the file into the plan: which
-//! allocations are temporaries (arena or stack candidates), which are long-lived data (owned by a chunk, a world or
-//! the program) and which methods to patch first.
+//! Amaç: çöp toplayıcıyı nasıl bırakacağımıza veriye dayanarak karar vermek. Her sınıf için ne kadar tahsis edildiğini,
+//! nesnelerin ne kadar yaşadığını (her nesnenin ölünceye ya da hâlâ yaşarken kaç toplamadan geçtiği: 0 ile 3+ arası)
+//! ve örnekleme yoluyla hangi kodun tahsis ettiğini kaydeder. `tools/alloc_report.py` dosyayı bir plana çevirir: hangi
+//! tahsisler geçici (arena ya da yığın adayı), hangileri uzun ömürlü (bir yonga, dünya ya da program tarafından sahiplenilen)
+//! ve önce hangi metotların yamalanacağı.
 //!
-//! Costs nothing when the variable is unset (one relaxed load per allocation). Written every `MONO_ALLOC_DUMP_SECS`
-//! seconds (default 10) and at exit, so a killed process still leaves data.
+//! Değişken ayarlı değilse hiçbir maliyeti yoktur (tahsis başına tek bir gevşek yükleme). Veri, `MONO_ALLOC_DUMP_SECS`
+//! saniyede bir (varsayılan 10) ve çıkışta yazılır; öldürülen bir süreç bile veri bırakır.
 //!
-//! * `MONO_ALLOC_PROFILE=<file>`   enable, write JSON to <file> (and the class list to <file>.classes once)
-//! * `MONO_ALLOC_SAMPLE=<bytes>`   one allocation site sample per this many allocated bytes per thread (default 65536)
-//! * `MONO_ALLOC_DUMP_SECS=<n>`    dump period
-//! * `MONO_ALLOC_SNAPSHOTS=1`      also keep every periodic dump as <file>.<elapsed seconds>, so two of them can be subtracted
-//!   (`alloc_report.py --base`): start-up versus steady state
+//! * `MONO_ALLOC_PROFILE=<dosya>`   etkinleştirir, JSON'u <dosya>'ya yazar (ve sınıf listesini bir kez <dosya>.classes'a)
+//! * `MONO_ALLOC_SAMPLE=<bayt>`   iş parçacığı başına bu kadar ayrılmış baytta bir tahsis noktası örneği (varsayılan 65536)
+//! * `MONO_ALLOC_DUMP_SECS=<n>`    döküm periyodu
+//! * `MONO_ALLOC_SNAPSHOTS=1`      her periyodik dökümü <dosya>.<geçen saniye> olarak da saklar; ikisi çıkarılabilir
+//!   (`alloc_report.py --base`): başlangıç ile kararlı durumu karşılaştırmak için
 use crate::rt::{self, Class, Obj};
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-/// Allocation-site table: (class, stack) key to (count, bytes).
+/// Tahsis noktası tablosu: (sınıf, yığın) anahtarından (sayı, bayt) değerine.
 type SiteTable = HashMap<(u32, [usize; DEPTH]), (u64, u64)>;
-/// One entry of `SiteTable` borrowed for sorting.
+/// Sıralama için ödünç alınan `SiteTable`'ın bir girdisi.
 type SiteEntry<'a> = (&'a (u32, [usize; DEPTH]), &'a (u64, u64));
 use std::time::Instant;
 
 pub static ON: AtomicBool = AtomicBool::new(false);
 static INTERVAL: AtomicUsize = AtomicUsize::new(65536);
 
-/// Frames kept per allocation site (the first ones belong to the allocator and are stripped by the report).
+/// Tahsis noktası başına tutulan çerçeve sayısı (ilkleri tahsis ediciye aittir; rapor onları ayıklar).
 const DEPTH: usize = 14;
 const MAX_SITES: usize = 400_000;
 pub const AGE_SHIFT: u32 = 8;
@@ -60,7 +60,7 @@ struct GcRec {
     pause_us: u64,
 }
 
-/// Class pointer -> dense index, immutable after `init` (lock-free reads on the allocation path).
+/// Sınıf işaretçisi -> yoğun indeks; `init` sonrası değişmez (tahsis yolunda kilitsiz okuma).
 struct Table {
     mask: usize,
     keys: Box<[usize]>,
@@ -181,8 +181,8 @@ thread_local! {
     static ACC: Cell<usize> = const { Cell::new(0) };
 }
 
-/// Called by the allocator for every object. `arena`: the allocation site was proven non-escaping (it would live in a
-/// scope arena once that is enabled) but today still comes from the heap.
+/// Her nesne için tahsis edici tarafından çağrılır. `arena`: tahsis noktası kaçmadığı kanıtlanmış (etkin olunca bir
+/// kapsam arenasında yaşayacak), ama bugün hâlâ yığından gelir.
 #[inline(always)]
 pub fn on_alloc(class: &'static Class, size: usize, arena: bool) {
     if ON.load(Ordering::Relaxed) {
@@ -238,7 +238,7 @@ fn capture() -> [usize; DEPTH + 4] {
 
 fn sample(st: &State, class_idx: u32, weight: u64) {
     let raw = capture();
-    // drop the profiler's own frames (sample, on_alloc_slow, on_alloc): the report strips the allocator frames
+    // Profilcinin kendi çerçevelerini at (sample, on_alloc_slow, on_alloc); rapor tahsis edici çerçevelerini zaten ayıklar
     let mut frames = [0usize; DEPTH];
     frames.copy_from_slice(&raw[3..3 + DEPTH]);
     {
@@ -262,16 +262,16 @@ fn sample(st: &State, class_idx: u32, weight: u64) {
     }
 }
 
-// ------------------------------------------------------------------ collector hooks
+// ------------------------------------------------------------------ toplayıcı kancaları
 
-/// Held for the duration of one sweep: counts the dead and live objects per class and ages the survivors.
+/// Tek bir süpürme süresince tutulur: ölü ve canlı nesneleri sınıf başına sayar ve sağ kalanların yaşını artırır.
 pub struct Sweep {
     st: &'static State,
     guard: std::sync::MutexGuard<'static, Census>,
     t0: Instant,
 }
 
-/// Starts the census of a collection. Returns None when profiling is off.
+/// Bir toplamanın sayımını başlatır. Profilleme kapalıysa None döner.
 pub fn sweep_begin() -> Option<Sweep> {
     if !on() {
         return None;
@@ -284,10 +284,10 @@ pub fn sweep_begin() -> Option<Sweep> {
 }
 
 impl Sweep {
-    /// A surviving object of `size` bytes: counted at its age, then one collection older (capped at 3).
+    /// `size` baytlık sağ kalan bir nesne: yaşında sayılır, sonra bir toplama daha yaşlı olur (en fazla 3).
     #[inline]
-    /// # Safety
-    /// `o` must point to an object of `size` bytes that is live from now on.
+    /// # Güvenlik
+    /// `o`, şu andan itibaren canlı olan `size` baytlık bir nesneyi göstermelidir.
     pub unsafe fn live(&mut self, o: *mut Obj, size: usize) {
         let age = (((*o).gc & AGE_MASK) >> AGE_SHIFT) as usize;
         if let Some(i) = self.st.table.get((*o).class) {
@@ -298,10 +298,10 @@ impl Sweep {
             (*o).gc += 1 << AGE_SHIFT;
         }
     }
-    /// An object that is being freed: counted at the age it reached. Call before the slot is reused.
+    /// Serbest bırakılan bir nesne: ulaştığı yaşta sayılır. Yuva yeniden kullanılmadan önce çağrılmalıdır.
     #[inline]
-    /// # Safety
-    /// `o` must point to an object of `size` bytes that has just been reclaimed.
+    /// # Güvenlik
+    /// `o`, yeni geri kazanılmış `size` baytlık bir nesneyi göstermelidir.
     pub unsafe fn dead(&mut self, o: *mut Obj, size: usize) {
         let age = (((*o).gc & AGE_MASK) >> AGE_SHIFT) as usize;
         if let Some(i) = self.st.table.get((*o).class) {
@@ -317,7 +317,7 @@ impl Sweep {
     }
 }
 
-// ------------------------------------------------------------------ output
+// ------------------------------------------------------------------ çıktı
 
 fn esc(s: &str, out: &mut String) {
     out.push('"');
@@ -346,7 +346,7 @@ fn write_class_list() {
     let _ = std::fs::write(format!("{}.classes", st.path), s);
 }
 
-/// Executable mappings of this process (start, end, file offset, path): the report maps sample addresses to symbols.
+/// Bu sürecin çalıştırılabilir eşlemeleri (başlangıç, bitiş, dosya ofseti, yol): rapor örnek adreslerini sembollere eşler.
 fn maps_json() -> String {
     let mut out = String::from("[");
     if let Ok(txt) = std::fs::read_to_string("/proc/self/maps") {
@@ -377,7 +377,7 @@ pub fn dump() {
     let mut j = String::with_capacity(1 << 20);
     let elapsed = st.start.elapsed().as_millis();
     j.push_str(&format!("{{\"version\":1,\"interval\":{},\"elapsed_ms\":{},\"maps\":{},", INTERVAL.load(Ordering::Relaxed), elapsed, maps_json()));
-    // collections
+    // toplamalar
     {
         let cen = st.census.lock().unwrap();
         j.push_str("\"gcs\":[");
@@ -403,7 +403,7 @@ pub fn dump() {
         }
         j.push_str(&format!("],\"total\":{{\"n\":{tn},\"b\":{tb},\"arena_n\":{an},\"arena_b\":{ab}}},"));
     }
-    // sites: the heaviest by sampled bytes
+    // tahsis noktaları: örneklenen bayta göre en ağırlar
     {
         let sites = st.sites.lock().unwrap();
         let mut v: Vec<SiteEntry> = sites.iter().collect();
