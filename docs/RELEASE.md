@@ -18,6 +18,7 @@ is only for additive changes; see docs/IMPL_SPEC.md section 7).
 | Lint | `pyflakes monolith/*.py tools/*.py tests/*.py` | no output |
 | Runtime unit tests | `rustc --edition 2021 --test tests/rust/audio_main.rs` and `tests/rust/crash_main.rs` | all pass (audio 12, crash reporter 5) |
 | Native differential tests | `python3 -m monolith.crc_tests`, `netty_tests`, `recycle_tests`, `stack_tests`, `patch_tests` (MONO_JDK_HOME set) | all `ALL PASSED` |
+| Link errors explained | `MONO_VERBOSE=1 python3 -m monolith.rustgen ... 2> t.err`, then `python3 tools/check_link_errors.py t.err` (`docs/LINK_ERRORS_TR.md`) | 0 unexplained |
 | GC stress, both modes | `tests/run_tests.py GcStress Oop Threads Lambdas Strings Collections1` with `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`, plain and `MONO_GC_CONCURRENT=1` | same output as HotSpot, no panic, six of six in each mode |
 | Game start, plain | `tools/headless_play.sh build --seconds 60` | game running, no crash report, no `Sound engine ERROR`, no `FFI types not initialized` |
 | Game start, concurrent GC | `MONO_GC_CONCURRENT=1 tools/headless_play.sh ...` | same as plain (one headless run reached the title and stayed up for 120 s, see `docs/VERIFICATION.md`; repeat runs needed) |
