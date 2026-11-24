@@ -1,11 +1,12 @@
+
+---
+name: background-tasks
+description: Efficiently manage long-running commands, background shell processes, builds, tests, deployments, and parallel task execution in Claude Code. Use whenever a command may take more than 30 seconds.
 ---
 
-name: background-tasks
-description: "Efficiently manage long-running commands, background shell processes, builds, tests, deployments, and parallel task execution in Claude Code. Use whenever a command may take more than 30 seconds. Prevent unnecessary polling, wasted tool calls, duplicated execution, and lost task output."
+# Background Tasks
 
-Background Tasks
-
-Overview
+## Overview
 
 This skill defines how Claude Code should execute, monitor, coordinate, and collect results from long-running shell commands.
 
