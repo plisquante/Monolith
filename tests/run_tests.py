@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 JAVA_DIR = os.path.join(HERE, "java")
 
-# Programs that need something this harness cannot provide (a display, network access, a JNI library).
+# Bu düzeneğin sağlayamadığı bir şeye ihtiyaç duyan programlar (ekran, ağ erişimi, bir JNI kütüphanesi).
 SKIP = {
     "ClientCoreE2E": "needs the Zig-era Client Core harness; the Rust core is tested by cargo test",
     "Jni": "application JNI libraries are not supported by design (goal: no JNI at run time, docs/MASTER_PLAN_TR.md WS2); the native "
@@ -55,12 +55,12 @@ def mem_avail_gib() -> float:
 
 
 def env_for_children() -> dict[str, str]:
-    # JAVA_TOOL_OPTIONS and _JAVA_OPTIONS print to stderr and would corrupt the first-line comparison
+    # JAVA_TOOL_OPTIONS ve _JAVA_OPTIONS stderr'e yazar ve ilk satır karşılaştırmasını bozardı
     return {k: v for k, v in os.environ.items() if k not in ("JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS")}
 
 
 def run_java(jdk: str, classes: str, name: str, env: dict[str, str], timeout: float) -> subprocess.CompletedProcess:
-    # -Xss8m: the reference stack depth the Exceptions test is written against
+    # -Xss8m: Exceptions testinin yazıldığı referans yığın derinliği
     return subprocess.run([os.path.join(jdk, "bin", "java"), "-Xss8m", "-cp", classes, name], capture_output=True, text=True,
                           env=env, timeout=timeout)
 

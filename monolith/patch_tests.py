@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory() as work:
     check("MONO_PATCH_VERIFY=1 passes and still == HotSpot", v.stdout == java.stdout and v.returncode == 0,
           f"exit {v.returncode}\n{v.stderr[-1500:]}")
 
-    # a wrong patch: sum() returns one too many
+    # yanlış bir yama: sum() bir fazla döndürür
     bad_dir = os.path.join(work, "bad"); os.makedirs(bad_dir)
     shutil.copy(os.path.join(TD, "test_patch.rs"), os.path.join(bad_dir, "test_patch.rs"))
     src = open(os.path.join(bad_dir, "test_patch.rs")).read().replace("    Ok(s)\n}\n\npub fn nan", "    Ok(s + 1)\n}\n\npub fn nan", 1)
@@ -65,7 +65,7 @@ with tempfile.TemporaryDirectory() as work:
     check("MONO_PATCH_VERIFY=1 aborts on the wrong patch", bv.returncode != 0 and "patch mismatch in Patch1$PatchTarget.sum(J)J" in bv.stderr,
           f"exit {bv.returncode}\n{bv.stderr[-800:]}")
 
-    # drift: the class exists, the method does not
+    # sapma: sınıf var, metot yok
     dm = json.load(open(good))
     dm["patches"][0]["method"] = "mixx"
     drift = os.path.join(work, "drift.json")

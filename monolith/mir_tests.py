@@ -136,7 +136,7 @@ def semantic(d, world, prog):
     mine.append(f"dupx {call('dupx', [5, 6, 7], 1)} {call('dupx', [-9, 1 << 40, 3], 1)}")
     bad = [f"jvm: {a}\nmir: {b}" for a, b in zip(jvm, mine) if a != b]
     check(f"MIR interpreter == JVM on {len(jvm)} result lines", not bad and len(jvm) == len(mine), "\n".join(bad[:6]) + f"\n({len(jvm)} vs {len(mine)})")
-    # the same after inlining (mir_opt.inline_leaf): poly calls sq and clamp, which are leaves
+    # satır içi almadan sonra aynısı (mir_opt.inline_leaf): sq ve clamp çok biçimli çağrıları, ikisi de yapraktır
     from monolith import mir_opt
     from monolith.rustgen import Gen
     g = Gen(world2, p2, os.path.join(ROOT, "monolith", "rt", "natives.rs"))

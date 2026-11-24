@@ -52,12 +52,12 @@ def title_svg():
     u = 7
     body, wc, hc = wordmark_body(u)
     W, H = 1024, 256
-    # the game draws only the top 176 px of the 1024x256 texture (44 of 64 rows at 4x): keep the wordmark inside that band
+    # oyun 1024x256 dokunun yalnızca üst 176 pikselini çizer (4x ölçekte 64 satırın 44'ü): logoyu o bandın içinde tut
     ox, oy = (W - wc * u) // 2, (176 - hc * u) // 2
     body, _, _ = wordmark_body(u, ox, oy)
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" shape-rendering="crispEdges"><title>Monolith</title>{body}</svg>'
 
-# ---------------- icon: 32x32 pixel scene, a monolith against sunrise ----------------
+# ---------------- simge: 32x32 piksel sahne, gün doğumunda bir monolit ----------------
 def icon_cells():
     G = 32
     px = {}
@@ -67,7 +67,7 @@ def icon_cells():
         for x in range(G): px[(x, y)] = col
     for (x, y) in [(3,3),(9,6),(25,4),(28,10),(20,2),(6,12),(27,16),(13,9)]: px[(x, y)] = "#ffffff"
     for (x, y) in [(5,8),(23,7),(30,5),(2,16)]: px[(x, y)] = "#8f95c4"
-    # sun: half disc on the horizon (y=24), concentric bands
+    # güneş: ufukta (y=24) yarım disk, eş merkezli bantlar
     cx, cy = 16, 24
     for y in range(G):
         for x in range(G):
@@ -76,12 +76,12 @@ def icon_cells():
                 if d <= 6.5: px[(x, y)] = "#fbe08a"
                 elif d <= 9.5: px[(x, y)] = "#f5a742"
                 elif d <= 12.5: px[(x, y)] = "#e0663a"
-    # ground
+    # zemin
     for y in range(24, G):
         for x in range(G):
             n = (x * 5 + y * 11 + x * y) % 4
             px[(x, y)] = ["#2b2b33", "#25252c", "#303039", "#222229"][n] if y > 24 else "#4a4a56"
-    # monolith: x 13..18 (6 wide), y 6..24 (rises out of the ground), edges lit left, dark right
+    # monolit: x 13..18 (6 geniş), y 6..24 (zeminden yükselir), kenarlar solda aydınlık, sağda koyu
     for y in range(6, 25):
         for x in range(13, 19):
             c = "#0b0b10"

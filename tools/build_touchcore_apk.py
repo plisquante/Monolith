@@ -179,7 +179,7 @@ def build_native_so(build_dir: Path, out_so: Path) -> None:
     else:
         raise FileNotFoundError("Neither Termux clang nor Android NDK LLVM toolchain found")
 
-    # The Rust core. The NDK clang is the linker, so the compiler runtime builtins come with it.
+    # Rust çekirdeği. Bağlayıcı NDK clang'ıdır, bu yüzden derleyici çalışma zamanı yerleşikleri onunla gelir.
     rust_target = "aarch64-linux-android"
     cargo_env = dict(os.environ)
     cargo_env[f"CARGO_TARGET_{rust_target.upper().replace('-', '_')}_LINKER"] = str(clang)
@@ -297,7 +297,7 @@ def jna_android_dispatch_lib() -> bytes:
 
 
 SHIZUKU_VERSION = "13.1.5"
-# dev.rikka.shizuku:<artifact>:13.1.5@aar on Maven Central
+# Maven Central üzerinde dev.rikka.shizuku:<artifact>:13.1.5@aar
 SHIZUKU_AARS = {
     "api": "1f760c56493bdbc01462930e75bb325033b36fe2",
     "provider": "4135b99cae9362fe2f63380230d04a9bcba9be3f",
@@ -347,21 +347,21 @@ def make_engine_resources_zip(res_dir: Path, client_jar: Path, dest: Path) -> in
             if rel.startswith("."):
                 continue
             if rel in jar_names:
-                # branding (Monolith title textures) replaced a jar file in the engine build: ship it as an override
+                # markalama (Monolith başlık dokuları) motor derlemesindeki bir jar dosyasını değiştirdi: geçersiz kılma olarak gönder
                 if path.stat().st_size != jar_sizes[rel] and rel.startswith("assets/minecraft/textures/gui/title/"):
                     zf.write(path, "__override__/" + rel)
                     count += 1
                 continue
-            # JNA (oshi, the narrator) loads com/sun/jna/linux-aarch64/libjnidispatch.so from the resource tree. The
-            # game's own file is a glibc build that Android cannot load: the Android build replaces it (below). The
-            # libraries of every other platform are left out.
+            # JNA (oshi, anlatıcı) com/sun/jna/linux-aarch64/libjnidispatch.so dosyasını kaynak ağacından yükler.
+            # Oyunun kendi dosyası Android'in yükleyemediği bir glibc derlemesidir: Android derlemesi onu değiştirir
+            # (aşağıda). Diğer her platformun kütüphaneleri dışarıda bırakılır.
             if rel.endswith(skip_ext) and (rel.startswith("com/sun/jna/") or rel.startswith("META-INF/native/")):
                 continue
             zf.write(path, rel)
             count += 1
         zf.writestr("com/sun/jna/linux-aarch64/libjnidispatch.so", jna_android_dispatch_lib())
         count += 1
-        # java.home of the engine: the JDK's conf/ tree and lib/tzdb.dat next to the engine build's resources
+        # motorun java.home'u: motor derlemesinin kaynaklarının yanında JDK'nın conf/ ağacı ve lib/tzdb.dat
         jhome = res_dir.parent
         jfiles = [p for p in sorted((jhome / "conf").rglob("*")) if p.is_file()] + [jhome / "lib" / "tzdb.dat"]
         if not (jhome / "conf" / "security" / "java.security").is_file() or not (jhome / "lib" / "tzdb.dat").is_file():
@@ -479,9 +479,9 @@ def build_apk(out_apk: Path, engine_resources: Path | None = None, client_jar: P
             print(f"[touchcore] bundling {n} library resource files ({res_zip.stat().st_size // 1024} KiB) as assets/engine_resources.zip")
             zf.write(res_zip, "assets/engine_resources.zip", compress_type=zipfile.ZIP_STORED)
         if shader_lib is not None:
-            # shaderc + SPIRV-Cross for the engine (android/shader, tools/build_shader_lib.py)
+            # motor için shaderc + SPIRV-Cross (android/shader, tools/build_shader_lib.py)
             zf.write(shader_lib, "lib/arm64-v8a/libmonoshader.so", compress_type=zipfile.ZIP_STORED)
-        # Store native .so uncompressed so Android 15 16KB page mapping + dlopen work directly
+        # Android 15 16KB sayfa eşleme + dlopen doğrudan çalışsın diye yerel .so dosyalarını sıkıştırmadan sakla
         zf.write(so_path, "lib/arm64-v8a/libtouchcore_mono.so", compress_type=zipfile.ZIP_STORED)
 
     aligned_apk = build_dir / "aligned.apk"

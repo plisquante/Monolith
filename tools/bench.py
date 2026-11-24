@@ -131,8 +131,8 @@ def main():
             if "session_lock" not in ev and os.path.exists(lock) and os.path.getmtime(lock) >= t0:
                 ev["session_lock"] = round(now - t0, 1)
             if "session_lock" in ev and "world_ready" not in ev and int(now - t0) % 3 == 0:
-                # the "Loading terrain" screen draws a pure green progress bar at (470,264); once the
-                # player is in the world that pixel is no longer 00FF00
+                # "Loading terrain" ekranı (470,264) konumunda düz yeşil bir ilerleme çubuğu çizer; oyuncu
+                # dünyaya girince o piksel artık 00FF00 değildir
                 shot = os.path.join(a.out, "probe.png")
                 r = subprocess.run(["import", "-display", a.display, "-window", "root", shot], capture_output=True)
                 if r.returncode == 0:

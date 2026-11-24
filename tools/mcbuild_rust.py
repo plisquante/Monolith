@@ -86,7 +86,7 @@ def main() -> int:
     if not a.resume:
         reflect = os.path.join(out, "reflect-classes.txt")
         with open(reflect, "w") as fh:
-            # library metadata plus the JDK provider classes (created by name at run time: JCA, JSSE, X.509)
+            # kütüphane metaverisi artı JDK sağlayıcı sınıfları (çalışma zamanında adıyla oluşturulur: JCA, JSSE, X.509)
             import jdk_runtime_data
             fh.write("\n".join(sorted(set(mb.reflection_metadata(jars)) | set(jdk_runtime_data.provider_classes(os.environ["MONO_JDK_HOME"])))))
         gen = [sys.executable, "-m", "monolith.rustgen", "--cp", os.pathsep.join(jars), "--reflect-class", "@" + reflect,
@@ -102,7 +102,7 @@ def main() -> int:
         print(f"done: {os.path.join(rust, 'libminecraft_mono.so')}")
         return 0
     mb.extract_resources(jars, os.path.join(out, "resources"))
-    # JDK data the runtime reads by name (ICU normalisation for X.500 names) and the trust store (public CA roots)
+    # çalışma zamanının adıyla okuduğu JDK verisi (X.500 adları için ICU normalleştirmesi) ve güven deposu (genel CA kökleri)
     import jdk_runtime_data, shutil
     jdk = os.environ["MONO_JDK_HOME"]
     jdk_runtime_data.main_copy(jdk, os.path.join(out, "resources"))

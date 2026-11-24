@@ -53,7 +53,7 @@ def main() -> int:
         want_sha1 = os.environ.get("MC_CLIENT_JAR_SHA1", "").strip().lower() or None
         want_size = None
         source = "mirror (MC_CLIENT_JAR_URL)"
-        # the jar is executed code: a mirror is only as trustworthy as the checksum it is checked against
+        # jar çalıştırılan koddur: bir ayna, karşılaştırıldığı sağlama toplamı kadar güvenilirdir
         if want_sha1 is None or len(want_sha1) != 40 or any(c not in "0123456789abcdef" for c in want_sha1):
             return fail("MC_CLIENT_JAR_URL needs MC_CLIENT_JAR_SHA1 (40 hex digits): a mirror is not accepted without a checksum")
     else:
@@ -74,7 +74,7 @@ def main() -> int:
     if not url.lower().startswith("https://"):  # urllib would also open file:// and ftp://
         return fail(f"refusing a non-https download URL: {url}")
     print(f"downloading {a.version} client from the {source}")
-    # the temporary file sits next to the target: os.replace cannot move files between drives (Windows C: to D:)
+    # geçici dosya hedefin yanında durur: os.replace dosyaları sürücüler arasında taşıyamaz (Windows C: -> D:)
     out_dir = os.path.dirname(os.path.abspath(a.out))
     os.makedirs(out_dir, exist_ok=True)
     tmp_fd, tmp = tempfile.mkstemp(prefix="client_", suffix=".jar", dir=out_dir)

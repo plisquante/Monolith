@@ -31,7 +31,7 @@ def main() -> int:
         check(f"non-https refused: {u!r}", refused(mb.require_https, u))
     check("https accepted", mb.require_https("https://piston-meta.mojang.com/x") == "https://piston-meta.mojang.com/x")
     with tempfile.TemporaryDirectory() as td:
-        # fetch() must refuse before touching the disk
+        # fetch(), diske dokunmadan önce reddetmeli
         dest = os.path.join(td, "never", "x.jar")
         check("fetch refuses file:// before creating anything", refused(mb.fetch, "file:///etc/passwd", dest)
               and not os.path.exists(os.path.dirname(dest)))

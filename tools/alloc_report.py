@@ -24,14 +24,14 @@ class Symbols:
         self.names: list[str] = []
         self.maps = maps
         self.exe = os.path.realpath(exe)
-        # nm -C understands both Rust manglings (legacy and v0)
+        # nm -C her iki Rust ad bozmasını (legacy ve v0) anlar
         out = subprocess.run(["nm", "-C", "-n", "--defined-only", exe], capture_output=True, text=True).stdout
         for line in out.splitlines():
             p = line.split(None, 2)
             if len(p) == 3 and p[1] in "tTwW":
                 self.addrs.append(int(p[0], 16))
                 self.names.append(p[2])
-        # PT_LOAD segments: file offset -> virtual address (the text segment is not mapped at vaddr == offset)
+        # PT_LOAD segmentleri: dosya ofseti -> sanal adres (metin segmenti vaddr == ofset olacak şekilde eşlenmez)
         self.segs = []
         rl = subprocess.run(["readelf", "-lW", exe], capture_output=True, text=True).stdout
         for line in rl.splitlines():
@@ -195,12 +195,12 @@ def main() -> int:
         selfs = collections.defaultdict(lambda: [0, 0, collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()])
         for s in P["sites"]:
             frames = [sym.name(int(x, 16)) for x in s["f"]]
-            # strip the allocator: leading runtime frames
+            # tahsis ediciyi ayıkla: öndeki çalışma zamanı çerçeveleri
             i = 0
             while i < len(frames) and (frames[i].startswith(RUNTIME_PREFIXES) or frames[i].startswith("0x")):
                 i += 1
             frames = frames[i:]
-            # collapse the r_/m_ wrapper pairs and skip runtime helpers between translated frames
+            # r_/m_ sarmalayıcı çiftlerini daralt ve çevrilmiş çerçeveler arasındaki çalışma zamanı yardımcılarını atla
             ded = []
             for f in frames:
                 if f.startswith(RUNTIME_PREFIXES) or f.startswith("0x") or (ded and ded[-1] == f):

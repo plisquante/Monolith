@@ -49,12 +49,12 @@ with tempfile.TemporaryDirectory() as work:
     a1, a0 = itr_heap("1"), itr_heap("0")
     n_on = a1.get("java/util/ArrayList$Itr", (0, 0)); n_off = a0.get("java/util/ArrayList$Itr", (0, 0))
     heap_on, heap_off = n_on[0] - n_on[1], n_off[0] - n_off[1]
-    # 5 of the loop shapes are excluded on purpose (return inside the loop, exception, use after the loop, alias, stored
-    # iterator): 5 x 3000 rounds stay on the heap, every other loop is served from the pool
+    # döngü biçimlerinden 5'i bilerek hariç tutulur (döngü içinde return, istisna, döngüden sonra kullanım, takma ad, saklanan
+    # yineleyici): 5 x 3000 tur heap'te kalır, diğer her döngü havuzdan karşılanır
     check(f"ArrayList$Itr: {n_on[1]:,} of {n_on[0]:,} served by recycling; heap {heap_on:,} (expected ~15,000 from the excluded loops)",
           heap_off == n_off[0] and n_on[1] >= 80_000 and 14_000 <= heap_on <= 16_000, f"on {n_on} off {n_off}")
-    # the same loops with the inliner and the escape analysis on: inlining must not take `iterator()` out of the
-    # `iterator()` + `astore` shape that the recycling recognizes (it did once: 1.4 GiB recycled -> 53 MiB in the game)
+    # aynı döngüler satır içi alma ve kaçış analizi açıkken: satır içi alma, geri dönüşümün tanıdığı `iterator()` + `astore`
+    # biçiminden `iterator()`'ı çıkarmamalıdır (bir kez çıkarmıştı: oyunda 1,4 GiB geri dönüştürülen -> 53 MiB)
     out2 = os.path.join(work, "out2")
     g2 = subprocess.run([sys.executable, "-m", "monolith.rustgen", "--cp", cdir, "--main", "Iter1", "-o", out2, "--shards", "4", "--shard-jobs", "2",
                          "--opt", "2", "--inline", "--escape", "--compile"], cwd=ROOT, capture_output=True, text=True, env=ENV)

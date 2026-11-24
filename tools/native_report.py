@@ -24,7 +24,7 @@ DEF = re.compile(r"^pub fn n_([A-Za-z0-9_]+)\s*\(", re.M)
 
 
 def category(mangled: str) -> str:
-    # the mangled name is class__method with '/' -> '_' and '$' -> '_'; the prefix identifies the package
+    # bozulmuş ad sınıf__metot biçimindedir, '/' -> '_' ve '$' -> '_'; önek paketi tanımlar
     if mangled.startswith("com_sun_jna"):
         return "JNA"
     if mangled.startswith("io_netty"):

@@ -17,7 +17,7 @@ import re
 import sys
 import zipfile
 
-# model numbers of the testers' phones; any other model is shown by its model number
+# deneyen kişilerin telefonlarının model numaraları; başka her model model numarasıyla gösterilir
 DEVICE_NAMES = {"SM-S721B": "Galaxy S24 FE", "SM-S942B": "Galaxy S26"}
 METRICS = [  # key, title, unit, digits
     ("ram_avg", "RAM (ortalama)", "MB", 0),

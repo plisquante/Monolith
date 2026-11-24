@@ -14,13 +14,13 @@ The JDK home must contain lib/modules (jimage) and bin/jimage.
 """
 import argparse, os, re, subprocess, sys
 
-# packages whose classes are instantiated by name at run time (providers and their helpers)
+# sınıfları çalışma zamanında adıyla örneklenen paketler (sağlayıcılar ve yardımcıları)
 PROVIDER_PACKAGES = (
     "sun.security.ssl.", "sun.security.provider.", "sun.security.ec.", "sun.security.rsa.",
     "sun.security.x509.", "sun.security.pkcs12.", "sun.security.pkcs.", "sun.security.util.",
     "sun.security.jca.", "sun.security.timestamp.", "com.sun.crypto.provider.",
 )
-# resource prefixes of java.base that the runtime reads by name
+# çalışma zamanının adıyla okuduğu java.base kaynak önekleri
 RESOURCE_PREFIXES = ("jdk/internal/icu/impl/data/",)
 
 
@@ -59,7 +59,7 @@ def extract(jdk: str, paths: list, dest: str):
     """Writes the given java.base entries under dest, keeping their paths."""
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
-        # one pattern for all: the runtime data prefixes of java.base
+        # hepsi için tek bir kalıp: java.base'in çalışma zamanı veri önekleri
         pattern = "regex:.*(" + "|".join(re.escape(x) for x in RESOURCE_PREFIXES) + ").*"
         cmd = [os.path.join(jdk, "bin", "jimage"), "extract", "--dir", tmp, "--include", pattern,
                os.path.join(jdk, "lib", "modules")]

@@ -19,7 +19,7 @@ def main() -> int:
     from monolith.rustgen import rt_deps_flags
 
     rt_deps_flags()  # builds rt_deps (crc32fast, cfg-if) offline first; the check below reuses those artifacts
-    # cwd is rt_deps: cargo reads the vendored-source configuration (rt_deps/.cargo) from the working directory
+    # çalışma dizini rt_deps: cargo, gömülü kaynak yapılandırmasını (rt_deps/.cargo) çalışma dizininden okur
     r = subprocess.run(["cargo", "check", "--release", "--offline", "--lib", "--manifest-path", "check/Cargo.toml",
                         "--target-dir", "target"], cwd=os.path.join(ROOT, "rt_deps"), capture_output=True, text=True)
     if r.returncode != 0:

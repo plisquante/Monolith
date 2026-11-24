@@ -67,7 +67,7 @@ def main() -> int:
         call, _, _ = compile_and_fingerprint(work, "call", source(body="return h(x) * 3;"))
         check("different called method: different fingerprint", call != base)
 
-        # PatchSet.validate against the version the patch was NOT written for
+        # PatchSet.validate, yamanın YAZILMADIĞI sürüme karşı
         fp_new, world, _ = compile_and_fingerprint(work, "newver", source(body="return x * 4 + 1;"))
 
         def pset(fp: str) -> PatchSet:
