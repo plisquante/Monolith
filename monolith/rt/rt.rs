@@ -1,8 +1,9 @@
-//! Monolith runtime, first slice: the pieces numeric code needs. Java semantics are kept exactly:
-//! wrapping integer arithmetic, masked shift counts, saturating float-to-int conversions, `/ by zero`.
+//! Monolith çalışma zamanı, ilk parça: sayısal kodun ihtiyaç duyduğu şeyler. Java'nın anlamı birebir korunur:
+//! taşmalı tamsayı aritmetiği, maskelenmiş kaydırma sayıları, doyuran float-tamsayı dönüşümleri ve `sıfıra bölme` hatası.
+//! Acemi notu: Java'da tamsayı taşması hata vermez, sarar (wrap). Rust'ta bu davranış `wrapping_*` fonksiyonlarıyla açıkça yazılır.
 #![allow(dead_code, non_snake_case)]
 
-/// A thrown Java exception: a reference to a Throwable object.
+/// Fırlatılmış bir Java istisnası: bir Throwable nesnesine referans.
 #[derive(Debug)]
 pub struct Thrown {
     pub obj: Ref,
@@ -45,10 +46,10 @@ pub fn cvoid(r: Res<()>) -> CVoid {
     }
 }
 
-// ------------------------------------------------------------------ object model
+// ------------------------------------------------------------------ nesne modeli
 use std::alloc::{alloc_zeroed, Layout};
 
-/// Object header, 16 bytes: class, identity hash, GC bits (same layout as the Zig runtime).
+/// Nesne başlığı, 16 bayt: sınıf, kimlik karması ve GC bitleri. Düzeni Zig çalışma zamanıyla aynıdır.
 #[repr(C)]
 pub struct Obj {
     pub class: &'static Class,
@@ -56,7 +57,8 @@ pub struct Obj {
     pub gc: u32,
 }
 
-/// A function pointer in a vtable (raw pointers are not `Sync`, statics need it).
+/// Bir vtable içindeki fonksiyon işaretçisi.
+/// Ham işaretçiler `Sync` değildir; statik değişkenlerde kullanılabilmesi için bu sarmalayıcı gerekir.
 #[repr(transparent)]
 pub struct Fp(pub *const ());
 unsafe impl Sync for Fp {}
@@ -67,40 +69,40 @@ pub struct Class {
     pub super_: Option<&'static Class>,
     pub size: usize,
     pub vtable: &'static [Fp],
-    /// array element kind (b'Z', b'B', b'C', b'S', b'I', b'J', b'F', b'D', b'A'), 0 for non-arrays
+    /// dizi eleman türü (b'Z', b'B', b'C', b'S', b'I', b'J', b'F', b'D', b'A); dizi değilse 0
     pub elem: u8,
-    /// component class for object/multi-dim arrays (None for non-arrays or 1D primitive arrays)
+    /// nesne ve çok boyutlu diziler için bileşen sınıfı (dizi değilse ya da 1 boyutlu ilkel dizi ise None)
     pub elem_class: Option<&'static Class>,
-    /// lazily allocated 1D array Class with `self` as component
+    /// tembel olarak oluşturulan, bileşeni `self` olan 1 boyutlu dizi sınıfı
     pub array_cache: ArrCache,
-    /// interface method table: (selector, function), sorted by selector; includes inherited and default methods
+    /// arayüz metot tablosu: (seçici, fonksiyon) çiftleri, seçiciye göre sıralı; miras alınan ve default metotlar dahil
     pub itab: &'static [IEnt],
-    /// every interface this class implements, directly or inherited (flat)
+    /// bu sınıfın doğrudan ya da miras yoluyla uyguladığı her arayüz (düz liste)
     pub ifaces: &'static [&'static Class],
-    /// declared fields (instance offsets and static field addresses), for Unsafe/VarHandle/reflection
+    /// bildirilen alanlar: örnek alan ofsetleri ve statik alan adresleri. Unsafe, VarHandle ve yansıma bunu kullanır.
     pub fields: &'static [FInfo],
-    /// instance reference field byte offsets (flattened across superclasses) for precise GC tracing
+    /// süper sınıflar boyunca düzleştirilmiş örnek referans alanı ofsetleri; kesin (precise) GC izlemesi için
     pub ref_offsets: &'static [u32],
-    /// static reference field pointers for precise GC root scanning
+    /// kesin GC kök taraması için statik referans alanlarının işaretçileri
     pub static_refs: &'static [SPtr],
-    /// declared methods (excluding <clinit>), for reflection
+    /// bildirilen metotlar (`<clinit>` hariç); yansıma için
     pub methods: &'static [MInfo],
-    /// optional class reflection metadata (annotations, constant pool, generics, nesting)
+    /// isteğe bağlı sınıf yansıma verisi: açıklamalar (annotation), sabit havuzu, jenerikler ve iç içe sınıf bilgisi
     pub refl: Option<&'static ClassRefl>,
-    /// lazily created java.lang.Class object
+    /// tembel olarak oluşturulan java.lang.Class nesnesi
     pub mirror: Mirror,
-    /// 0 instance, 1 interface, 2 array, 3 primitive
+    /// 0: örnek sınıf, 1: arayüz, 2: dizi, 3: ilkel
     pub kind: u8,
     pub access: u16,
-    /// class initializer (None when the class needs none)
+    /// sınıf başlatıcısı (gerekmiyorsa None)
     pub init: Option<extern "C" fn() -> CVoid>,
-    /// Enum.values() array of an enum class
+    /// bir enum sınıfının Enum.values() dizisi
     pub enum_values: Option<extern "C" fn() -> CRes<Ref>>,
 }
 pub struct ArrCache(pub std::sync::atomic::AtomicPtr<Class>);
 unsafe impl Sync for ArrCache {}
 impl ArrCache {
-    // a const, not a static: each use in a static initializer gets its own cell
+    // sabit, `static` değil: statik başlatıcıdaki her kullanım kendi hücresini alır
     #[allow(clippy::declare_interior_mutable_const)]
     pub const NEW: ArrCache = ArrCache(std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()));
 }
@@ -160,7 +162,7 @@ pub struct ClassRefl {
 }
 unsafe impl Sync for ClassRefl {}
 impl Class {
-    /// Finds a declared field in this class or a superclass.
+    /// Bu sınıfta ya da süper sınıfında bildirilmiş bir alanı bulur.
     pub fn find_field(&'static self, name: &str, is_static: bool) -> Option<(&'static Class, &'static FInfo)> {
         let mut k: Option<&'static Class> = Some(self);
         while let Some(c) = k {
@@ -177,14 +179,15 @@ impl Class {
 unsafe impl Sync for Class {}
 pub struct Mirror(pub std::sync::atomic::AtomicPtr<Obj>);
 impl Mirror {
-    // a const, not a static: each use in a static initializer gets its own cell
+    // sabit, `static` değil: statik başlatıcıdaki her kullanım kendi hücresini alır
     #[allow(clippy::declare_interior_mutable_const)]
     pub const NEW: Mirror = Mirror(std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()));
 }
 pub struct IEnt(pub u32, pub Fp);
 unsafe impl Sync for IEnt {}
 
-/// A reference: null or a pointer to an object (no GC yet in this slice: memory is never freed).
+/// Bir referans: null ya da bir nesneye işaretçi.
+/// Bu dilimde henüz çöp toplayıcı yok: bellek hiç serbest bırakılmaz.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Ref(pub *mut Obj);
@@ -201,7 +204,8 @@ impl Default for Ref {
     }
 }
 
-/// Startup registration by the generated program: the classes and callbacks the runtime needs.
+/// Üretilen programın başlangıçta yaptığı kayıt: çalışma zamanının ihtiyaç duyduğu sınıflar ve geri çağrılar.
+/// Bu fonksiyon, Java kodu çalışmadan önce bir kez çağrılır.
 pub struct ServiceEntry {
     pub service: &'static str,
     pub create: fn() -> Res<Ref>,
@@ -211,10 +215,10 @@ unsafe impl Sync for ServiceEntry {}
 pub struct Hooks {
     pub object_class: &'static Class,
     pub string_class: &'static Class,
-    /// array classes in the order Z B C S I J F D A
+    /// dizi sınıfları, Z B C S I J F D A sırasıyla
     pub arrays: [&'static Class; 9],
     pub array_ifaces: &'static [&'static Class],
-    /// creates an exception object of the named class with the given message (a String or null)
+    /// verilen mesajla adlandırılmış sınıftan bir istisna nesnesi oluşturur (mesaj bir String ya da null)
     pub class_class: &'static Class,
     pub all_classes: &'static [&'static Class],
     pub vh_kind: usize,
@@ -228,10 +232,10 @@ pub struct Hooks {
     pub new_unix_exception: fn(i32) -> Res<Ref>,
     pub new_direct_byte_buffer: fn(i64, i64) -> Res<Ref>,
 }
-/// Runtime hooks, set once by `init_hooks` before any Java code runs. Null until then.
+/// Çalışma zamanı kancaları. Herhangi bir Java kodu çalışmadan önce `init_hooks` tarafından bir kez ayarlanır; o zamana kadar null.
 static HOOKS: std::sync::atomic::AtomicPtr<Hooks> = std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 pub fn init_hooks(h: Hooks) {
-    // leaked on purpose: the hooks live for the whole process and are read without a lock
+    // bilerek sızdırılır: kancalar süreç boyunca yaşar ve kilitsiz okunur
     HOOKS.store(Box::leak(Box::new(h)), std::sync::atomic::Ordering::Release);
     crate::prof::init();
     crate::crash::install();
@@ -242,8 +246,8 @@ pub fn hooks() -> &'static Hooks {
     unsafe { HOOKS.load(std::sync::atomic::Ordering::Acquire).as_ref() }.expect("Monolith: runtime hooks not registered")
 }
 
-/// MONO_TRACE_EX, read once: exceptions are thrown all the time (class lookups, parsing, control flow), and a lookup of the
-/// environment takes a global lock and allocates.
+/// MONO_TRACE_EX bir kez okunur. İstisnalar çok sık fırlatılır (sınıf aramaları, ayrıştırma ve akış kontrolünde bile),
+/// ortam değişkenini okumak genel bir kilit alır ve bellek ayırır; bu yüzden değer bir kez okunup saklanır.
 fn trace_ex() -> Option<&'static str> {
     static V: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     V.get_or_init(|| std::env::var("MONO_TRACE_EX").ok()).as_deref()
@@ -261,7 +265,7 @@ pub fn throw<T>(class: &'static str, msg: String) -> Res<T> {
     Err(Thrown { obj: (hooks().throw_new)(class, m) })
 }
 
-/// `athrow`: throws the object, or NullPointerException for null.
+/// `athrow`: nesneyi fırlatır. Nesne null ise NullPointerException fırlatır.
 #[cold]
 #[inline(never)]
 pub fn throw_ref<T>(r: Ref) -> Res<T> {
@@ -427,16 +431,16 @@ pub fn set_fd(fd_obj: Ref, fd: i32) -> Res<()> {
     Ok(())
 }
 
-/// # Safety
-/// `arr` must be a live byte array. The returned slice must not outlive the array and must not alias a live `&mut`.
+/// # Güvenlik
+/// `arr` canlı bir bayt dizisi olmalıdır. Dönen dilim dizinin ömründen uzun yaşamamalı ve canlı bir `&mut` ile örtüşmemelidir.
 pub unsafe fn byte_slice<'a>(arr: Ref) -> Res<&'a [u8]> {
     let a = nn(arr)? as *const Arr;
     let len = (*a).len as usize;
     Ok(std::slice::from_raw_parts((a as *const u8).add(24), len))
 }
 
-/// # Safety
-/// `arr` must be a live byte array. The caller must hold exclusive access to its bytes for the slice's lifetime.
+/// # Güvenlik
+/// `arr` canlı bir bayt dizisi olmalıdır. Çağıran, dilimin ömrü boyunca baytlarına münhasır erişime sahip olmalıdır.
 pub unsafe fn byte_slice_mut<'a>(arr: Ref) -> Res<&'a mut [u8]> {
     let a = nn(arr)? as *mut Arr;
     let len = (*a).len as usize;
@@ -460,11 +464,12 @@ pub fn alloc(class: &'static Class) -> Ref {
     Ref(crate::heap::alloc_obj(class, class.size.max(16)))
 }
 
-/// An object kept in the frame of the function that creates it (the escape analysis proved it dies with that call or loop
-/// iteration). `p` is the function's slot for this allocation site; it is cleared and given the class header on every
-/// execution of the `new`. The collector ignores it (not a heap address) and finds what it references by scanning stacks.
-/// # Safety
-/// `p` must be valid and aligned for `class.size.max(16)` bytes of writes, and must stay alive for the object's lifetime.
+/// Kaçış analizi sayesinde, onu oluşturan fonksiyonun çerçevesinde tutulan bir nesne.
+/// Analiz, nesnenin o çağrı ya da döngü turu bitince öldüğünü ispatlamıştır.
+/// `p`, bu tahsis noktasının fonksiyon içindeki yuvasıdır. `new` her çalıştığında temizlenir ve sınıf başlığı yazılır.
+/// Çöp toplayıcı bu nesneyi yok sayar (heap adresi değildir); referans verdiği nesneleri yığınları tarayarak bulur.
+/// # Güvenlik
+/// `p`, nesnenin ömrü boyunca `class.size.max(16)` bayt yazma için geçerli ve hizalı olmalı; nesne yaşadığı sürece canlı kalmalıdır.
 #[inline(always)]
 pub unsafe fn stack_obj(p: *mut u8, class: &'static Class) -> Ref {
     unsafe {
@@ -476,7 +481,7 @@ pub unsafe fn stack_obj(p: *mut u8, class: &'static Class) -> Ref {
     }
 }
 
-/// `new` of a class whose instances are recycled at the end of their scope (iterators of for-each loops).
+/// Kapsamı bitince geri dönüştürülen örneklerin `new`'ü (for-each döngüsü yineleyicileri gibi).
 pub fn alloc_recyclable(class: &'static Class, slot: usize) -> Ref {
     crate::heap::alloc_recyclable(class, slot)
 }
@@ -499,7 +504,7 @@ pub fn instance_of(r: Ref, target: &'static Class) -> bool {
     is_subclass(unsafe { (*r.0).class }, target)
 }
 
-/// invokeinterface: the implementation of selector `sel` for the receiver's class.
+/// invokeinterface: alıcının sınıfında `sel` seçicisinin uygulaması.
 pub fn itab_find(c: &'static Class, sel: u32) -> *const () {
     let t = c.itab;
     match t.binary_search_by_key(&sel, |e| e.0) {
@@ -524,8 +529,8 @@ pub fn unsupported() -> ! {
     std::process::exit(70);
 }
 
-// ------------------------------------------------------------------ strings
-/// Layout of java.lang.String in the class library overlay (the generator checks the field order).
+// ------------------------------------------------------------------ dizgiler
+/// Overlay sınıf kütüphanesindeki java.lang.String yerleşimi. Üreteç alan sırasını denetler.
 #[repr(C)]
 pub struct StrObj {
     pub hdr: Obj,
@@ -534,7 +539,7 @@ pub struct StrObj {
     pub hash_is_zero: i8,
     pub coder: i8,
 }
-/// A new String from UTF-16 code units.
+/// UTF-16 kod birimlerinden yeni bir String.
 pub fn mk_string(chars: &[u16]) -> Ref {
     let arr = new_array(b'C', chars.len() as i32).expect("Monolith: out of memory");
     unsafe {
@@ -553,9 +558,9 @@ pub fn new_str(s: String) -> Ref {
     let u: Vec<u16> = s.encode_utf16().collect();
     mk_string(&u)
 }
-/// Interned literal: created once per use site (thread-safe CAS + GC root registration).
-/// Canonical instance of a string value: `String.intern()` and string literals share this table, so
-/// `"x" == name.intern()` holds (the JDK compares reflected member names with `==`, e.g. AnnotationInvocationHandler).
+/// Literal (sabit) dizge: her kullanım noktası için bir kez oluşturulur. İş parçacığı güvenli CAS ve GC kökü kaydı yapılır.
+/// Bir dizge değerinin tekil (kanonik) örneği. `String.intern()` ve dizge literalleri bu tabloyu paylaşır,
+/// böylece `"x" == name.intern()` doğrudur. JDK yansıtılmış üye adlarını `==` ile karşılaştırır (örn. AnnotationInvocationHandler).
 pub fn intern_string(s: Ref) -> Ref {
     use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
@@ -568,8 +573,8 @@ pub fn intern_string(s: Ref) -> Ref {
     });
     Ref(ptr as *mut Obj)
 }
-/// # Safety
-/// `slot` must be valid for reads and writes of a `Ref` and must not be accessed concurrently without synchronization.
+/// # Güvenlik
+/// `slot`, bir `Ref` için okuma ve yazmaya geçerli olmalı; eşzamanlama olmadan eşzamanlı erişilmemelidir.
 pub unsafe fn lit(slot: *mut Ref, data: &'static [u16]) -> Ref {
     use std::sync::atomic::{AtomicPtr, Ordering};
     let ap = &*(slot as *const AtomicPtr<Obj>);
@@ -598,7 +603,7 @@ pub fn str_to_rust(r: Ref) -> String {
     }
 }
 
-// ------------------------------------------------------------------ arrays
+// ------------------------------------------------------------------ diziler
 #[repr(C)]
 pub struct Arr {
     pub hdr: Obj,
@@ -717,7 +722,7 @@ pub fn new_obj_array_arena(elem_c: &'static Class, len: i32) -> Res<Ref> {
     unsafe { (*(r.0 as *mut Arr)).len = len };
     Ok(r)
 }
-/// `multianewarray`: `depth` dimensions of `leaf` (plus optional object component class `elem_c`), `dims` lengths given.
+/// `multianewarray`: `leaf` türünden, `depth` boyutlu dizi (isteğe bağlı nesne bileşen sınıfı `elem_c` ile), verilen `dims` uzunluklarıyla.
 pub fn new_multi(elem_c: Option<&'static Class>, leaf: u8, depth: usize, dims: &[i32]) -> Res<Ref> {
     for d in dims {
         if *d < 0 {
@@ -787,8 +792,8 @@ pub fn astore<T: Copy>(a: Ref, i: i32, v: T) -> Res<()> {
     Ok(())
 }
 /// Referans yazma bariyeri; üretilen kod da bunu kullanır (rustgen: putfield/putstatic).
-/// # Safety
-/// Same contract as `gc::satb_store`: `slot` must be a valid, aligned `Ref` location.
+/// # Güvenlik
+/// `gc::satb_store` ile aynı sözleşme: `slot` geçerli ve hizalı bir `Ref` konumu olmalı.
 #[inline(always)]
 pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
     crate::heap::satb_store(slot, v)
@@ -838,7 +843,7 @@ pub fn lrem(a: i64, b: i64) -> Res<i64> {
     Ok(a.wrapping_rem(b))
 }
 
-// shifts: Java masks the count to the operand width, wrapping_sh* does the same
+// kaydırmalar: Java kaydırma sayısını işlenenin genişliğine maskeler; `wrapping_sh*` aynısını yapar.
 #[inline(always)]
 pub fn ishl(a: i32, b: i32) -> i32 {
     a.wrapping_shl(b as u32)
@@ -864,7 +869,7 @@ pub fn lushr(a: i64, b: i32) -> i64 {
     (a as u64).wrapping_shr(b as u32) as i64
 }
 
-// comparisons (NaN handling per the JVM spec: fcmpl/dcmpl give -1, fcmpg/dcmpg give 1)
+// karşılaştırmalar: JVM belirtimine göre NaN durumu. fcmpl/dcmpl -1, fcmpg/dcmpg 1 verir.
 #[inline(always)]
 pub fn lcmp(a: i64, b: i64) -> i32 {
     (a > b) as i32 - (a < b) as i32
@@ -886,7 +891,7 @@ pub fn dcmpg(a: f64, b: f64) -> i32 {
     if a.is_nan() || b.is_nan() { 1 } else { (a > b) as i32 - (a < b) as i32 }
 }
 
-// conversions: Rust's `as` from float saturates and maps NaN to 0, exactly the Java rule
+// dönüşümler: Rust'ın `as` operatörü float'ı doyurur ve NaN'ı 0'a çevirir. Java kuralı tam olarak budur.
 #[inline(always)]
 pub fn f2i(x: f32) -> i32 { x as i32 }
 #[inline(always)]
@@ -902,7 +907,7 @@ pub fn i2c(x: i32) -> i32 { (x as u16) as i32 }
 #[inline(always)]
 pub fn i2s(x: i32) -> i32 { (x as i16) as i32 }
 
-/// `bastore` serves byte[] and boolean[]: boolean elements keep only the low bit.
+/// `bastore` hem byte[] hem boolean[] için çalışır. Boolean elemanlar yalnızca en düşük biti tutar.
 pub fn bastore(a: Ref, i: i32, v: i32) -> Res<()> {
     let d = checked(a, i)?;
     let z = unsafe { (*a.0).class.elem } == b'Z';
@@ -911,7 +916,7 @@ pub fn bastore(a: Ref, i: i32, v: i32) -> Res<()> {
 }
 
 
-// ------------------------------------------------------------------ misc runtime services
+// ------------------------------------------------------------------ çeşitli çalışma zamanı hizmetleri
 pub fn abort(msg: &str) -> ! {
     eprintln!("Monolith: {}", msg);
     std::process::exit(70)
@@ -926,7 +931,7 @@ pub extern "C" fn unreachable_slot() -> ! {
     abort("call of a method the reachability analysis did not keep")
 }
 
-/// java.lang.Class instance of a runtime class (first field of the overlay Class is the long `monoClass`).
+/// Bir çalışma zamanı sınıfının java.lang.Class örneği. Overlay Class'ın ilk alanı `monoClass` adlı uzun tamsayıdır.
 #[repr(C)]
 pub struct ClassObj {
     pub hdr: Obj,
@@ -962,7 +967,7 @@ pub fn array_clone(a: Ref) -> Res<Ref> {
     Ok(r)
 }
 
-/// Monitors live in sync.rs.
+/// Monitörler sync.rs içinde yaşar.
 pub fn monitorenter(r: Ref) -> Res<()> {
     crate::sync::enter(r)
 }
@@ -1035,13 +1040,13 @@ pub fn class_for_desc(desc: &str) -> Option<&'static Class> {
     }
 }
 pub fn elem_size(e: u8) -> usize { esize(e) }
-/// Mirror object -> pointer check (`Class` objects must not be null).
+/// Ayna nesnesi -> işaretçi denetimi. Class nesneleri null olamaz.
 pub fn nn_ref(r: Ref) -> Res<Ref> {
     nn(r)?;
     Ok(r)
 }
 
-/// UTF-16 code units of a String object.
+/// Bir String nesnesinin UTF-16 kod birimleri.
 pub fn str_units(r: Ref) -> Vec<u16> {
     unsafe {
         let v = (*(r.0 as *mut StrObj)).value;
@@ -1050,7 +1055,7 @@ pub fn str_units(r: Ref) -> Vec<u16> {
     }
 }
 
-// ------------------------------------------------------------------ class initialization (JLS 12.4.2)
+// ------------------------------------------------------------------ sınıf başlatma (JLS 12.4.2)
 use std::sync::atomic::{AtomicU64, Ordering};
 const ST_DONE: u64 = 2;
 const ST_ERROR: u64 = 3;
@@ -1058,7 +1063,7 @@ fn init_lock() -> &'static (std::sync::Mutex<()>, std::sync::Condvar) {
     static L: std::sync::OnceLock<(std::sync::Mutex<()>, std::sync::Condvar)> = std::sync::OnceLock::new();
     L.get_or_init(|| (std::sync::Mutex::new(()), std::sync::Condvar::new()))
 }
-/// Returns Ok(true) when the caller must run the initializer; Ok(false) when it is done or being run by this thread.
+/// Ok(true) dönerse çağıran başlatıcıyı çalıştırmalıdır. Ok(false) ise başlatma bitmiştir ya da bu iş parçacığı tarafından çalıştırılıyordur.
 pub fn init_enter(st: &AtomicU64, name: &str) -> Res<bool> {
     let v = st.load(Ordering::Acquire);
     if v == ST_DONE {
@@ -1100,7 +1105,7 @@ pub fn init_leave(st: &AtomicU64, ok: bool) {
     cv.notify_all();
 }
 
-// ------------------------------------------------------------------ caller class, program arguments, system properties
+// ------------------------------------------------------------------ çağıran sınıf, program argümanları, sistem özellikleri
 thread_local! { static CALLER: std::cell::Cell<Option<&'static Class>> = const { std::cell::Cell::new(None) }; }
 pub fn set_caller(c: &'static Class) {
     CALLER.with(|x| x.set(Some(c)));
@@ -1116,8 +1121,8 @@ pub fn find_class(dotted: &str) -> Option<&'static Class> {
     let all = hooks().all_classes;
     all.binary_search_by_key(&n.as_str(), |c| c.name).ok().map(|i| all[i])
 }
-/// Command line of the program. A shared library host (Android) installs it with `set_host_args`;
-/// an executable reads the process arguments.
+/// Programın komut satırı. Paylaşımlı kütüphane ana makinesi (Android) bunu `set_host_args` ile kurar;
+/// çalıştırılabilir dosya ise süreç argümanlarını işletim sisteminden okur.
 static HOST_ARGS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
 pub fn set_host_args(args: Vec<String>) {
     let _ = HOST_ARGS.set(args);
@@ -1128,11 +1133,11 @@ fn cmdline() -> Vec<String> {
         None => std::env::args().skip(1).collect(),
     }
 }
-/// `-Dkey=value` arguments are system properties; the others are program arguments.
+/// `-Dkey=value` biçimindeki argümanlar sistem özelliğidir; diğerleri program argümanıdır.
 pub fn user_props() -> Vec<String> {
     let mut v: Vec<String> = cmdline().into_iter().filter(|a| a.starts_with("-D")).map(|a| a[2..].to_string()).collect();
-    // Netty's native transports (epoll/kqueue) are JNI code emulated in Rust (174 natives). Without them Netty uses its
-    // NIO transport, which is plain Java and needs no native code. A launcher or user can still set the value.
+    // Netty'nin yerel taşıyıcıları (epoll ve kqueue) Rust'ta öykünülen JNI kodudur (174 native). Onlar olmadan Netty
+    // düz Java olan NIO taşıyıcısını kullanır ve yerel kod gerektirmez. Bir başlatıcı ya da kullanıcı yine de değeri değiştirebilir.
     if !v.iter().any(|p| p.starts_with("io.netty.transport.noNative=")) {
         v.push("io.netty.transport.noNative=true".to_string());
     }
@@ -1154,10 +1159,10 @@ pub fn string_array(items: &[String]) -> Res<Ref> {
     Ok(arr)
 }
 
-// ---------------------------------------------------------------- stack depth
-// Java programs expect a StackOverflowError from unbounded recursion. Generated methods call `stack_check`
-// on entry; it compares the stack pointer with this thread's low-water mark, taken from the OS when the thread
-// first asks.
+// ---------------------------------------------------------------- yığın derinliği
+// Java programları sınırsız özyinelemede StackOverflowError bekler. Üretilen metotlar girişte `stack_check` çağırır.
+// Bu fonksiyon yığın işaretçisini, iş parçacığının alt sınırıyla karşılaştırır. Alt sınır işletim sisteminden alınır.
+// Alt sınır, iş parçacığı ilk soruşunda alınır.
 thread_local! {
     static STACK_LOW: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static IN_OVERFLOW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -1170,13 +1175,13 @@ unsafe extern "C" {
     fn pthread_attr_destroy(attr: *mut [u64; 16]) -> i32;
 }
 
-/// Lowest usable stack address of this thread, leaving a margin for the runtime's own frames.
+/// Bu iş parçacığının kullanılabilir en düşük yığın adresi. Çalışma zamanının kendi çerçeveleri için bir pay bırakılır.
 #[cold]
 #[inline(never)]
 fn stack_low_init() -> usize {
     let mut attr = [0u64; 16];
-    // SAFETY: `attr` is large enough for pthread_attr_t on glibc and bionic; it is initialized by pthread_getattr_np
-    // and destroyed before returning.
+    // GÜVENLİK: `attr`, glibc ve bionic'te pthread_attr_t için yeterince büyüktür. pthread_getattr_np tarafından ilklenir
+    // ve fonksiyon dönmeden önce yok edilir.
     unsafe {
         if pthread_getattr_np(pthread_self(), &mut attr) != 0 {
             return 0;
@@ -1193,7 +1198,7 @@ fn stack_low_init() -> usize {
     }
 }
 
-/// Throws StackOverflowError when the current thread is nearly out of stack.
+/// Mevcut iş parçacığının yığını neredeyse tükendiğinde StackOverflowError fırlatır.
 #[inline(always)]
 pub fn stack_check() -> Res<()> {
     let marker = 0u8;
@@ -1206,7 +1211,7 @@ pub fn stack_check() -> Res<()> {
             return Ok(()); // the OS would not tell the bounds: no check, as before
         }
     }
-    // while the error object is being built its constructors run on the margin: they must not throw again
+    // Hata nesnesi kurulurken kurucuları tampon bölgede çalışır. Bu kurucular yeniden hata fırlatmamalıdır;
     if sp < low && !IN_OVERFLOW.with(|c| c.get()) {
         IN_OVERFLOW.with(|c| c.set(true));
         let e = stack_overflow();
@@ -1222,11 +1227,11 @@ fn stack_overflow<T>() -> Res<T> {
     throw("java/lang/StackOverflowError", String::new())
 }
 
-/// Original exceptions of classes whose static initializer failed, by class name. Pinned: the collector must
-/// not free them, because later accesses report them.
+/// Statik başlatıcısı başarısız olan sınıfların özgün istisnaları, sınıf adına göre tutulur. Sabitlenir:
+/// çöp toplayıcı bunları serbest bırakmamalıdır, çünkü sonraki erişimler bunları bildirir.
 static INIT_FAILURES: std::sync::Mutex<Vec<(String, usize)>> = std::sync::Mutex::new(Vec::new());
 
-/// `Class.toString`-like text of a throwable: "java.lang.RuntimeException: message".
+/// Bir throwable'ın `Class.toString` benzeri metni: "java.lang.RuntimeException: mesaj".
 fn throwable_text(obj: Ref) -> String {
     let cls = unsafe { (*obj.0).class.name }.replace('/', ".");
     let msg = get_ref(obj, "detailMessage");
@@ -1237,8 +1242,8 @@ fn throwable_text(obj: Ref) -> String {
     }
 }
 
-/// The NoClassDefFoundError that every access after a failed initialization throws. HotSpot attaches an
-/// ExceptionInInitializerError describing the first failure as its cause.
+/// Başlatma başarısız olduktan sonraki her erişimin fırlattığı NoClassDefFoundError. HotSpot ilk hatayı
+/// açıklayan bir ExceptionInInitializerError'ı nedeni olarak ekler.
 fn class_init_error(name: &str) -> Ref {
     let dotted = name.replace('/', ".");
     let first = INIT_FAILURES.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(n, _)| n == name).map(|(_, p)| *p);
@@ -1253,8 +1258,8 @@ fn class_init_error(name: &str) -> Ref {
     ncdfe
 }
 
-/// JLS 12.4.2: an exception that escapes a static initializer is wrapped in ExceptionInInitializerError (its
-/// cause is the original exception). An Error propagates unchanged, and the class is left unusable.
+/// JLS 12.4.2: statik başlatıcıdan kaçan bir istisna ExceptionInInitializerError içine sarılır. Nedeni özgün istisnadır.
+/// Error ise olduğu gibi yayılır ve sınıf kullanılamaz hâle gelir.
 pub fn init_failure(name: &str, r: Res<()>) -> Res<()> {
     let Err(t) = r else { return Ok(()) };
     if let Some(err) = find_class("java/lang/Error") {
@@ -1269,16 +1274,17 @@ pub fn init_failure(name: &str, r: Res<()>) -> Res<()> {
     Err(Thrown { obj: wrapped })
 }
 
-// ---------------------------------------------------------------- shadow stack (Throwable backtraces)
-// Every generated method pushes a frame tag on entry and pops it when its guard drops (also on `?` returns).
-// `capture_backtrace` reads the tags, innermost first, for `Throwable.fillInStackTrace`.
+// ---------------------------------------------------------------- yığın gölgesi (Throwable yığın izleri)
+// Üretilen her metot girişte bir çerçeve etiketi iter ve guard bırakıldığında çıkarır (`?` ile dönüşlerde de).
+// Acemi notu: Yığın izi (stack trace), hangi metotların o an açık olduğunu bu etiketlerden okuyarak oluşur.
+// `capture_backtrace` etiketleri en içten başlayarak okur ve `Throwable.fillInStackTrace` için kullanır.
 #[derive(Clone, Copy)]
 struct FrameTag {
     class: &'static str,
     method: &'static str,
     desc: &'static str,
     file: &'static str,
-    /// source line of the statement being executed (-1 until the first line marker)
+    /// İşlenmekte olan ifadenin kaynak satırı (ilk satır işaretçisi gelene kadar -1)
     line: i32,
 }
 
@@ -1290,7 +1296,7 @@ pub struct FrameGuard;
 
 impl Drop for FrameGuard {
     fn drop(&mut self) {
-        // during thread teardown the slot may already be gone: then there is nothing to pop
+        // İş parçacığı sonlanırken yuva zaten yok olmuş olabilir. O zaman çıkarılacak bir şey yoktur.
         let _ = FRAMES.try_with(|f| {
             if let Ok(mut v) = f.try_borrow_mut() {
                 v.pop();
@@ -1299,7 +1305,7 @@ impl Drop for FrameGuard {
     }
 }
 
-/// Marks the source line the current frame is executing; called at the start of each statement.
+/// Mevcut çerçevenin çalıştığı kaynak satırını işaretler. Her ifadenin başında çağrılır.
 #[inline(always)]
 pub fn set_line(line: i32) {
     let _ = FRAMES.try_with(|f| {
@@ -1321,13 +1327,13 @@ pub fn enter_frame(class: &'static str, method: &'static str, desc: &'static str
     FrameGuard
 }
 
-/// Every frame on this thread, innermost first: (class internal name, method, descriptor, source file, line).
+/// Bu iş parçacığındaki her çerçeve, en içten başlayarak: (sınıf iç adı, metot, tanımlayıcı, kaynak dosya, satır).
 pub fn frames_snapshot() -> Vec<(&'static str, &'static str, &'static str, &'static str, i32)> {
     FRAMES.with(|f| f.borrow().iter().rev().map(|t| (t.class, t.method, t.desc, t.file, t.line)).collect())
 }
 
-/// One line per frame, innermost first: class (dotted), method, source file (may be empty), line (-1 unknown),
-/// separated by tabs. Constructor frames and `fillInStackTrace` at the top are skipped, as HotSpot does.
+/// Çerçeve başına bir satır, en içten başlayarak: sınıf (noktalı), metot, kaynak dosya (boş olabilir), satır (bilinmiyorsa -1),
+/// sekmelerle ayrılmış. Kurucu çerçeveleri ve en üstteki `fillInStackTrace` atlanır. HotSpot da böyle yapar.
 pub fn capture_backtrace() -> String {
     FRAMES.with(|f| {
         let frames = f.borrow();
@@ -1335,9 +1341,9 @@ pub fn capture_backtrace() -> String {
         for t in frames
             .iter()
             .rev()
-            // hidden lambda proxy classes (`Owner$$Lambda$N`) do not appear in HotSpot traces
+            // Gizli lambda vekil sınıfları (`Owner$$Lambda$N`) HotSpot izlerinde görünmez.
             .filter(|t| !t.class.contains("$$Lambda$"))
-            // any Throwable subclass may override fillInStackTrace (the JDK's NullPointerException does)
+            // Her Throwable alt sınıfı fillInStackTrace'i geçersiz kılabilir. JDK'nın NullPointerException'ı da böyle yapar.
             .skip_while(|t| t.method == "<init>" || t.method == "fillInStackTrace")
         {
             out.push_str(&format!("{}\t{}\t{}\t{}\n", t.class.replace('/', "."), t.method, t.file, t.line));

@@ -1,4 +1,5 @@
-//! Stop-the-world segregated-slab Mark-Sweep GC + thread-local non-escaping bump arena.
+//! Durdur-dünya (stop-the-world) ayrık-dilimli (segregated slab) İşaretle-Süpür çöp toplayıcı, artı iş parçacığına özel kaçmayan bump arena.
+//! Acemi notu: İşaretle-Süpür, canlı nesneleri önce işaretler, sonra işaretlenmemiş (ölü) nesneleri geri kazanır.
 use crate::rt::{self, Arr, Class, FLoc, Obj, Ref, Res};
 use std::alloc::{alloc_zeroed, dealloc, Layout};
 use std::cell::UnsafeCell;
@@ -10,16 +11,17 @@ pub const GC_HEAP: u32 = 1;
 pub const GC_MARK: u32 = 2;
 pub const GC_ARENA: u32 = 4;
 
-/// Collector state shared by every thread. One value, `G`; each field is the variable it replaced.
+/// Tüm iş parçacıklarının paylaştığı toplayıcı durumu. Tek bir değer, `G`; her alan, yerini aldığı değişkendir.
 struct Globals {
-    /// Eşzamanlı işaretleme (SATB) açık mı. Şimdilik hiçbir yer açmıyor; açıldığında yazmalar eski değeri kaydeder.
+    /// Eşzamanlı işaretleme (SATB) açık mı? Şu an hiçbir yer açmıyor; açıldığında yazmalar eski değeri kaydeder.
     satb_on: AtomicBool,
     satb_log: Mutex<Vec<usize>>,
-    /// Weak references found by the current cycle's marking (live or not yet known to be live).
+    /// Bu döngünün işaretlemesinde bulunan zayıf referanslar (canlı olabilirler ya da henüz canlı olduğu bilinmeyebilirler).
     weak_seen: Mutex<Vec<usize>>,
     gc_stopping: AtomicU32,
     bytes_since_gc: AtomicUsize,
-    /// A concurrent cycle is running (between its start and its final collection). The marker asks for the final collection (only that collection may run during a cycle).
+    /// Eşzamanlı bir döngü çalışıyor (başlangıcı ile son toplaması arasında). İşaretleyici son toplamayı ister;
+    /// döngü sırasında yalnızca o toplama çalışabilir.
     cycle: AtomicBool,
     finishing: AtomicBool,
     conc: Mutex<Option<ConcCycle>>,
@@ -119,7 +121,7 @@ impl Slab {
         self.alloc_bits[bit_idx >> 6] &= !(1u64 << (bit_idx & 63));
     }
     #[inline(always)]
-    /// True when the slab has a free slot (a freed one, or one never used yet).
+    /// Dilimin boş bir yuvası var mı? (Serbest bırakılmış ya da hiç kullanılmamış bir yuva.)
     fn has_free(&self) -> bool {
         self.free_head >= 0 || self.next_bump < self.n_slots
     }
@@ -178,7 +180,7 @@ pub struct ThreadReg {
     arena_idx: usize,
     java_thread: AtomicUsize,
     alloc_acc: usize,
-    /// Iterator objects handed back at the end of a for-each loop (see `recycle`), per recyclable class slot.
+    /// For-each döngüsünün sonunda geri verilen yineleyici nesneleri (bkz. `recycle`), geri dönüştürülebilir sınıf yuvası başına.
     recycled: [Vec<*mut Obj>; RECYCLE_SLOTS],
 }
 
@@ -195,10 +197,10 @@ fn cur_reg() -> *mut ThreadReg {
 }
 
 
-/// Referans yazma bariyeri (snapshot-at-the-beginning): işaretleme açıksa yazılacak yerin eski değerini kaydeder.
+/// Referans yazma bariyeri (snapshot-at-the-beginning): işaretleme açıksa, yazılacak yerin eski değerini kaydeder.
 #[inline(always)]
-/// # Safety
-/// `slot` must be a valid, aligned pointer to a `Ref` field or array element. `v` must be a valid reference or null.
+/// # Güvenlik
+/// `slot`, bir `Ref` alanına ya da dizi elemanına geçerli ve hizalı bir işaretçi olmalıdır. `v` geçerli bir referans ya da null olmalıdır.
 pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
     unsafe {
         if G.satb_on.load(Ordering::Relaxed) {
@@ -208,14 +210,15 @@ pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
     }
 }
 
-// ------------------------------------------------------------------ Weak references
+// ------------------------------------------------------------------ Zayıf referanslar
 //
-// A WeakReference does not keep its referent alive: the marker skips the `referent` field of every WeakReference
-// it scans and remembers the reference. After marking (before the sweep) a live WeakReference whose referent was not
-// marked is cleared, which is what HotSpot does for weak references. SoftReference and PhantomReference are traced
-// as strong references; no ReferenceQueue is filled.
+// Bir WeakReference, kendi hedefini (referent) canlı tutmaz. İşaretleyici taradığı her WeakReference'ın `referent`
+// alanını atlar ve referansı not eder.
+// İşaretlemeden sonra (süpürmeden önce), işaretlenmemiş hedefi olan canlı bir WeakReference temizlenir.
+// HotSpot da zayıf referanslar için aynısını yapar. SoftReference ve PhantomReference güçlü referans gibi izlenir;
+// ReferenceQueue doldurulmaz.
 
-/// The WeakReference class (0 when the program does not load it) and the offset of Reference.referent.
+/// WeakReference sınıfı (program yüklemezse 0) ve Reference.referent alanının ofseti.
 fn weak_info() -> (usize, u32) {
     static W: OnceLock<(usize, u32)> = OnceLock::new();
     *W.get_or_init(|| match rt::find_class("java/lang/ref/WeakReference") {
@@ -231,7 +234,7 @@ fn weak_info() -> (usize, u32) {
 }
 
 
-/// True for an instance of WeakReference (or a subclass) whose referent must not be traced.
+/// Hedefi izlenmemesi gereken bir WeakReference (ya da alt sınıfı) örneği için true.
 #[inline(always)]
 fn weak_object(c: &'static Class) -> bool {
     let (wc, ro) = weak_info();
@@ -248,7 +251,7 @@ fn weak_object(c: &'static Class) -> bool {
     false
 }
 
-/// After marking: a marked WeakReference whose referent was not marked loses the referent.
+/// İşaretlemeden sonra: işaretlenmiş bir WeakReference'ın hedefi işaretlenmemişse, hedefini kaybeder.
 fn clear_dead_referents() {
     let (wc, ro) = weak_info();
     if wc == 0 {
@@ -274,11 +277,12 @@ fn clear_dead_referents() {
     }
 }
 
-/// Write barrier for a reference slot that is about to be overwritten by an atomic operation (Unsafe CAS/put,
+/// Atomik bir işlemle (Unsafe CAS/put, VarHandle store/CAS) üzerine yazılacak bir referans yuvası için yazma bariyeri.
+/// İşaretleme açıksa, yuvanın şu anki değeri SATB günlüğüne gider.
 /// VarHandle store/CAS): the value it holds now goes to the SATB log while marking is on.
 #[inline(always)]
-/// # Safety
-/// `slot` must be a valid, aligned pointer to a reference-sized field that is about to be overwritten.
+/// # Güvenlik
+/// `slot`, üzerine yazılacak, referans boyutunda ve hizalı bir alanın geçerli işaretçisi olmalıdır.
 pub unsafe fn satb_overwrite(slot: *mut *mut Obj) {
     if G.satb_on.load(Ordering::Relaxed) {
         satb_log(unsafe { *slot } as usize);
@@ -293,11 +297,13 @@ fn satb_log(old: usize) {
     }
 }
 
-/// Bir bellek aralığının (eski) içeriğini, işaretleme açıksa, SATB günlüğüne alır. Her 8 baytlık sözcük bir referans
+/// Bir bellek aralığının (eski) içeriğini, işaretleme açıksa SATB günlüğüne alır. Her 8 baytlık sözcük bir referans
+/// olabilir. Sözcük bir nesne adresi değilse işaretleyici onu yok sayar; yani bu yaklaşım muhafazakâr ve güvenlidir.
+/// Yazma bariyeri olmayan toplu yazımlar (arraycopy, Unsafe kopyası, VarHandle) bunu çağırır.
 /// olabilir: sözcük bir nesne adresi değilse işaretleyici onu yok sayar, yani bu konservatif ve güvenlidir.
 /// Yazma bariyeri olmayan toplu yazımlar (arraycopy, Unsafe kopyası, VarHandle) bunu çağırır.
-/// # Safety
-/// `p..p + bytes` must be readable memory.
+/// # Güvenlik
+/// `p..p + bytes` okunabilir bellek olmalıdır.
 pub unsafe fn satb_log_range(p: *const u8, bytes: usize) {
     if !G.satb_on.load(Ordering::Relaxed) {
         return;
@@ -316,7 +322,7 @@ pub unsafe fn satb_log_range(p: *const u8, bytes: usize) {
     }
 }
 
-/// İşaretleme sırasında kaydedilen eski değerleri alır (işaretleyici tüketir).
+/// İşaretleme sırasında kaydedilen eski değerleri alır (işaretleyici bunları tüketir).
 pub fn satb_take() -> Vec<usize> {
     std::mem::take(&mut *G.satb_log.lock().unwrap())
 }
@@ -453,8 +459,9 @@ pub fn unregister_thread() {
     if reg.is_null() {
         return;
     }
-    // Like a safepoint: record the stack and registers, and say "paused" while waiting for a collection. Without the
-    // flag the collector waits for this thread forever (deadlock seen in a stress run: collector and thread both waiting).
+    // Güvenli nokta (safepoint) gibi: yığını ve yazmaçları kaydeder ve toplama beklerken "duraklatıldı" der.
+    // Bu bayrak olmadan toplayıcı bu iş parçacığını sonsuza kadar bekler (bir stres testinde görülen kilitlenme:
+    // hem toplayıcı hem iş parçacığı birbirini bekliyordu).
     let _regs = std::hint::black_box(capture_regs());
     let sp = flush_regs_and_sp();
     unsafe { (*reg).stack_bot.store(sp, Ordering::Release) };
@@ -471,7 +478,7 @@ pub fn unregister_thread() {
     unsafe {
         let b = Box::from_raw(reg);
         for s in b.active {
-            // only slabs that still have room: a full one in the partial list is what made the allocator panic
+            // Yalnızca hâlâ boş yeri olan dilimler: kısmi listedeki dolu bir dilim, ayırıcının panic yapmasına yol açıyordu
             if !s.is_null() && (*s).has_free() {
                 h.partial[(*s).sc as usize].push(s);
             }
@@ -582,7 +589,7 @@ pub fn register_array_class(c: &'static Class) {
     h.array_classes.push(c as *const Class as usize);
 }
 
-// ------------------------------------------------------------------ allocation
+// ------------------------------------------------------------------ Tahsis (allocation)
 pub fn alloc_obj(class: &'static Class, size: usize) -> *mut Obj {
     crate::prof::on_alloc(class, size, false);
     alloc_obj_inner(class, size)
@@ -645,8 +652,8 @@ fn alloc_small_slow(reg: *mut ThreadReg, sc: usize, class: &'static Class) -> *m
         if !old.is_null() {
             unsafe { (*reg).active[sc] = std::ptr::null_mut() };
         }
-        // a slab from the partial list is used only if it really has a free slot; a full one is dropped here
-        // (the sweep puts it back on the list when space appears)
+        // Kısmi listeden bir dilim yalnızca gerçekten boş yuvası varsa kullanılır. Dolu olan burada atılır;
+        // süpürme alan açıldığında onu listeye geri koyar.
         let found = loop {
             match h.partial[sc].pop() {
                 Some(s) if unsafe { (*s).has_free() } => break s,
@@ -674,11 +681,11 @@ fn alloc_small_slow(reg: *mut ThreadReg, sc: usize, class: &'static Class) -> *m
     };
     if need_gc {
         collect();
-        // After GC, our active[sc] might have been cleared, recurse cleanly once via alloc_obj:
+        // GC'den sonra active[sc] temizlenmiş olabilir; alloc_obj üzerinden bir kez temiz biçimde yinelenir:
         return alloc_obj_inner(class, SIZE_CLASSES[sc]);
     }
     unsafe {
-        // a slab chosen above has a free slot; if not (never expected), go round the allocator again
+        // Yukarıda seçilen bir dilimin boş yuvası vardır. Yoksa (hiç beklenmez) ayırıcıya yeniden dönülür.
         let o = match (*slab).alloc_slot() {
             Some(o) => o,
             None => {
@@ -722,7 +729,7 @@ fn alloc_large(reg: *mut ThreadReg, class: &'static Class, aligned: usize) -> *m
     p
 }
 
-// ------------------------------------------------------------------ Non-escaping Bump Arena
+// ------------------------------------------------------------------ Kaçmayan bump arena
 pub struct ArenaGuard {
     mark: ArenaMark,
 }
@@ -763,10 +770,11 @@ impl Drop for ArenaGuard {
     }
 }
 
-/// Allocation site proven non-escaping by the escape analysis: bump-allocated in the thread's scope arena, released
-/// when the method returns (`ArenaGuard`). `MONO_ARENA=0` turns it off (those objects then come from the heap), for
-/// comparing runs and as a rollback if the analysis is ever wrong; `MONO_ARENA_CHECK=1` verifies at every collection
-/// that no heap object or static points into an arena.
+/// Kaçış analizinin kaçmadığını kanıtladığı tahsis noktası: iş parçacığının kapsam arenasında bump ile ayrılır
+/// ve metot dönünce serbest bırakılır (`ArenaGuard`).
+/// `MONO_ARENA=0` bunu kapatır (o nesneler yığından gelir). Bu, çalıştırmaları karşılaştırmak ve analiz
+/// bir gün yanlış çıkarsa geri dönüş yolu olarak kullanılır.
+/// `MONO_ARENA_CHECK=1` her toplamada, hiçbir yığın nesnesinin ya da statik alanın arenaya işaret etmediğini denetler.
 pub fn alloc_arena(class: &'static Class, size: usize) -> Ref {
     crate::prof::on_alloc(class, size, true);
     if !arena_enabled() {
@@ -775,16 +783,16 @@ pub fn alloc_arena(class: &'static Class, size: usize) -> Ref {
     alloc_arena_bump(class, size)
 }
 
-/// Environment switches, read once on first use (diagnostics and A/B toggles).
+/// Ortam anahtarları; ilk kullanımda bir kez okunur (tanılama ve A/B karşılaştırma anahtarları).
 struct Knobs {
     arena: bool,
-    /// 0 off, 1 report, 2 abort on the first violation.
+    /// 0: kapalı, 1: rapor et, 2: ilk ihlalde durdur.
     arena_check: u8,
-    /// MONO_GC_POISON=1: freed slots are overwritten with 0xDD so a use-after-free is visible at once.
+    /// MONO_GC_POISON=1: serbest bırakılan yuvalar 0xDD ile doldurulur; böylece serbest bırakılmış belleğe erişim hemen görünür.
     poison: bool,
     concurrent: bool,
     recycle: bool,
-    /// MONO_GC=off: no automatic collection (measures what the heap does with the collector disabled).
+    /// MONO_GC=off: otomatik toplama yok (toplayıcı kapalıyken yığının ne yaptığını ölçer).
     gc_off: bool,
 }
 
@@ -849,16 +857,17 @@ fn alloc_arena_bump(class: &'static Class, size: usize) -> Ref {
     }
 }
 
-// ------------------------------------------------------------------ Mark & Sweep Collector
+// ------------------------------------------------------------------ İşaretle ve Süpür toplayıcısı
 //
-// Concurrent marking (MONO_GC_CONCURRENT=1). A cycle starts with a short stop-the-world root snapshot; the marking runs
-// on a marker thread while the program runs (the SATB barrier, `satb_store`, logs every overwritten reference); the
-// last collection (stop-the-world: roots again, the SATB log, sweep) is run by the marker when no work is left.
-// Objects allocated during a cycle are born marked, so the sweep keeps them. Requests to collect during a cycle
-// are ignored: the cycle finishes itself. Without the variable nothing here runs and the collector is unchanged.
+// Eşzamanlı işaretleme (MONO_GC_CONCURRENT=1). Bir döngü, kısa bir durdur-dünya kök anlık görüntüsüyle başlar;
+// işaretleme, program çalışırken bir işaretleyici iş parçacığında yapılır (SATB bariyeri, `satb_store`, üzerine yazılan
+// her referansı günlükler). Son toplama (durdur-dünya: yine kökler, SATB günlüğü ve süpürme) iş kalmayınca işaretleyici tarafından yapılır.
+// Döngü sırasında ayrılan nesneler doğuştan işaretli gelir, böylece süpürme onları tutar.
+// Döngü sırasında gelen toplama istekleri yok sayılır: döngü kendini bitirir.
+// Değişken ayarlanmamışsa burada hiçbir şey çalışmaz ve toplayıcı değişmez.
 
 
-/// Data the marker thread takes over at the start of a cycle.
+/// Bir döngü başladığında işaretleyici iş parçacığının devraldığı veriler.
 struct ConcCycle {
     work: Vec<usize>,
     slabs: Vec<usize>,
@@ -877,7 +886,7 @@ fn concurrent_enabled() -> bool {
     knobs().concurrent
 }
 
-/// GC bits of a newly allocated object: black during a cycle (it survives that cycle's sweep).
+/// Yeni ayrılmış bir nesnenin GC bitleri: döngü sırasında siyah (o döngünün süpürmesinden sağ çıkar).
 #[inline(always)]
 fn new_obj_bits() -> u32 {
     if G.satb_on.load(Ordering::Relaxed) { GC_HEAP | GC_MARK } else { GC_HEAP }
@@ -894,7 +903,8 @@ pub fn collect() {
     collect_impl(begin);
 }
 
-/// System.gc(): a complete collection before it returns (as HotSpot does), so weak references are cleared
+/// System.gc(): dönmeden önce tam bir toplama yapar (HotSpot gibi), böylece zayıf referanslar çağıran devam etmeden temizlenmiş olur.
+/// Çalışan bir eşzamanlı döngü önce beklenir; bekleme güvenli noktalarda yapılır, çünkü o döngünün son toplaması bu iş parçacığını durdurmalıdır.
 /// by the time the caller continues. A running concurrent cycle is waited for first; the wait stays at safepoints
 /// because that cycle's final collection has to stop this thread.
 pub fn collect_explicit() {
@@ -902,15 +912,15 @@ pub fn collect_explicit() {
         safepoint();
         std::thread::sleep(std::time::Duration::from_micros(200));
     }
-    // the first call may only wait for a collection another thread is still finishing (collect_impl returns at once
-    // then); the second one is the collection this call asked for. An object born black during that cycle has its
-    // mark cleared by its sweep, so the second collection sees it as garbage if nothing refers to it.
+    // İlk çağrı yalnızca başka bir iş parçacığının bitirmekte olduğu bir toplamayı bekleyebilir (collect_impl o zaman hemen döner).
+    // İkincisi bu çağrının istediği toplamadır. Bu döngüde siyah doğan bir nesnenin işareti süpürmeyle silinir;
+    // hiçbir şey ona referans vermiyorsa ikinci toplama onu çöp olarak görür.
     collect_impl(false);
     collect_impl(false);
 }
 
 #[inline(always)]
-// hot path: the heap bounds are passed by value so the marker keeps them in registers
+// Sıcak yol: heap sınırları değerle geçirilir; böylece işaretleyici onları yazmaçlarda tutar.
 #[allow(clippy::too_many_arguments)]
 fn try_push(
     addr: usize,
@@ -953,7 +963,7 @@ fn try_push(
     }
 }
 
-/// Scans one object for the marker: pushes what it references (the same work as the stop-the-world drain).
+/// İşaretleyici için bir nesneyi tarar: referans verdiği nesneleri yığına iter (durdur-dünya boşaltmasıyla aynı iş).
 fn marker_scan(obj: *mut Obj, cyc: &ConcCycle, work: &mut Vec<*mut Obj>) {
     unsafe {
         let c = (*obj).class;
@@ -986,7 +996,7 @@ fn marker_scan(obj: *mut Obj, cyc: &ConcCycle, work: &mut Vec<*mut Obj>) {
     }
 }
 
-/// The marker thread: marks from the snapshot, takes the SATB log, and when nothing is left runs the final collection.
+/// İşaretleyici iş parçacığı: anlık görüntüden işaretler, SATB günlüğünü alır ve iş kalmayınca son toplamayı çalıştırır.
 fn marker_main() {
     let cyc = match G.conc.lock().unwrap().take() {
         Some(c) => c,
@@ -1045,7 +1055,7 @@ fn collect_impl(begin_only: bool) {
     h.collecting = true;
     G.gc_stopping.store(1, Ordering::SeqCst);
 
-    // Wait for all other active threads to park at a safepoint or be inside ScopedBlock
+    // Diğer tüm etkin iş parçacıklarının bir güvenli noktada ya da ScopedBlock içinde durmasını bekle
     loop {
         let mut all_ready = true;
         for &tp in &h.threads {
@@ -1066,10 +1076,10 @@ fn collect_impl(begin_only: bool) {
     }
 
     let stw_start = std::time::Instant::now();
-    // güvenli nokta beklemesi: girişten, diğer thread'lerin durmasının tamamlanmasına kadar
+    // Güvenli nokta beklemesi: girişten, diğer iş parçacıklarının durmasının tamamlanmasına kadar
     let t_wait = stw_start.duration_since(t_entry);
     h.gc_count += 1;
-    // Return thread-local active slabs to global pools so everything is swept cleanly
+    // İş parçacığına özel etkin dilimleri genel havuzlara geri ver; böylece her şey temiz biçimde süpürülür
     for i in 0..h.threads.len() {
         let tp = h.threads[i];
         unsafe {
@@ -1103,7 +1113,7 @@ fn collect_impl(begin_only: bool) {
     // Fazların süreleri (MONO_GC_PHASES): kökler, işaretleme, arena denetimi, süpürme.
     let phases_on = std::env::var_os("MONO_GC_PHASES").is_some();
     let t_start = std::time::Instant::now();
-    // 1. Thread stacks + thread arenas + Java Thread object roots
+    // 1. İş parçacığı yığınları, iş parçacığı arenaları ve Java Thread nesnesi kökleri
     for &tp in &h.threads {
         unsafe {
             let bot = (*tp).stack_bot.load(Ordering::Acquire);
@@ -1137,7 +1147,7 @@ fn collect_impl(begin_only: bool) {
         }
     }
 
-    // 2. Class mirrors and static reference fields
+    // 2. Sınıf aynaları (Class nesneleri) ve statik referans alanları
     let hooks = rt::hooks();
     for &c in hooks.all_classes {
         let mptr = c.mirror.0.load(Ordering::Relaxed);
@@ -1172,7 +1182,7 @@ fn collect_impl(begin_only: bool) {
         }
     }
 
-    // 3. Pinned refs (String.intern) and literal slots
+    // 3. Sabitlenmiş referanslar (String.intern) ve literal yuvaları
     for &addr in &h.pinned_refs {
         try_push(addr, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut work);
     }
@@ -1183,7 +1193,7 @@ fn collect_impl(begin_only: bool) {
 
     let t_roots = t_start.elapsed();
     if begin_only {
-        // Start of a concurrent cycle: the roots are the snapshot. The marker takes over, the program goes on.
+        // Eşzamanlı döngünün başlangıcı: kökler anlık görüntüdür. İşaretleyici devralır, program devam eder.
         let mut slabs = h.slabs.clone();
         slabs.sort_unstable();
         let cyc = ConcCycle {
@@ -1206,7 +1216,7 @@ fn collect_impl(begin_only: bool) {
         cv.notify_all();
         drop(h);
         if std::thread::Builder::new().name("mono-gc-mark".into()).spawn(marker_main).is_err() {
-            // no marker thread: finish the cycle now, on this thread (stop-the-world, as without concurrency)
+            // İşaretleyici iş parçacığı yok: döngüyü şimdi, bu iş parçacığında bitir (eşzamansız olmadığı gibi durdur-dünya)
             G.finishing.store(true, Ordering::Release);
             collect_impl(false);
             G.finishing.store(false, Ordering::Release);
@@ -1214,14 +1224,15 @@ fn collect_impl(begin_only: bool) {
         std::hint::black_box(&_regs);
         return;
     }
-    // 4. Precise heap graph mark
+    // 4. Kesin (precise) heap grafı işaretlemesi
     let check = arena_check_mode();
     let mut arena_ranges: Vec<(usize, usize)> = Vec::new();
     if check != 0 {
         for &tp in &h.threads {
             unsafe {
                 for ch in &(*tp).arena { arena_ranges.push((ch.ptr as usize, ch.ptr as usize + ch.cap)); }
-                // objects kept in a frame (rt::stack_obj) live on the thread's stack: a heap reference to one is the same violation
+                // Bir çerçevede tutulan nesneler (rt::stack_obj) iş parçacığının yığınında yaşar. Onlara bir heap referansı
+                // aynı ihlaldir.
                 let bot = (*tp).stack_bot.load(Ordering::Acquire);
                 let top = (*tp).stack_top;
                 let (lo, hi) = if bot <= top { (bot, top) } else { (top, bot) };
@@ -1236,7 +1247,7 @@ fn collect_impl(begin_only: bool) {
         i > 0 && a < arena_ranges[i - 1].1
     };
     let mut violations = 0u32;
-    // statics first: a static holding an arena object is the plainest escape
+    // Önce statikler: arena nesnesini tutan bir statik, kaçışın en açık biçimidir
     if check != 0 {
         for &c in hooks.all_classes {
             for sp in c.static_refs {
@@ -1248,7 +1259,7 @@ fn collect_impl(begin_only: bool) {
             }
         }
     }
-    // the references that mutators overwrote during a concurrent cycle (their old values are live at the snapshot)
+    // Eşzamanlı bir döngü sırasında mutatörlerin üzerine yazdığı referanslar (eski değerleri anlık görüntüde canlıdır)
     for v in satb_take() {
         try_push(v, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut work);
     }
@@ -1300,13 +1311,13 @@ fn collect_impl(begin_only: bool) {
         if check == 2 { rt::abort("arena escape violation"); }
     }
     clear_dead_referents();
-    // monitors of dead objects (an object that was locked once keeps its table entry until it dies)
+    // Ölü nesnelerin monitörleri (bir kez kilitlenen nesne, ölene kadar tablo girdisini tutar)
     crate::sync::prune_dead_monitors(|a| unsafe {
         let g = (*(a as *mut Obj)).gc;
         g & GC_HEAP != 0 && g & GC_MARK == 0
     });
     let t_mark = t_start.elapsed() - t_roots;
-    // 5. Sweep slabs
+    // 5. Dilimleri süpür
     let since_gc = G.bytes_since_gc.load(Ordering::Relaxed);
     let mut census = crate::prof::sweep_begin();
     for sc in 0..NUM_CLASSES {
@@ -1327,7 +1338,7 @@ fn collect_impl(begin_only: bool) {
             let sz = s.slot_size as usize;
             s.free_head = -1;
             let mut live_c = 0u16;
-            // Rebuild free list in reverse so low indices pop first
+            // Serbest listeyi tersten yeniden kur; böylece düşük indisler önce çıkar
             for idx in (0..n).rev() {
                 let off = SLAB_HDR + idx as usize * sz;
                 let bit = off >> 4;
@@ -1347,7 +1358,7 @@ fn collect_impl(begin_only: bool) {
                     if let Some(c) = census.as_mut() { c.dead(o, sz); }
                     s.clear_bit(bit);
                     if poison_enabled() {
-                        // diagnostics: a stale read of a freed object now yields 0xDDDD... instead of plausible data
+                        // Tanılama: serbest bırakılmış bir nesnenin bayat okuması artık makul veri yerine 0xDDDD... verir
                         std::ptr::write_bytes((base + off) as *mut u8, 0xDD, sz);
                     }
                     let p = (base + off) as *mut i32;
@@ -1378,7 +1389,7 @@ fn collect_impl(begin_only: bool) {
         unsafe { dealloc(base as *mut u8, Layout::from_size_align(SLAB_SIZE, SLAB_SIZE).unwrap()) };
     }
 
-    // 6. Sweep large objects
+    // 6. Büyük nesneleri süpür
     let mut dead_large = Vec::new();
     for (&addr, &sz) in &h.large {
         unsafe {
@@ -1416,7 +1427,7 @@ fn collect_impl(begin_only: bool) {
         }
     }
     if G.cycle.load(Ordering::Acquire) {
-        // the final collection of a concurrent cycle: the barrier goes off before the program runs again
+        // Eşzamanlı bir döngünün son toplaması: program yeniden çalışmadan önce bariyer kapanır
         G.satb_on.store(false, Ordering::Release);
         G.cycle.store(false, Ordering::Release);
     }
@@ -1433,14 +1444,14 @@ pub fn heap_bytes() -> usize {
     heap_sync().0.lock().unwrap().heap_bytes
 }
 
-// ------------------------------------------------------------------ recycling of scope-bound objects
+// ------------------------------------------------------------------ Kapsama bağlı nesnelerin geri dönüşümü
 //
-// A `for (x : list)` loop creates an iterator, uses it only through hasNext/next/remove and drops it when the loop
-// ends. The translator recognizes that shape (monolith/rustgen.py, `find_iterator_scopes`) and calls `recycle` where
-// the iterator goes out of scope; every `new` of a recyclable iterator class asks `alloc_recyclable` first. That is
-// the Rust way for a value with a clear owner: the end of its scope releases it, nobody has to find it later.
-// Only classes that are allocated through `alloc_recyclable` are ever recycled, so a shared or cached instance of
-// another class is never touched. `MONO_RECYCLE=0` turns it off.
+// `for (x : list)` döngüsü bir yineleyici oluşturur, onu yalnızca hasNext/next/remove ile kullanır ve döngü bitince bırakır.
+// Çevirici bu biçimi tanır (monolith/rustgen.py, `find_iterator_scopes`) ve yineleyicinin kapsamı bittiği yerde `recycle` çağırır.
+// Geri dönüştürülebilir bir sınıfın her `new`'ü önce `alloc_recyclable`'a sorar. Rust'taki yaklaşım budur: sahibi belli bir değerin
+// kapsamı bitince serbest bırakılır; kimsenin onu sonradan aramasına gerek yoktur.
+// Yalnızca `alloc_recyclable` ile ayrılan sınıflar geri dönüştürülür; başka bir sınıfın paylaşılan ya da önbelleğe alınmış örneğine dokunulmaz.
+// `MONO_RECYCLE=0` bunu kapatır.
 
 pub const RECYCLE_SLOTS: usize = 32;
 const RECYCLE_KEEP: usize = 16;
@@ -1450,7 +1461,7 @@ fn recycle_enabled() -> bool {
     knobs().recycle
 }
 
-/// `new` of a recyclable class: a recycled object of that class when the thread has one, else a fresh heap object.
+/// Geri dönüştürülebilir bir sınıfın `new`'ü: iş parçacığında o sınıftan geri dönüştürülmüş bir nesne varsa o, yoksa yeni bir heap nesnesi.
 pub fn alloc_recyclable(class: &'static Class, slot: usize) -> Ref {
     if recycle_enabled() {
         G.recycle_classes[slot].store(class as *const Class as usize, Ordering::Relaxed);
@@ -1466,7 +1477,7 @@ pub fn alloc_recyclable(class: &'static Class, slot: usize) -> Ref {
     Ref(alloc_obj(class, class.size.max(16)))
 }
 
-/// The scope of `r` ended and nothing else refers to it: zero it and keep it for the next `new` of its class.
+/// `r`'nin kapsamı bitti ve başka hiçbir şey ona referans vermiyor: sıfırlanır ve sınıfının bir sonraki `new`'ü için saklanır.
 pub fn recycle(r: Ref) {
     if r.is_null() || !recycle_enabled() {
         return;
@@ -1482,9 +1493,9 @@ pub fn recycle(r: Ref) {
             if owner.load(Ordering::Relaxed) == cp {
                 let list = &mut (*reg).recycled[slot];
                 if list.len() < RECYCLE_KEEP && (*r.0).gc & GC_HEAP != 0 {
-                    // keep the header, drop what the object held so the collector does not follow stale references.
-                    // The fields it held are overwritten without a barrier, so their old values go to the SATB log
-                    // first: a cycle that marks from its snapshot must still reach them.
+                    // Başlığı koru; nesnenin tuttuğu şeyleri bırak ki çöp toplayıcı bayat referansları izlemesin.
+                    // Tuttuğu alanlar bariyersiz üzerine yazılır, bu yüzden eski değerleri önce SATB günlüğüne gitmelidir:
+                    // anlık görüntüden işaretleyen bir döngü yine de onlara ulaşabilmelidir.
                     let body = class.size.max(16) - 16;
                     satb_log_range((r.0 as *const u8).add(16), body);
                     std::ptr::write_bytes((r.0 as *mut u8).add(16), 0, body);
