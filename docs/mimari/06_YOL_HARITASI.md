@@ -109,6 +109,8 @@ Kapı sayısı: yalnızca mevcut build için kanıtlanmış Q kapıları sayıl�
 
 Analiz (derleme değil, kapanış sayımı): native 976 → 726. Bu, Claude tarafının ölçtüğü tek kapanış sayısı.
 Son derleme: `--escape` Minecraft derlemesi tamamlandı (`mcesc/minecraft-26.3/run.sh`); bu derleme yamalardan önce, MIR kapalı.
-Varsayılan yolda fark süiti: koşuyor; şu ana kadar 16 PASS, 0 FAIL, 3 SKIP (ClientCoreE2E, HttpFetch, Jni: tasarım gereği).
+Varsayılan yolda fark süiti: 28 PASS, 0 FAIL, 3 SKIP (ClientCoreE2E, HttpFetch, Jni: tasarım gereği).
+MIR yolunda fark süiti (MONO_MIR=1): koşuyor, sonuç bitince buraya yazılacak.
+Hafif kapılar: pyflakes temiz, patch_fp_tests 9/9, cache_tests 7/7, mir_tests ve stackmap_tests ALL PASSED.
 
 Q kapıları (mevcut build için): 0/12 kanıtlı. Q3 fark süiti bitmedi; Q5 oyun ve Q6 sızıntı mevcut build ile koşulmadı.
