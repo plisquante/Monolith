@@ -1,167 +1,133 @@
-# Memory architecture plan: from stop-the-world GC to an idle collector, then to no collector
+# Bellek mimarisi planı: durdur-dünya GC'den boşta çalışan toplayıcıya, sonra toplayıcısız duruma
 
-> **Not (2026-11-24):** hedef mimari artik `docs/mimari/00_ANA_MIMARI.md`; celisen bolumler orada listelenir (bolum 8).
+> **Not (2026-11-24):** hedef mimari artık `docs/mimari/00_ANA_MIMARI.md`; çelişen bölümler orada listelenir (bölüm 8).
 
-Goal (owner's words): GC at zero, zero leaks, never a visible drop. Route: make the collector invisible first
-(always-on, small, paced), shrink what it has to do (less garbage, owned data), then switch it off only when a
-measured leak budget says it is safe. Nothing below is implemented yet unless it says "done".
+Hedef (sahibinin sözleriyle): GC sıfır, sızıntı sıfır, görünür bir takılma asla olmasın. Yol: önce toplayıcıyı görünmez kılmak (her zaman açık, küçük, ayarlı), yaptığı işi azaltmak (daha az çöp, sahipli veri), ve ancak ölçülmüş bir sızıntı bütçesi güvenli dediğinde kapatmak. Aşağıdakilerden "bitti" denmeyenler henüz uygulanmadı.
 
-Current measurements (allocation and root sites, escape analysis on `Stack1`): `docs/GC_REMOVAL_INVENTORY.md`.
+Güncel ölçümler (tahsis ve kök noktaları, `Stack1` üzerinde kaçış analizi açık): `docs/GC_REMOVAL_INVENTORY.md`.
 
-## 0. Definition of done
+## 0. Bitmiş sayılma tanımı
 
-| Metric | Today | Target (idle collector) | End state (collector off) |
+| Ölçüt | Bugün | Hedef (boşta toplayıcı) | Son durum (toplayıcı kapalı) |
 |---|---|---|---|
-| Longest GC pause on the game thread | not measured (STW over whole heap) | < 1 ms (root snapshot only) | none |
-| Allocation into the managed heap, steady state | 36.5 MiB/s (prof4, before inline/escape build) | < 5 MiB/s | residual only |
-| Barrier cost on the mutator | none | < 3 % frame time | none |
-| Collector CPU | bursts | <= 10 % of one core, throttled | 0 |
-| Leak budget: live managed bytes growth at steady state | unknown | flat after warm-up | < 1 MiB/min over a 60 min soak |
+| Oyun iş parçacığındaki en uzun GC duraklaması | ölçülmedi (tüm heap üzerinde STW) | < 1 ms (yalnızca kök anlık görüntüsü) | yok |
+| Yönetilen heap'e tahsis, kararlı durum | 36,5 MiB/sn (prof4, satır içi/kaçış derlemesinden önce) | < 5 MiB/sn | yalnızca artık |
+| Mutator üzerindeki bariyer maliyeti | yok | < kare süresinin %3'ü | yok |
+| Toplayıcı CPU'su | patlamalar halinde | bir çekirdeğin <= %10'u, kısılmış | 0 |
+| Sızıntı bütçesi: kararlı durumda yönetilen canlı bayt büyümesi | bilinmiyor | ısınmadan sonra düz | 60 dk soak'ta < 1 MiB/dk |
 
-Targets, not results. Every row gets a measuring tool in phase 0 and is checked on every build after that.
+Hedefler, sonuçlar değil. Her satırın faz 0'da bir ölçüm aracı olur ve sonraki her derlemede kontrol edilir.
 
-## 1. Where we are (facts from the code)
+## 1. Nerededeyiz (koddan gerçekler)
 
-* `monolith/rt/gc.rs`: segregated slab allocator (64 KiB slabs, 14 size classes 16..2048 B, large objects in a map),
-  thread-local active slabs, stop-the-world mark-sweep, conservative stack and register scan, precise heap marking
-  through `ref_offsets`, trigger at 32 MiB (`MONO_GC_MB`), pinned refs, registered static slots.
-* Done: frame (stack) allocation of non-escaping objects, scope-bound iterator recycling, DataFixer patch (live heap -61 %),
-  inliner + iteration-local escape analysis, `tickChunk` patch, allocation profiler with steady-state diff.
-* Not done: any incremental or concurrent collection, any write barrier, owned (manually released) objects.
-* `MONO_GC=off` (phase 0 switch): done. Automatic collections never run; `System.gc()` still collects. Tests pass with it
-  (`GcStress Oop Threads`). Measured in the game: 13.3 GB resident after about 10 min standing still on 16 GB; stopped, the collector stays
-  (`docs/VERIFICATION.md`).
-* Leak gate, first pass (collector on): 60 min standing still, slope after 1800 s warm-up -0.054 MiB/min against the
-  1 MiB/min budget, passes as written. Heap grew from 7.9 to 593.5 MiB over the whole run, longest pause 1473 ms.
-  Details in `docs/VERIFICATION.md`.
-* Phase 2 evidence (test harness, not the game): `tests/run_tests.py GcStress Oop Threads` passes with
-  `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`, and `GcStress Oop Threads Lambdas Strings Collections1`
-  passes with the same settings plus `MONO_GC_CONCURRENT=1`. These runs exercise the tracing collector and the
-  concurrent mode switch only; the SATB marker and the lazy sweep are not built yet.
+* `monolith/rt/gc.rs`: ayrık dilimli (segregated slab) tahsis edici (64 KiB dilim, 14 boyut sınıfı 16..2048 B, büyük nesneler bir haritada), iş parçacığına özel etkin dilimler, durdur-dünya işaretle-süpür, muhafazakâr yığın ve yazmaç taraması, `ref_offsets` ile kesin heap işaretleme, 32 MiB'de tetikleyici (`MONO_GC_MB`), sabitlenmiş referanslar, kayıtlı statik yuvalar.
+* Yapıldı: kaçmayan nesnelerin çerçeve (yığın) tahsisi, kapsam bağlı yineleyici geri dönüşümü, DataFixer yaması (canlı heap -%61), satır içi + yineleme-yerel kaçış analizi, `tickChunk` yamasi, durum farkı içeren tahsis profilleyicisi.
+* Yapılmadı: artımlı ya da eşzamanlı toplama, herhangi bir yazma bariyeri, sahipli (elle serbest bırakılan) nesneler.
+* `MONO_GC=off` (faz 0 anahtarı): yapıldı. Otomatik toplamalar hiç çalışmaz; `System.gc()` yine toplar. Testler bununla geçiyor (`GcStress Oop Threads`). Oyunda ölçüldü: 16 GB'da 10 dakika hareketsiz beklerken 13,3 GB resident; durduruldu, toplayıcı kalır (`docs/VERIFICATION.md`).
+* Sızıntı kapısı, ilk geçiş (toplayıcı açık): 60 dk hareketsiz, 1800 sn ısınmadan sonra eğim -0,054 MiB/dk, bütçe 1 MiB/dk, yazıldığı gibi geçiyor. Heap tüm koşuda 7,9'dan 593,5 MiB'a büyüdü, en uzun duraklama 1473 ms. Ayrıntılar `docs/VERIFICATION.md`'de.
+* Faz 2 kanıtı (test düzeneği, oyun değil): `tests/run_tests.py GcStress Oop Threads`, `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort` ile geçiyor; `GcStress Oop Threads Lambdas Strings Collections1` aynı ayarlarla ve ayrıca `MONO_GC_CONCURRENT=1` ile geçiyor. Bu koşular yalnızca izleyici toplayıcıyı ve eşzamanlı mod anahtarını çalıştırır; SATB işaretleyicisi ve tembel süpürme henüz yapılmadı.
 
-## 2. The four tiers
+## 2. Dört kademe
 
-Every allocation ends up in exactly one tier. A tier is chosen by proof (analysis) or by a patch (declared owner), never by guess.
+Her tahsis tam olarak bir kademeye düşer. Bir kademe kanıtla (analiz) ya da bir yamayla (ilan edilmiş sahip) seçilir, asla tahminle değil.
 
-1. **Frame**: does not outlive the method. Stack slot. Free at return. (done, growing with inline/escape coverage)
-2. **Region**: lives until the end of a known scope (tick, frame, packet). Bump arena, freed in one step. (arena exists;
-   non-escaping arrays already use it, per method, via `rt::ArenaGuard`; objects do not yet. Loop allocations that
-   survive one iteration need a per-iteration or per-scope reset before they can use it, otherwise a long loop keeps
-   every iteration's object alive until the method returns. Scope markers for tick/frame still to be added; verified
-   by the escape-violation checker)
-3. **Owned**: has one owner with a defined release point (chunk, section, block entity, entity, GPU-side wrappers). Allocated
-   outside the sweep set, traced through (it holds references to managed objects) but never swept; freed by `rt::release`
-   when the owner dies. Patches declare ownership; debug mode poisons and quarantines released objects to catch use-after-release.
-4. **Managed**: the residue. Collected by the idle collector until the leak budget lets us drop it.
+1. **Çerçeve**: metottan uzun yaşamaz. Yığın yuvası. Dönüşte serbest. (yapıldı; satır içi/kaçış kapsamı arttıkça büyüyor)
+2. **Bölge**: bilinen bir kapsamın sonuna kadar yaşar (tick, kare, paket). Bump arena, tek adımda serbest. (arena var; kaçmayan diziler zaten metot başına `rt::ArenaGuard` ile kullanıyor; nesneler henüz kullanmıyor. Bir turu aşan döngü tahsisleri, arenaya girmeden önce tur başına ya da kapsam başına sıfırlama gerektirir; aksi hâlde uzun bir döngü, metot dönene kadar her turun nesnesini canlı tutar. tick/kare için kapsam işaretçileri hâlâ eklenecek; kaçış ihlali denetleyicisiyle doğrulanacak)
+3. **Sahipli**: tanımlı bir serbest bırakma noktası olan tek bir sahibi var (yonga, bölüm, blok varlığı, varlık, GPU tarafı sarmalayıcılar). Süpürme kümesi dışında tahsis edilir, yine de içinden izlenir (yönetilen nesnelere referans tutar) ama asla süpürülmez; sahibi öldüğünde `rt::release` ile serbest bırakılır. Yamalar sahipliği ilan eder; hata ayıklama modu serbest bırakılan nesneleri zehirler ve karantinaya alır, böylece serbest bırakıldıktan sonra kullanımı yakalar.
+4. **Yönetilen**: artık kalan kısım. Sızıntı bütçesi izin verene kadar boşta toplayıcı tarafından toplanır.
 
-Tiers 1-3 shrink tier 4. Tier 4 is the safety net, and it stays compiled (feature `gc`) until a soak test passes.
+Kademe 1-3, kademe 4'ü küçültür. Kademe 4 güvenlik ağıdır ve bir soak testi geçene kadar derlemede kalır (`gc` özelliği).
 
-## 3. The idle collector (tier 4)
+## 3. Boşta toplayıcı (kademe 4)
 
-Like an engine at idle: always turning over a little, throttled, gives more throttle only when memory pressure rises.
+Boşta bir motor gibi: hep biraz döner, kısılmıştır, yalnızca bellek baskısı arttığında daha fazla pay alır.
 
-* **Concurrent marking on a background thread** with snapshot-at-the-beginning (SATB). The game threads never mark.
-  * Start of a cycle: one short stop (roots only): stacks and registers (conservative, as today), registered statics, pinned refs.
-    This is the only pause; it is proportional to stack depth, not heap size.
-  * Marking: atomic mark bits (epoch parity bit in the object flags, so no clear pass); worklist in the marker thread.
-  * Allocation during a cycle is born marked.
-  * Write barrier (SATB): while a cycle is active, a reference store pushes the overwritten reference into a thread-local buffer.
-    Outside a cycle the barrier is one load of a global flag and a not-taken branch.
-  * End of marking: short handshake to drain the thread-local buffers (no stack rescan needed under SATB).
-* **Lazy sweeping**: no sweep pause. A slab is swept when an allocator refills from it (and by the marker thread when idle).
-  Empty slabs go back to the empty pool; size-class free lists are rebuilt per slab.
-* **Pacing**: a cycle starts when managed live bytes exceed `trigger = max(floor, live_after_last * 1.25)`. The marker runs with a duty cycle
-  (sleep/yield between work chunks) targeting <= 10 % of one core. If allocation outruns marking (heap above `soft_limit`), the
-  duty cycle rises, then mutators assist in bounded chunks (<= 200 us per allocation slow path). At `hard_limit` a full stop-the-world collection
-  runs once, logs loudly, and counts as a failure of the leak budget.
-* **Thread model**: Game threads register as today. The marker needs each thread's stack range only for the start snapshot.
-* **No moving, no compaction.** Slabs keep size classes; fragmentation is watched by a metric (slab occupancy histogram), not fixed by copying.
-* Generational collection is not planned. It needs a second barrier and a remembered set; the profile after tiers 1-3 decides whether it is ever worth it.
+* **Arka plan iş parçacığında eşzamanlı işaretleme**, başlangıç anlık görüntüsüyle (snapshot-at-the-beginning, SATB). Oyun iş parçacıkları asla işaretlemez.
+  * Bir döngünün başlangıcı: tek kısa durma (yalnızca kökler): yığınlar ve yazmaçlar (bugünkü gibi muhafazakâr), kayıtlı statikler, sabitlenmiş referanslar. Tek duraklama budur; yığın derinliğiyle orantılıdır, heap boyutuyla değil.
+  * İşaretleme: atomik işaret bitleri (nesne bayraklarında dönüşümlü epoch biti, böylece temizleme geçişi gerekmez); işaretleyici iş parçacığında iş listesi.
+  * Döngü sırasında tahsis edilen nesneler doğuştan işaretli gelir.
+  * Yazma bariyeri (SATB): bir döngü aktifken, bir referans yazımı üzerine yazılan referansı iş parçacığına özel bir tampona iter. Döngü dışında bariyer, genel bir bayrağın tek yüklemesi ve alınmayan bir dal.
+  * İşaretlemenin sonu: iş parçacığına özel tamponları boşaltmak için kısa bir el sıkışma (SATB altında yığınların yeniden taranmasına gerek yok).
+* **Tembel süpürme**: süpürme duraklaması yok. Bir dilim, tahsis edici ondan yeniden doldurduğunda süpürülür (ve işaretleyici boşta olduğunda). Boş dilimler boş havuza döner; boyut sınıfı serbest listeleri dilim başına yeniden kurulur.
+* **Ayarlama**: bir döngü, yönetilen canlı bayt `tetikleyici = max(taban, son_canlı * 1,25)` değerini aştığında başlar. İşaretleyici bir görev yüzdesiyle çalışır (iş parçacıkları arasında uyku/verim) ve bir çekirdeğin <= %10'unu hedefler. Tahsis işaretlemeden hızlı giderse (heap `soft_limit` üstünde), görev yüzdesi yükselir, ardından mutator'lar sınırlı parçalarla yardım eder (tahsis yavaş yolu başına <= 200 us). `hard_limit`'te bir kez tam durdur-dünya toplama çalışır, yüksek sesle kaydedilir ve sızıntı bütçesinde bir başarısızlık sayılır.
+* **İş parçacığı modeli**: oyun iş parçacıkları bugünkü gibi kayıt olur. İşaretleyici, her iş parçacığının yığın aralığını yalnızca başlangıç anlık görüntüsü için ister.
+* **Taşıma yok, sıkıştırma yok.** Dilimler boyut sınıflarını korur; parçalanma, kopyalamayla düzeltilmez, bir metrikle (dilim doluluk histogramı) izlenir.
+* Nesilsel toplama planlanmadı. İkinci bir bariyer ve bir hatırlanan küme gerektirir; kademe 1-3'ten sonraki profil, buna değip değmeyeceğine karar verir.
 
-## 4. Codegen and runtime impact of the barrier
+## 4. Üretilen kod ve çalışma zamanı üzerinde bariyerin etkisi
 
-The translator owns every reference store, so the barrier is emitted, not patched in afterwards.
+Çevirici her referans yazımının sahibidir, bu yüzden bariyer sonradan yamalanmaz, üretilir.
 
-* Emitted at: `putfield`/`aastore` of references, `putstatic` of references, bulk copies (`System.arraycopy`, `Arrays.copyOf` family, `clone`) as a range barrier.
-* Runtime/native/patch code must not store references with raw writes. `rt::set_ref`/`rt::set_ref_array` become the only API and carry the barrier. A grep-based
-  check in `monolith/patch_tests.py` fails the build if a patch or native writes a reference field raw.
-* Stores into frame/region objects and into objects born in the current cycle skip the barrier (analysis result), and constructors writing into a fresh object skip it.
-* Because the barrier changes generated code, it is batched with other codegen changes into one full regeneration (section 9).
+* Yayıldığı yerler: referansların `putfield`/`aastore` komutları, referansların `putstatic` komutları, toplu kopyalar (`System.arraycopy`, `Arrays.copyOf` ailesi, `clone`) aralık bariyeri olarak.
+* Çalışma zamanı, yerel ve yama kodu referansları ham yazımlarla yazmamalıdır. `rt::set_ref`/`rt::set_ref_array` tek API olur ve bariyeri taşır. `monolith/patch_tests.py` içindeki grep tabanlı denetim, bir yama ya da yerel kod bir referans alanını ham yazarsa derlemeyi başarısız kılar.
+* Çerçeve/bölge nesnelerine ve o döngüde doğan nesnelere yapılan yazımlar bariyeri atlar (analiz sonucu); taze bir nesneye yazan kurucular da atlar.
+* Bariyer üretilen kodu değiştirdiği için diğer kod üretimi değişiklikleriyle birlikte tek bir tam yeniden üretimde toplanır (bölüm 9).
 
-## 5. Owned memory (tier 3)
+## 5. Sahipli bellek (kademe 3)
 
-* API: `rt::alloc_owned(class)`, `rt::release(ref)`; owner types in patches (`owner: "chunk"` in the manifest binding) so release points are declared next to the patch.
-* Candidate owners in order of expected payoff (measure first, do not guess): chunk sections and palettes (`PalettedContainer`, `BitStorage`, light data),
-  chunk/section maps, entity lists, block entities, packet buffers, mesh buffers, texture/atlas data.
-* Release points: chunk unload, entity removal, section rebuild, connection close.
-* Safety: `MONO_OWNED_CHECK=1` poisons released memory and keeps it in quarantine for N frames; any access to a poisoned object aborts with the allocation site.
-  Releasing an object still referenced elsewhere is the main risk; the check mode and a reachability audit (a debug full mark that reports owned objects still reachable after release) cover it.
+* API: `rt::alloc_owned(class)`, `rt::release(ref)`; yamalarda sahip tipleri (manifestteki bağlamada `owner: "chunk"`), böylece serbest bırakma noktaları yamanın yanında ilan edilir.
+* Beklenen kazanca göre sıralı aday sahipler (önce ölç, tahmin etme): yonga bölümleri ve paletler (`PalettedContainer`, `BitStorage`, ışık verisi), yonga/bölüm haritaları, varlık listeleri, blok varlıkları, paket tamponları, ağ (mesh) tamponları, doku/atlas verisi.
+* Serbest bırakma noktaları: yonga boşaltma, varlık kaldırma, bölüm yeniden kurma, bağlantı kapatma.
+* Güvenlik: `MONO_OWNED_CHECK=1` serbest bırakılan belleği zehirler ve N kare karantinada tutar; zehirlenmiş bir nesneye erişim, tahsis noktasıyla birlikte durdurur. Serbest bırakılan ama başka yerde hâlâ referanslı bir nesne ana risktir; denetim modu ve bir erişilebilirlik denetimi (serbest bırakıldıktan sonra hâlâ erişilebilen sahipli nesneleri bildiren bir hata ayıklama tam işaretlemesi) bunu kapsar.
 
-## 6. Garbage reduction backlog (tiers 1-2), order from the profile
+## 6. Çöp azaltma birikimi (kademe 1-2), profile göre sıra
 
-1. Finish measuring the inline + escape + `tickChunk` build (in progress). Compare class by class with prof4.
-   Measured on the full game build: `--escape --inline` raised idle allocation from 19.0 to 26.8 MB/s, so the flags stay
-   opt-in and are not the fix (`docs/VERIFICATION.md`). Open before any enablement: 6 JDK method-handle link errors
-   that appear only with inlining; check whether they are reached.
-   Idle profile on the current build (collector off, 10 min, `docs/VERIFICATION.md`): about 19 MB/s allocated, no
-   dominant class; the top items are the temporaries of item 2 and item 5 below.
-2. Value-like temporaries still heap-allocated: `Vec3`, `AABB`, `BlockPos` factories beyond `tickChunk`, `MutableBlockPos` copies, `VoxelShape` chains. Measured at idle: `Vec3` 3.0 %, `BlockPos` 2.8 % of the bytes allocated (`docs/VERIFICATION.md`).
-3. Strings: `StringBuilder`, `char[]`/`byte[]` growth (`Arrays.copyOf`), `String.format`/`concat`; replace hot paths by Rust patches that write into a reused region buffer.
-4. Lambdas and captured closures at hot call sites: allocate in the frame when non-escaping (analysis extension), reuse non-capturing instances.
-5. fastutil `clone`, collection resizing, stream pipelines on tick paths; DFU leftovers. Measured at idle: `DataResult$Success`
-   2.5 %, `Optional` 2.3 %, `ArrayList$Itr` 3.0 %, `RegularEnumSet$EnumSetIterator` 2.3 %, `ImmutableCollections$ListItr` 2.5 %
-   (`docs/VERIFICATION.md`).
-6. After each item: new steady-state profile, update `docs/ALLOC_BASELINE.md`.
+1. Satır içi + kaçış + `tickChunk` derlemesini ölçmeyi bitirin (sürüyor). Tam oyun derlemesinde ölçüldü: `--escape --inline` boşta tahsisi 19,0'dan 26,8 MB/sn'ye çıkardı; bu yüzden bayraklar isteğe bağlı kalır ve çözüm değildir (`docs/VERIFICATION.md`). Etkinleştirmeden önce açık: yalnızca satır içi alındığında görünen 6 JDK method-handle link hatası; ulaşılıp ulaşılmadığını kontrol edin.
+   Güncel derlemede boşta profil (toplayıcı kapalı, 10 dk, `docs/VERIFICATION.md`): yaklaşık 19 MB/sn tahsis, baskın sınıf yok; en üstteki kalemler aşağıdaki 2 ve 5 numaralı maddelerin geçicileri.
+2. Değer gibi davranan ama hâlâ heap'te tahsis edilen geçiciler: `tickChunk` dışındaki `Vec3`, `AABB`, `BlockPos` fabrikaları, `MutableBlockPos` kopyaları, `VoxelShape` zincirleri. Boşta ölçüldü: `Vec3` bayt tahsisinin %3,0'ı, `BlockPos` %2,8 (`docs/VERIFICATION.md`).
+3. Dizgiler: `StringBuilder`, `char[]`/`byte[]` büyümesi (`Arrays.copyOf`), `String.format`/`concat`; sıcak yolları, yeniden kullanılan bir bölge tamponuna yazan Rust yamalarıyla değiştirin.
+4. Sıcak çağrı noktalarındaki lambdalar ve yakalanan kapanımlar: kaçmıyorsa çerçevede tahsis edin (analiz genişletmesi), yakalamayan örnekleri yeniden kullanın.
+5. fastutil `clone`, koleksiyon yeniden boyutlandırma, tick yollarındaki akış boru hatları; DFU artıkları. Boşta ölçüldü: `DataResult$Success` %2,5, `Optional` %2,3, `ArrayList$Itr` %3,0, `RegularEnumSet$EnumSetIterator` %2,3, `ImmutableCollections$ListItr` %2,5 (`docs/VERIFICATION.md`).
+6. Her kalemden sonra: yeni kararlı durum profili, `docs/ALLOC_BASELINE.md` güncellenir.
 
-## 7. Verification and tooling (built before the collector)
+## 7. Doğrulama ve araçlar (toplayıcıdan önce yapılır)
 
-* **Pause/heap monitor** (phase 0): per-collection pause, longest pause, bytes allocated per second per tier, live bytes over time, slab occupancy. Output joins the profile JSON.
-* **Leak budget tool**: scripted play (`tools/headless_play.sh`), samples live managed bytes every 10 s after warm-up, fits a slope, fails above budget. `MONO_GC=off` runs the same script with the collector disabled to show what tiers 1-3 alone achieve.
-* **Collector tests** (fast, no Minecraft): small bytecode programs in `monolith/tests/gc/`: linked structures mutated while a cycle runs, multi-thread allocation storms, finalization-free cycles, large arrays, static roots, deep stacks. Run with a tiny trigger so cycles are constant.
-* **Verify mode** `MONO_GC_VERIFY=1`: after each concurrent cycle, a stop-the-world full mark runs and the two live sets are compared; any object the STW mark reaches but the concurrent sweep freed aborts with the object's class and allocation site.
-* **Region/frame checker**: `MONO_ARENA_CHECK=abort` stays on in all game runs.
+* **Duraklama/heap izleyicisi** (faz 0): toplama başına duraklama, en uzun duraklama, kademe başına saniyede tahsis edilen bayt, zaman içinde canlı bayt, dilim doluluğu. Çıktı profil JSON'una eklenir.
+* **Sızıntı bütçesi aracı**: betikli oyun (`tools/headless_play.sh`), ısınmadan sonra her 10 sn'de canlı yönetilen baytları örnekler, bir eğim uydurur, bütçeyi aşarsa başarısız olur. `MONO_GC=off` aynı betiği toplayıcı kapalıyken çalıştırır; kademe 1-3'ün tek başına ne başardığını gösterir.
+* **Toplayıcı testleri** (hızlı, Minecraft yok): `monolith/tests/gc/` içinde küçük bayt kodu programları: bir döngü çalışırken değiştirilen bağlı yapılar, çok iş parçacıklı tahsis fırtınaları, finalizasyonsuz döngüler, büyük diziler, statik kökler, derin yığınlar. Döngüler sürekli olsun diye çok küçük bir tetikleyiciyle çalıştırılır.
+* **Doğrulama modu** `MONO_GC_VERIFY=1`: her eşzamanlı döngüden sonra, durdur-dünya tam işaretlemesi çalışır ve iki canlı küme karşılaştırılır; STW işaretlemesinin ulaştığı ama eşzamanlı süpürmenin serbest bıraktığı her nesne, nesnenin sınıfı ve tahsis noktasıyla birlikte programı durdurur.
+* **Bölge/çerçeve denetleyicisi**: `MONO_ARENA_CHECK=abort` tüm oyun koşularında açık kalır.
 
-## 8. Phases and exit criteria
+## 8. Fazlar ve çıkış ölçütleri
 
-| Phase | Work | Exit criterion |
+| Faz | İş | Çıkış ölçütü |
 |---|---|---|
-| 0 | Pause/heap monitor, leak-budget tool, `MONO_GC=off` switch, baseline on the current build | numbers recorded in `docs/ALLOC_BASELINE.md` |
-| 1 | Validate inline + escape + `tickChunk` build in the game | no arena violation, no crash in a 10 min run, alloc rate vs prof4 documented |
-| 2 | Collector tests + verify mode scaffolding; tier-4 internals refactored (epoch mark bit, lazy sweep) on the existing STW collector | tests green, no behaviour change in game |
-| 3 | Write barrier in codegen, runtime API, native/patch audit; SATB concurrent marker, pacing, assists, hard limit | verify mode clean for a 30 min run, pause < 1 ms, barrier cost < 3 % |
-| 4 | Garbage backlog (section 6), region scopes for tick/frame | managed steady-state allocation < 5 MiB/s |
-| 5 | Owned memory for the top owners from the profile | live managed heap and collector CPU drop measurably per owner |
-| 6 | `MONO_GC=off` soak (60 min scripted play; first run stopped at 13.3 GB RSS after 10 min) | residual growth < 1 MiB/min; if met, collector off by default, kept behind feature `gc` as net; hard-limit event = fail |
-| 7 | Platforms on the final runtime: Android `.so`, Windows/macOS windowing | each runs the leak script |
+| 0 | Duraklama/heap izleyicisi, sızıntı bütçesi aracı, `MONO_GC=off` anahtarı, güncel derlemede temel ölçüm | sayılar `docs/ALLOC_BASELINE.md`'ye kaydedildi |
+| 1 | Satır içi + kaçış + `tickChunk` derlemesinin oyunda doğrulanması | 10 dk'lık koşuda arena ihlali yok, çökme yok, tahsis oranı prof4 ile karşılaştırılıp belgelendi |
+| 2 | Toplayıcı testleri + doğrulama modu iskeleti; kademe 4 iç yapısı yeniden düzenlendi (epoch işaret biti, tembel süpürme), mevcut STW toplayıcısı üzerinde | testler yeşil, oyunda davranış değişikliği yok |
+| 3 | Kod üretiminde yazma bariyeri, çalışma zamanı API'si, yerel/yama denetimi; SATB eşzamanlı işaretleyici, ayarlama, yardım, sert sınır | 30 dk'lık koşuda doğrulama modu temiz, duraklama < 1 ms, bariyer maliyeti < %3 |
+| 4 | Çöp birikimi (bölüm 6), tick/kare için bölge kapsamları | yönetilen kararlı durum tahsisi < 5 MiB/sn |
+| 5 | Profildeki en büyük sahipler için sahipli bellek | her sahip için yönetilen canlı heap ve toplayıcı CPU'su ölçülebilir biçimde düşer |
+| 6 | `MONO_GC=off` soak'ı (60 dk betikli oyun; ilk koşu 10 dk sonra 13,3 GB RSS'te durduruldu) | kalan büyüme < 1 MiB/dk; sağlanırsa toplayıcı varsayılan olarak kapalı, `gc` özelliği arkasında güvenlik ağı olarak tutulur; sert sınır olayı = başarısızlık |
+| 7 | Son çalışma zamanında platformlar: Android `.so`, Windows/macOS pencereleme | her biri sızıntı betiğini çalıştırır |
 
-## 9. Build logistics (this decides the order)
+## 9. Derleme lojistiği (sırayı bu belirler)
 
-A full Minecraft regeneration is ~10 min of analysis plus ~55 min of compile (32 shards, 2 parallel jobs); a runtime change invalidates all shard objects unless
-`--reuse-objs` is valid (internals only, same ABI and same generated code). So:
+Tam bir Minecraft yeniden üretimi yaklaşık 10 dk analiz ve yaklaşık 55 dk derleme (32 shard, 2 paralel iş) sürer; bir çalışma zamanı değişikliği, `--reuse-objs` geçerli olmadıkça (yalnızca iç yapılar, aynı ABI ve aynı üretilmiş kod) tüm shard nesnelerini geçersiz kılar. Bu nedenle:
 
-* Collector internals (phase 2, most of phase 3's marker) are developed against the test programs and the small test builds, not the full game.
-* Everything that changes generated code (barrier, region scope markers, owned-alloc calls, new patches) is collected and applied in as few full regenerations as possible.
-* Never run generation, compile and game tests at the same time (memory limit).
+* Toplayıcı iç yapıları (faz 2 ve faz 3'ün işaretleyicisinin çoğu) tam oyun yerine test programları ve küçük test derlemeleri üzerinde geliştirilir.
+* Üretilen kodu değiştiren her şey (bariyer, bölge kapsamı işaretçileri, sahipli tahsis çağrıları, yeni yamalar) mümkün olduğunca az tam yeniden üretimde toplanıp uygulanır.
+* Üretim, derleme ve oyun testleri hiçbir zaman aynı anda çalıştırılmaz (bellek sınırı).
 
-## 10. Decisions fixed by this plan
+## 10. Bu planın sabitlediği kararlar
 
-* Collector design: concurrent SATB marking on a background thread, lazy non-moving sweep, no generational scheme for now.
-* Pause budget: only the root snapshot; everything else is concurrent or amortized.
-* Ownership is declared in patches, enforced in debug by poisoning, and never inferred silently.
-* The collector is removed from the default path only after a passed soak; it stays in the tree behind a feature as the net.
-* Order: measure, then shrink garbage, then make the net invisible; the barrier and marker go in one regeneration.
+* Toplayıcı tasarımı: arka plan iş parçacığında eşzamanlı SATB işaretleme, tembel taşımasız süpürme, şimdilik nesilsel şema yok.
+* Duraklama bütçesi: yalnızca kök anlık görüntüsü; geri kalan her şey eşzamanlı ya da amortismandır.
+* Sahiplik yamalarda ilan edilir, hata ayıklamada zehirlemeyle zorlanır ve asla sessizce çıkarılmaz.
+* Toplayıcı, geçen bir soak'tan sonra varsayılan yoldan çıkarılır; güvenlik ağı olarak bir özellik arkasında ağaçta kalır.
+* Sıra: ölç, sonra çöpü azalt, sonra güvenlik ağını görünmez yap; bariyer ve işaretleyici tek bir yeniden üretimde girer.
 
-## 11. Risks
+## 11. Riskler
 
-* A missed barrier (raw reference store in a native or patch) loses live objects under SATB: mitigated by the single store API, the grep check, and verify mode.
-* Conservative stack scanning keeps some garbage alive: bounded, visible in the leak tool.
-* Owned release bugs corrupt memory: poisoning/quarantine mode and the reachability audit; ship owned types one at a time.
-* Fragmentation without compaction: slab occupancy metric; size-class tuning from the profile.
-* Android: marker thread priority and big.LITTLE scheduling need measuring on a device (phase 7).
+* Eksik bir bariyer (yerel ya da yamada ham referans yazımı) SATB altında canlı nesneleri kaybettirir: tek depolama API'si, grep denetimi ve doğrulama modu ile azaltılır.
+* Muhafazakâr yığın taraması bazı çöpleri canlı tutar: sınırlıdır, sızıntı aracında görünür.
+* Sahipli serbest bırakma hataları belleği bozar: zehirleme/karantina modu ve erişilebilirlik denetimi; sahipli tipler birer birer devreye alınır.
+* Sıkıştırma olmadan parçalanma: dilim doluluk metriği; profilden boyut sınıfı ayarı.
+* Android: işaretleyici iş parçacığı önceliği ve big.LITTLE zamanlaması bir cihazda ölçülmeli (faz 7).
 
-## Pre-registered leak gate (fixed before the measurement)
+## Önceden kaydedilmiş sızıntı kapısı (ölçümden önce sabitlendi)
 
-- Scenario: open the saved world, stand still (no walking, no new chunks), 60 minutes (`tools/leak_soak.sh --minutes 60`).
-- Warm-up: the first 30 minutes are ignored (the world around the player settles in this window, measured in the first 60-minute soak).
-- Gate: least-squares slope of live managed bytes over minutes 30-60, from `tools/leak_budget.py --warmup-s 1800 --budget-mb-per-min 1`.
-- Pass: slope <= 1 MiB/min. Fail: anything above. The window is not changed after the run.
+- Senaryo: kaydedilmiş dünyayı aç, hareketsiz dur (yürüme yok, yeni yonga yok), 60 dakika (`tools/leak_soak.sh --minutes 60`).
+- Isınma: ilk 30 dakika yok sayılır (oyuncunun çevresindeki dünya bu pencerede oturur; ilk 60 dakikalık soak'ta ölçüldü).
+- Kapı: 30-60. dakikalar arasında yönetilen canlı baytların en küçük kareler eğimi, `tools/leak_budget.py --warmup-s 1800 --budget-mb-per-min 1` ile.
+- Geçer: eğim <= 1 MiB/dk. Kalır: üzerindeki her şey. Pencere koşudan sonra değiştirilmez.
