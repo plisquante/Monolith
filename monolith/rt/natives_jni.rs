@@ -1,6 +1,6 @@
-//! Netty native transport (epoll + unix domain/TCP/UDP sockets + BSD kqueue guard),
-//! JNA (`com.sun.jna.Native` over dlopen/dlsym/libffi), Tracy profiler bindings,
-//! and NarratorLinux (`libflite.so.1` via dlopen).
+//! Netty yerel taşıyıcısı (epoll + unix domain/TCP/UDP soketleri + BSD kqueue koruması),
+//! JNA (dlopen/dlsym/libffi üzerinden `com.sun.jna.Native`), Tracy profilci bağlamaları
+//! ve NarratorLinux (dlopen ile `libflite.so.1`).
 use crate::heap::ScopedBlock;
 use crate::rt::{self, Arr, Ref, Res};
 use std::collections::HashMap;
@@ -722,7 +722,7 @@ pub fn n_io_netty_channel_epoll_LinuxSocket__sendFile(fd: i32, region: Ref, base
     Ok(if n < 0 { -(errno() as i64) } else { n as i64 })
 }
 
-// ------------------------------------------------------------------ io.netty.channel.kqueue (BSD-only -> UnsatisfiedLinkError on Linux)
+// ------------------------------------------------------------------ io.netty.channel.kqueue (yalnızca BSD -> Linux'ta UnsatisfiedLinkError)
 fn kqueue_err<T>() -> Res<T> {
     rt::throw("java/lang/UnsatisfiedLinkError", "kqueue unavailable on Linux".to_string())
 }
@@ -773,11 +773,11 @@ fn jna_addr(ptr: Ref, base: i64, off: i64) -> usize {
     b.wrapping_add(off as usize)
 }
 
-// inline(never): the generated code must call this body; an inlined copy would survive in reused objects.
+// inline(never): üretilen kod bu gövdeyi çağırmalıdır; satır içi alınmış bir kopya yeniden kullanılan nesnelerde sağ kalırdı.
 #[inline(never)]
-/// jnidispatch's `initIDs`: stores the libffi type descriptors in `Structure.FFIType.FFITypes`, as `Pointer` objects.
-/// Without them `Structure.FFIType` cannot be initialised ("FFI types not initialized"), and JNA users such as the
-/// narrator fail at start-up.
+/// jnidispatch'in `initIDs` fonksiyonu: libffi tip tanımlayıcılarını `Pointer` nesneleri olarak `Structure.FFIType.FFITypes` içinde saklar.
+/// Bunlar olmadan `Structure.FFIType` ilklenemez ("FFI types not initialized") ve anlatıcı gibi JNA kullanıcıları
+/// açılışta başarısız olur.
 pub fn n_com_sun_jna_Native__initIDs() -> Res<()> {
     if std::env::var_os("MONO_JNA_TRACE").is_some() {
         eprintln!("jna: initIDs entered");
@@ -955,7 +955,7 @@ unsafe fn jna_ffi_call(fp: i64, args_arr: Ref, rtype: *mut c_void, ret_buf: *mut
     let mut arg_types: Vec<*mut c_void> = Vec::with_capacity(argc);
     let mut arg_vals: Vec<u64> = vec![0; argc];
     let mut cstrings: Vec<CString> = Vec::new();
-    // `i` is also the index into the Java array (aload), so the range loop stays
+    // `i` aynı zamanda Java dizisine indekstir (aload), bu yüzden aralık döngüsü kalır
     #[allow(clippy::needless_range_loop)]
     for i in 0..argc {
         let a = rt::aload::<Ref>(args_arr, i as i32)?;
@@ -1069,7 +1069,7 @@ pub fn n_com_sun_jna_Native__registerMethod(
     Ok(0)
 }
 
-// ------------------------------------------------------------------ TracyBindings & NarratorLinux (Flite)
+// ------------------------------------------------------------------ TracyBindings ve NarratorLinux (Flite)
 static TRACY_IDS: AtomicU32 = AtomicU32::new(1);
 static TRACY_START: OnceLock<Instant> = OnceLock::new();
 fn tracy_plots() -> &'static Mutex<HashMap<i64, f64>> {
@@ -1128,8 +1128,8 @@ fn kal16_lib() -> *mut c_void {
         h as usize
     }) as *mut c_void
 }
-/// libflite / the kal16 voice can be opened (the narrator patch, patches/rust/narrator.rs, replaces JNA's
-/// `Native.register` with this check: the natives above are bound by name, JNA is not needed to load them).
+/// libflite / kal16 sesi açılabilir (anlatıcı yaması patches/rust/narrator.rs, JNA'nın `Native.register`'ını bu denetimle
+/// değiştirir: yukarıdaki yerel metotlar adla bağlanır, yüklemek için JNA gerekmez).
 pub fn flite_available() -> bool { !flite_lib().is_null() }
 pub fn flite_kal16_available() -> bool { !kal16_lib().is_null() }
 fn jna_ptr(peer: usize) -> Res<Ref> {

@@ -1,6 +1,6 @@
-//! Native methods of the class library overlay. Value types follow the JVM stack: boolean/byte/char/short/int are i32.
-//! Names: `n_<class>__<method>` (class with `/` -> `_`);
-//! overloaded natives of one class get a `__<desc hash>` suffix, shown by the generator in its missing-natives list.
+//! Sınıf kütüphanesi kaplamasının yerel metotları. Değer tipleri JVM yığınını izler: boolean/byte/char/short/int, i32'dir.
+//! Adlar: `n_<sınıf>__<metot>` (sınıfta `/` -> `_`);
+//! bir sınıfın aşırı yüklenmiş yerel metotları `__<tanımlayıcı karması>` soneki alır; üreteç bunu eksik-yerel-metot listesinde gösterir.
 #![allow(dead_code, non_snake_case, unused_imports)]
 use crate::rt::{self, Ref, Res, Class, Obj, Arr, StrObj};
 use crate::*;
@@ -88,7 +88,7 @@ pub fn n_java_lang_System__arraycopy(src: Ref, sp: i32, dst: Ref, dp: i32, n: i3
                 if !rt::is_subclass(se, de) {
                     let sptr = arr_data(src) as *const Ref;
                     let dptr = arr_data(dst) as *mut Ref;
-                    // the overwritten elements are snapshot values (SATB)
+                    // üzerine yazılan elemanlar anlık görüntü değerleridir (SATB)
                     crate::heap::satb_log_range(dptr.add(dp as usize) as *const u8, n as usize * std::mem::size_of::<Ref>());
                     let same = src.0 == dst.0;
                     for k in 0..n as usize {
@@ -105,7 +105,7 @@ pub fn n_java_lang_System__arraycopy(src: Ref, sp: i32, dst: Ref, dp: i32, n: i3
         }
         let es = rt::elem_size(sc.elem);
         if sc.elem == b'A' {
-            // reference array: the overwritten elements are snapshot values (SATB)
+            // referans dizisi: üzerine yazılan elemanlar anlık görüntü değerleridir (SATB)
             crate::heap::satb_log_range((arr_data(dst)).add(dp as usize * es), n as usize * es);
         }
         std::ptr::copy((arr_data(src)).add(sp as usize * es), (arr_data(dst)).add(dp as usize * es), n as usize * es);
@@ -155,7 +155,7 @@ pub fn n_java_lang_Runtime__maxMemory(this: Ref) -> Res<i64> {
     Ok(i64::MAX)
 }
 
-// ------------------------------------------------------------------ numerics
+// ------------------------------------------------------------------ sayısal işlemler
 pub fn n_java_lang_Double__doubleToRawLongBits(v: f64) -> Res<i64> {
     Ok(v.to_bits() as i64)
 }
@@ -163,7 +163,7 @@ pub fn n_java_lang_Float__floatToRawIntBits(v: f32) -> Res<i32> {
     Ok(v.to_bits() as i32)
 }
 
-// ------------------------------------------------------------------ Throwable / threads
+// ------------------------------------------------------------------ Throwable / iş parçacıkları
 pub fn n_java_lang_Throwable__backtrace0(_this: Ref) -> Res<Ref> {
     Ok(rt::new_str(rt::capture_backtrace()))
 }
@@ -265,7 +265,7 @@ pub fn n_jdk_internal_misc_Unsafe__getReferenceVolatile(this: Ref, o: Ref, off: 
     Ok(unsafe { (addr(o, off) as *const Ref).read() })
 }
 
-// ------------------------------------------------------------------ misc
+// ------------------------------------------------------------------ çeşitli
 pub fn n_java_util_concurrent_atomic_AtomicLong__cas(this: Ref, expected: i64, new: i64) -> Res<i32> {
     let p = rt::nn(this)?;
     let a = unsafe { &*((p as *mut u8).add(16) as *const std::sync::atomic::AtomicI64) };
@@ -285,7 +285,7 @@ pub fn n_java_lang_reflect_Array__newArray(c: Ref, n: i32) -> Res<Ref> {
     }
 }
 
-// ------------------------------------------------------------------ Unsafe: raw memory
+// ------------------------------------------------------------------ Unsafe: ham bellek
 macro_rules! unsafe_put {
     ($name:ident, $t:ty, $arg:ty) => {
         pub fn $name(this: Ref, o: Ref, off: i64, v: $arg) -> Res<()> {
@@ -380,7 +380,7 @@ pub fn n_java_lang_invoke_MethodHandles__fieldIsFinal0(c: Ref, name: Ref, is_sta
     Ok(match k.find_field(&n, is_static != 0) { Some((_, f)) => (f.access & 0x10 != 0) as i32, None => 0 })
 }
 
-// ------------------------------------------------------------------ Class: init, enums
+// ------------------------------------------------------------------ Class: başlatma, enum'lar
 pub fn n_java_lang_Class__ensureInit(this: Ref) -> Res<()> {
     let c = rt::class_of_mirror(rt::nn_ref(this)?);
     if let Some(i) = c.init { i().res()?; }
@@ -394,7 +394,7 @@ pub fn n_java_lang_Class__enumValues0(this: Ref) -> Res<Ref> {
     }
 }
 
-// ------------------------------------------------------------------ misc small
+// ------------------------------------------------------------------ çeşitli küçükler
 pub fn n_java_lang_Float__intBitsToFloat(v: i32) -> Res<f32> {
     Ok(f32::from_bits(v as u32))
 }
@@ -411,7 +411,7 @@ pub fn n_java_lang_String__intern(this: Ref) -> Res<Ref> {
     Ok(rt::intern_string(this))
 }
 
-// ------------------------------------------------------------------ monitors and threads (sync.rs)
+// ------------------------------------------------------------------ monitörler ve iş parçacıkları (sync.rs)
 use crate::sync;
 pub fn n_java_lang_Object__notify(this: Ref) -> Res<()> { sync::notify(this, false) }
 pub fn n_java_lang_Object__notifyAll(this: Ref) -> Res<()> { sync::notify(this, true) }
@@ -427,7 +427,7 @@ pub fn n_java_lang_Thread__holdsLock(o: Ref) -> Res<i32> { Ok(sync::holds_lock(o
 pub fn n_jdk_internal_misc_Unsafe__park(this: Ref, absolute: i32, time: i64) -> Res<()> { sync::park(absolute != 0, time); Ok(()) }
 pub fn n_jdk_internal_misc_Unsafe__unpark(this: Ref, t: Ref) -> Res<()> { sync::unpark(t); Ok(()) }
 
-// ------------------------------------------------------------------ System properties, Runtime
+// ------------------------------------------------------------------ Sistem özellikleri, Runtime
 pub fn n_java_lang_System__cwd0() -> Res<Ref> {
     Ok(rt::new_str(std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| "/".into())))
 }
@@ -468,7 +468,7 @@ pub fn n_java_security_SecureRandom__fill0(b: Ref) -> Res<()> {
 }
 pub fn n_java_io_ObjectStreamClass__initNative() -> Res<()> { Ok(()) }
 
-// ------------------------------------------------------------------ Reflection basics, Class queries
+// ------------------------------------------------------------------ Yansıma temelleri, Class sorguları
 pub fn n_jdk_internal_reflect_Reflection__getCallerClass() -> Res<Ref> {
     match rt::caller() {
         Some(c) => rt::class_mirror(c),

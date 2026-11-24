@@ -1,4 +1,4 @@
-//! NIO filesystem and channel natives (UnixNativeDispatcher, LinuxNativeDispatcher,
+//! NIO dosya sistemi ve kanal yerel metotları (UnixNativeDispatcher, LinuxNativeDispatcher,
 //! LinuxWatchService, UnixFileDispatcherImpl, FileDispatcherImpl, EPoll, EventFD,
 //! IOUtil, NativeThread, FileKey, UnixDispatcher, MappedMemoryUtils).
 use crate::heap::ScopedBlock;
@@ -551,7 +551,7 @@ pub fn n_sun_nio_fs_UnixNativeDispatcher__fremovexattr0(_fd: i32, _n: i64) -> Re
 pub fn n_sun_nio_fs_UnixNativeDispatcher__flistxattr(_fd: i32, _l: i64, _n: i32) -> Res<i32> { no_xattr() }
 pub fn n_sun_nio_fs_UnixNativeDispatcher__fchmodatNoFollowSupported0() -> Res<i32> { Ok(0) }
 
-// ------------------------------------------------------------------ LinuxNativeDispatcher & bufferedCopy0
+// ------------------------------------------------------------------ LinuxNativeDispatcher ve bufferedCopy0
 pub fn n_sun_nio_fs_LinuxNativeDispatcher__init() -> Res<()> { Ok(()) }
 
 pub fn n_sun_nio_fs_LinuxNativeDispatcher__setmntent0(p: i64, m: i64) -> Res<i64> {
@@ -720,7 +720,7 @@ pub fn n_sun_nio_fs_LinuxWatchService__poll(fd1: i32, fd2: i32) -> Res<i32> {
     Ok(r)
 }
 
-// ------------------------------------------------------------------ UnixFileDispatcherImpl & FileDispatcherImpl
+// ------------------------------------------------------------------ UnixFileDispatcherImpl ve FileDispatcherImpl
 pub fn n_sun_nio_ch_UnixFileDispatcherImpl__read0(fdo: Ref, a: i64, len: i32) -> Res<i32> {
     let fd = rt::fd_of(fdo)?;
     let n = {

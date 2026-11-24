@@ -1,10 +1,10 @@
-//! SIGTERM, SIGINT and SIGHUP end a Java program through `Runtime.exit(128 + signal)`, so the shutdown hooks run first, as
-//! they do on HotSpot. Minecraft saves the world and stops the integrated server in such a hook; without this a `kill`,
-//! Ctrl-C in a terminal or a system shutdown stopped the process at once and the hooks never ran.
+//! SIGTERM, SIGINT ve SIGHUP bir Java programını `Runtime.exit(128 + sinyal)` ile bitirir; böylece kapanış kancaları, HotSpot'taki gibi
+//! önce çalışır. Minecraft dünyayı kaydeder ve gömülü sunucuyu böyle bir kancada durdurur; bu olmadan bir `kill`,
+//! terminalde Ctrl-C ya da bir sistem kapanışı süreci anında durdurur ve kancalar hiç çalışmazdı.
 //!
-//! The handler only writes the signal number into a pipe (async-signal-safe). The Java thread `Signal Dispatcher`
-//! (`java.lang.MonoSignals`) blocks in `await0` on the read end and calls `Runtime.exit` when a number arrives.
-//! Linux only for now: elsewhere `install0` reports 0 and the signals keep their default action.
+//! İşleyici yalnızca sinyal numarasını bir boruya yazar (sinyal-güvenli). `Signal Dispatcher` Java iş parçacığı
+//! (`java.lang.MonoSignals`) okuma ucunda `await0` içinde bloke olur ve bir numara geldiğinde `Runtime.exit` çağırır.
+//! Şimdilik yalnızca Linux: başka yerlerde `install0` 0 bildirir ve sinyaller varsayılan eylemini korur.
 use crate::rt::Res;
 
 #[cfg(target_os = "linux")]
@@ -15,7 +15,7 @@ mod imp {
     static WFD: AtomicI32 = AtomicI32::new(-1);
     static RFD: AtomicI32 = AtomicI32::new(-1);
 
-    /// glibc `struct sigaction` on Linux x86_64 and aarch64 (the layout crash.rs uses too).
+    /// Linux x86_64 ve aarch64 üzerinde glibc `struct sigaction` (crash.rs'in de kullandığı yerleşim).
     #[repr(C)]
     struct SigAction {
         sa_handler: usize,
@@ -42,7 +42,7 @@ mod imp {
         let fd = WFD.load(Ordering::Relaxed);
         if fd >= 0 {
             let b = [sig as u8];
-            // the write end is non-blocking: a full pipe (nobody reading) drops the byte instead of blocking in a handler
+            // yazma ucu bloke etmez: dolu bir boru (okuyan yok) bir işleyicide bloke olmak yerine baytı düşürür
             unsafe {
                 let _ = write(fd, b.as_ptr() as *const c_void, 1);
             }
@@ -77,7 +77,7 @@ mod imp {
         true
     }
 
-    /// Blocks until a signal number arrives; 0 when the pipe is gone.
+    /// Bir sinyal numarası gelene kadar bloke olur; boru yoksa 0.
     pub fn wait() -> i32 {
         let fd = RFD.load(Ordering::Relaxed);
         if fd < 0 {
@@ -110,12 +110,12 @@ mod imp {
     }
 }
 
-/// `MonoSignals.install0()`: 1 when SIGHUP, SIGINT and SIGTERM now go to the dispatcher thread, 0 when not supported.
+/// `MonoSignals.install0()`: SIGHUP, SIGINT ve SIGTERM artık dağıtıcı iş parçacığına gidiyorsa 1, desteklenmiyorsa 0.
 pub fn n_java_lang_MonoSignals__install0() -> Res<i32> {
     Ok(imp::install() as i32)
 }
 
-/// `MonoSignals.await0()`: the number of the next signal (blocks), or 0 when signals are not delivered any more.
+/// `MonoSignals.await0()`: sonraki sinyalin numarası (bloke olur), ya da sinyaller artık iletilmiyorsa 0.
 pub fn n_java_lang_MonoSignals__await0() -> Res<i32> {
     Ok(imp::wait())
 }

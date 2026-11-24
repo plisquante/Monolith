@@ -1,4 +1,4 @@
-//! Heap facade. The runtime allocates, runs write barriers and collects only through this module.
-//! It currently forwards to the tracing collector in `gc`; the collector can be replaced behind this
-//! module without touching the natives, the generated code or the class model.
+//! Heap cephesi. Çalışma zamanı yalnızca bu modül üzerinden tahsis eder, yazma bariyerlerini çalıştırır ve toplama yapar.
+//! Şu an `gc` içindeki izleyici (tracing) toplayıcıya yönlendirir; toplayıcı, yerel metotlara, üretilen koda ya da sınıf modeline
+//! dokunmadan bu modülün arkasında değiştirilebilir.
 pub use crate::gc::*;

@@ -1,4 +1,4 @@
-//! Reflection, ConstantPool, Unsafe field-offset, MethodHandleAccessorFactory, and MethodHandleNatives.
+//! Yansıma, ConstantPool, Unsafe alan ofseti, MethodHandleAccessorFactory ve MethodHandleNatives.
 use crate::rt::{self, Arr, Class, CpEnt, FLoc, Ref, Res};
 use crate::natives::n_java_lang_String__intern;
 use std::sync::atomic::Ordering;
@@ -97,7 +97,7 @@ fn parse_param_descs(desc: &str) -> Vec<&str> {
     out
 }
 
-// ------------------------------------------------------------------ java.lang.Class reflection
+// ------------------------------------------------------------------ java.lang.Class yansıması
 pub fn n_java_lang_Class__newField0(this: Ref, name: Ref) -> Res<Ref> {
     let c = rt::class_of_mirror(rt::nn_ref(this)?);
     let n = rt::str_to_rust(rt::nn_ref(name)?);
@@ -319,7 +319,7 @@ pub fn n_jdk_internal_reflect_ConstantPool__getTagAt0(this: Ref, oop: Ref, idx: 
     })
 }
 
-// ------------------------------------------------------------------ Unsafe Field-based offset queries
+// ------------------------------------------------------------------ Unsafe alan tabanlı ofset sorguları
 fn field_target(f: Ref) -> Res<(&'static Class, String, bool)> {
     rt::nn(f)?;
     let clazz = get_ref(f, "clazz");
@@ -353,7 +353,7 @@ pub fn n_jdk_internal_misc_Unsafe__staticFieldBase0(this: Ref, f: Ref) -> Res<Re
     Ok(Ref::NULL)
 }
 
-// ------------------------------------------------------------------ Reflective invocation
+// ------------------------------------------------------------------ Yansıtmalı çağrı
 fn find_target(decl: &'static Class, slot: usize, recv: Ref, dispatch: bool) -> Res<&'static rt::MInfo> {
     let m = &decl.methods[slot];
     if dispatch && (m.access & 0x000A) == 0 && !recv.is_null() {
@@ -430,7 +430,7 @@ pub fn n_java_lang_invoke_MonoMH__newInstance0(c: Ref, args: Ref) -> Res<Ref> {
     n_jdk_internal_reflect_MethodHandleAccessorFactory__newInstance0(c, args)
 }
 
-// ------------------------------------------------------------------ JDK 25 MethodHandleNatives & NativeImageBuffer
+// ------------------------------------------------------------------ JDK 25 MethodHandleNatives ve NativeImageBuffer
 pub fn n_java_lang_invoke_MethodHandleNatives__registerNatives() -> Res<()> { Ok(()) }
 pub fn n_java_lang_invoke_MethodHandleNatives__getNamedCon(which: i32, name: Ref) -> Res<i32> { Ok(0) }
 pub fn n_java_lang_invoke_MethodHandleNatives__init(this_mh: Ref, r: Ref) -> Res<()> { Ok(()) }

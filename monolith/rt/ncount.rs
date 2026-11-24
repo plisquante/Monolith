@@ -1,9 +1,9 @@
-//! Counts the calls of the JNI/JNA emulation natives (`natives_jni.rs`: netty epoll and kqueue, JNA, Tracy, the narrator).
-//! The goal of docs/MASTER_PLAN_TR.md WS2 is zero such calls in 30 minutes of play; this is the meter for it.
+//! JNI/JNA öykünme yerel metotlarının (`natives_jni.rs`: netty epoll ve kqueue, JNA, Tracy, anlatıcı) çağrılarını sayar.
+//! docs/MASTER_PLAN_TR.md WS2'nin hedefi, 30 dakikalık oyunda sıfır böyle çağrıdır; bu, onun ölçeğidir.
 //!
-//! `MONO_COUNT_NATIVES=1` prints the table to stderr when the process exits, `MONO_COUNT_NATIVES=<file>` writes it there.
-//! Off, a call costs one relaxed load. The table is written by an `atexit` handler: a process that ends by `_exit`, a
-//! crash or a kill does not print it.
+//! `MONO_COUNT_NATIVES=1` süreç çıkarken tabloyu stderr'e yazdırır, `MONO_COUNT_NATIVES=<dosya>` oraya yazar.
+//! Kapalıyken bir çağrı tek bir gevşek yüklemeye mal olur. Tablo bir `atexit` işleyicisi tarafından yazılır: `_exit` ile biten bir süreç,
+//! bir çökme ya da bir kill onu yazdırmaz.
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -12,7 +12,7 @@ static ON: AtomicBool = AtomicBool::new(false);
 static COUNTS: Mutex<BTreeMap<&'static str, u64>> = Mutex::new(BTreeMap::new());
 static TARGET: Mutex<Option<String>> = Mutex::new(None);
 
-/// Called by the generated stub of every emulation native, with its Rust name.
+/// Her öykünme yerel metodunun üretilen taslağı tarafından, Rust adıyla çağrılır.
 #[inline(always)]
 pub fn count(name: &'static str) {
     if ON.load(Ordering::Relaxed) {
@@ -27,7 +27,7 @@ fn count_slow(name: &'static str) {
     *c.entry(name).or_insert(0) += 1;
 }
 
-/// The table: total, then one line per native, most called first.
+/// Tablo: önce toplam, sonra yerel metot başına bir satır, en çok çağrılan önce.
 pub fn render() -> String {
     let c = COUNTS.lock().unwrap_or_else(|e| e.into_inner());
     let total: u64 = c.values().sum();
@@ -40,7 +40,7 @@ pub fn render() -> String {
     s
 }
 
-/// Starts counting; the table goes to `target` (a file) or to stderr when `None`.
+/// Saymayı başlatır; tablo `target`'a (bir dosya) ya da `None` ise stderr'e gider.
 pub fn enable(target: Option<String>) {
     *TARGET.lock().unwrap_or_else(|e| e.into_inner()) = target;
     ON.store(true, Ordering::Relaxed);
@@ -67,7 +67,7 @@ unsafe extern "C" {
     fn atexit(cb: extern "C" fn()) -> std::os::raw::c_int;
 }
 
-/// Reads MONO_COUNT_NATIVES and, when it is set, starts counting and registers the table for process exit.
+/// MONO_COUNT_NATIVES'i okur ve ayarlıysa saymayı başlatır ve tabloyu süreç çıkışı için kaydeder.
 pub fn install() {
     let Some(v) = std::env::var_os("MONO_COUNT_NATIVES") else { return };
     let v = v.to_string_lossy().into_owned();

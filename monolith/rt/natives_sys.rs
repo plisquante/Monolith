@@ -1,5 +1,5 @@
 //! System, Process, Module, StackWalker, MethodHandle/MethodHandleNatives, CgroupMetrics,
-//! Continuation, Foreign/LibFallback (libffi), Management, NativeLibraries, and JFR natives.
+//! Continuation, Foreign/LibFallback (libffi), Management, NativeLibraries ve JFR yerel metotları.
 use crate::heap::ScopedBlock;
 use crate::natives_io::{loaded_lib_handles, register_lib_handle};
 use crate::rt::{self, Arr, FLoc, Ref, Res};
@@ -333,8 +333,8 @@ unsafe extern "system" {
 }
 
 pub fn n_java_lang_StackWalker__frames0() -> Res<Ref> {
-    // The shadow stack is exact (generated methods push their own frame); the machine stack is not, because an
-    // instruction address only tells us the nearest method start, not the method that owns it.
+    // Gölge yığın kesindir (üretilen metotlar kendi çerçevelerini iter); makine yığını kesin değildir, çünkü bir
+    // komut adresi bize yalnızca en yakın metot başlangıcını söyler, onun sahibi olan metodu değil.
     let frames = rt::frames_snapshot();
     let cls_cls = rt::hooks().class_class;
     let str_cls = rt::hooks().string_class;
@@ -342,7 +342,7 @@ pub fn n_java_lang_StackWalker__frames0() -> Res<Ref> {
     let mut mirrors: Vec<Ref> = Vec::with_capacity(frames.len());
     let mut kept: Vec<(&'static str, &'static str, &'static str, i32)> = Vec::with_capacity(frames.len());
     for (cls, method, desc, file, line) in frames {
-        // classes the program cannot name (generated lambda proxies have no class-table entry) are skipped
+        // programın adlandıramadığı sınıflar (üretilmiş lambda vekillerinin sınıf tablosu girdisi yoktur) atlanır
         let Some(c) = rt::find_class(&cls.replace('/', ".")) else { continue };
         mirrors.push(rt::class_mirror(c)?);
         kept.push((method, desc, file, line));
@@ -605,7 +605,7 @@ pub fn n_jdk_internal_loader_RawNativeLibraries__load0(impl_obj: Ref, path: Ref)
     n_jdk_internal_loader_NativeLibraries__load(impl_obj, path, 0, 0)
 }
 
-// ------------------------------------------------------------------ Foreign Linker (LibFallback over real libffi + NativeEntryPoint)
+// ------------------------------------------------------------------ Foreign Linker (gerçek libffi üzerinde LibFallback + NativeEntryPoint)
 pub fn n_jdk_internal_foreign_abi_NativeEntryPoint__registerNatives() -> Res<()> { Ok(()) }
 pub fn n_jdk_internal_foreign_abi_NativeEntryPoint__makeDowncallStub(
     _mt: Ref, _abi: Ref, _args: Ref, _rets: Ref, _needs_ret: i32, _rank: i32, _needs_t: i32,
@@ -797,7 +797,7 @@ extern "C" {
     fn tcsetattr(fd: c_int, action: c_int, t: *const u8) -> c_int;
 }
 
-/// Bits: 1 = stdin, 2 = stdout, 4 = stderr is a character device (java.io.Console.TTY_*_MASK).
+/// Bitler: 1 = stdin, 2 = stdout, 4 = stderr bir karakter aygıtıdır (java.io.Console.TTY_*_MASK).
 pub fn n_java_io_Console__ttyStatus() -> Res<i32> {
     let mut s = 0;
     unsafe {
@@ -814,8 +814,8 @@ pub fn n_java_io_Console__ttyStatus() -> Res<i32> {
     Ok(s)
 }
 
-/// Turns the echo of the terminal on stdin on or off; returns whether echo was on before.
-/// termios on Linux and Android: c_lflag is the fourth 32-bit field (byte offset 12); ECHO is 0o10.
+/// stdin üzerindeki terminalin yankısını (echo) açar ya da kapatır; öncesinde yankının açık olup olmadığını döndürür.
+/// Linux ve Android'de termios: c_lflag dördüncü 32 bitlik alandır (bayt ofseti 12); ECHO 0o10'dur.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub fn n_jdk_internal_io_JdkConsoleImpl__echo(on: i32) -> Res<i32> {
     const TCSANOW: c_int = 0;

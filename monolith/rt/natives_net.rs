@@ -1,4 +1,4 @@
-//! Networking natives: sun.nio.ch.Net, SocketDispatcher, DatagramDispatcher,
+//! Ağ yerel metotları: sun.nio.ch.Net, SocketDispatcher, DatagramDispatcher,
 //! DatagramChannelImpl, NativeSocketAddress, UnixDomainSockets, InetAddress,
 //! Inet4AddressImpl, Inet6AddressImpl, NetworkInterface, DefaultProxySelector, SdpSupport.
 use crate::heap::ScopedBlock;
@@ -1057,7 +1057,7 @@ pub fn n_java_net_Inet6AddressImpl__isReachable0(_this: Ref, addr: Ref, scope: i
     Ok(reachable(&mut st, 28, timeout) as i32)
 }
 
-// ------------------------------------------------------------------ NetworkInterface & DefaultProxySelector & SdpSupport
+// ------------------------------------------------------------------ NetworkInterface, DefaultProxySelector ve SdpSupport
 pub fn n_java_net_NetworkInterface__init() -> Res<()> { Ok(()) }
 
 enum IfFilter<'a> {

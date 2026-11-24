@@ -1,6 +1,6 @@
-//! Zero-LWJGL RHI (`mono.rhi.NativeRhi` 124 methods) + Shader Compiler (`org.lwjgl.util.MonoShader` 38 methods).
-//! Dynamically binds OpenGL 3.3 Core / GLES 3.0 (`libGLESv3.so` / `libGL.so.1`), TouchCore Android Surface/Input
-//! (`libtouchcore_mono.so`), OpenAL (`libopenal.so.1`), shaderc (`libshaderc.so`), and SPIRV-Cross (`libspirv-cross.so`).
+//! Sıfır-LWJGL RHI (`mono.rhi.NativeRhi` 124 metot) + Gölgelendirici Derleyicisi (`org.lwjgl.util.MonoShader` 38 metot).
+//! OpenGL 3.3 Core / GLES 3.0'ı (`libGLESv3.so` / `libGL.so.1`), TouchCore Android Yüzey/Girdi'yi
+//! (`libtouchcore_mono.so`), OpenAL'ı (`libopenal.so.1`), shaderc'i (`libshaderc.so`) ve SPIRV-Cross'u (`libspirv-cross.so`) dinamik olarak bağlar.
 use crate::rt::{self, Arr, Ref, Res};
 use crate::desk::{self, dl_open_any, dl_sym, sym_fn, TcPollSnapshot};
 use std::cell::Cell;
@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 
-// ------------------------------------------------------------------ RHI World Culling & Instance Batcher State
+// ------------------------------------------------------------------ RHI Dünya Elemesi ve Örnek Toplayıcı Durumu
 #[derive(Clone, Copy)]
 struct SectionSnap {
     sx: i32,
@@ -347,7 +347,7 @@ pub fn n_mono_rhi_NativeRhi__frameEpoch0() -> Res<i64> { Ok(FRAME_EPOCH.load(Ord
 pub fn n_mono_rhi_NativeRhi__threadCount0() -> Res<i64> { Ok(1) }
 pub fn n_mono_rhi_NativeRhi__droppedSections0() -> Res<i64> { Ok(rhi_state().lock().unwrap().dropped_sections as i64) }
 
-// ------------------------------------------------------------------ TouchCore Host & GL/GLES3 Dynamic Dispatch
+// ------------------------------------------------------------------ TouchCore Ana Makinesi ve GL/GLES3 Dinamik Dağıtımı
 
 fn tc_lib() -> *mut c_void {
     static H: OnceLock<usize> = OnceLock::new();
@@ -1168,8 +1168,8 @@ pub fn n_mono_rhi_NativeRhi__glClientWaitSync0(sync: i64, flags: i32, timeout_ns
         .unwrap_or(0x911A))
 }
 
-// ------------------------------------------------------------------ OpenAL-compatible audio (audio.rs, audio_dev.rs)
-// The Java side (runtime/java/mono/rhi/NativeRhi.java) keeps its names; the work is done by the Rust mixer.
+// ------------------------------------------------------------------ OpenAL uyumlu ses (audio.rs, audio_dev.rs)
+// Java tarafı (runtime/java/mono/rhi/NativeRhi.java) adlarını korur; işi Rust karıştırıcısı yapar.
 fn al_ctx() -> std::sync::Arc<std::sync::Mutex<crate::audio::Context>> {
     crate::audio_dev::context()
 }
@@ -1232,7 +1232,7 @@ pub fn n_mono_rhi_NativeRhi__alBufferData0(b: i32, fmt: i32, addr: i64, sz: i32,
     let data: &[u8] = if addr == 0 || sz <= 0 {
         &[]
     } else {
-        // the address of a direct ByteBuffer of the caller: valid for the call
+        // çağıranın doğrudan bir ByteBuffer'ının adresi: çağrı süresince geçerli
         unsafe { std::slice::from_raw_parts(addr as usize as *const u8, sz as usize) }
     };
     al_ctx().lock().unwrap().buffer_data(b as u32, fmt, data, freq);

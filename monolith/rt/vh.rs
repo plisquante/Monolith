@@ -1,5 +1,5 @@
-//! VarHandle access modes (field, static field, array element, byte-array view). Port of runtime/varhandle.zig.
-//! `St` is the JVM stack type of a variable type T (byte/short/char/boolean widen to i32).
+//! VarHandle erişim modları (alan, statik alan, dizi elemanı, bayt dizisi görünümü). runtime/varhandle.zig'in taşınmış hâli.
+//! `St`, bir T değişken tipinin JVM yığın tipidir (byte/short/char/boolean, i32'ye genişler).
 use crate::rt::{self, Arr, Obj, Ref, Res};
 use std::sync::atomic::*;
 
@@ -8,15 +8,15 @@ pub trait Vt: Copy {
     const IS_REF: bool = false;
     fn to_st(self) -> Self::St;
     fn from_st(s: Self::St) -> Self;
-    /// # Safety
-    /// `p` must be valid and aligned for reads of `Self`.
+    /// # Güvenlik
+    /// `p`, `Self` okumaları için geçerli ve hizalı olmalıdır.
     unsafe fn load(p: *mut Self) -> Self;
-    /// # Safety
-    /// `p` must be valid and aligned for writes of `Self`.
+    /// # Güvenlik
+    /// `p`, `Self` yazmaları için geçerli ve hizalı olmalıdır.
     unsafe fn store(p: *mut Self, v: Self);
-    /// strong CAS; returns the previous value
-    /// # Safety
-    /// `p` must be valid and aligned for reads and writes of `Self`.
+    /// güçlü CAS; önceki değeri döndürür
+    /// # Güvenlik
+    /// `p`, `Self` okuma ve yazmaları için geçerli ve hizalı olmalıdır.
     unsafe fn cas(p: *mut Self, e: Self, n: Self) -> Self;
     fn bits_eq(a: Self, b: Self) -> bool;
     fn add(a: Self, b: Self) -> Self;
@@ -125,11 +125,11 @@ fn address<T: Vt>(vh: Ref, obj: Ref, idx: i32, nc: u8) -> Res<*mut T> {
 }
 
 fn store_check<T: Vt>(obj: Ref, v: T, nc: u8) -> Res<()> {
-    // reference arrays share one runtime class: the element type check is not modelled (see docs/MONOLITH.md)
+    // referans dizileri tek bir çalışma zamanı sınıfını paylaşır: eleman tipi denetimi modellenmez (bkz. docs/MONOLITH.md)
     Ok(())
 }
 
-/// byteArrayViewVarHandle: (byte[] array, int byteIndex), unaligned, explicit byte order.
+/// byteArrayViewVarHandle: (byte[] dizi, int byteIndex), hizasız, açık bayt sırası.
 fn view_ptr<T: Vt>(vh: Ref, obj: Ref, idx: i32) -> Res<Option<*mut u8>> {
     unsafe {
         if vh_i32(vh, rt::hooks().vh_kind) != 3 { return Ok(None); }
