@@ -2219,6 +2219,48 @@ def _older_obj(cache_dir: str, name: str, opt: str, key: str):
     return max(hits, key=os.path.getmtime) if hits else None
 
 
+def prune_shard_cache(cache_dir: str, limit_bytes: int | None = None) -> int:
+    """Keeps the compiled-object cache under `limit_bytes` (default 8 GiB, MONO_SHARD_CACHE_GB overrides): oldest files first
+    (a cache hit refreshes a file's time). The cache is only a speed-up, so deleting from it costs a rebuild and nothing else;
+    without a limit it grew by a few hundred MB for every changed shard and filled a 250 GB disk (42 GB measured).
+    Returns the number of files removed."""
+    if limit_bytes is None:
+        try:
+            limit_bytes = int(float(os.environ.get("MONO_SHARD_CACHE_GB", "8")) * (1 << 30))
+        except ValueError:
+            limit_bytes = 8 << 30
+    entries = []
+    total = 0
+    for dp, _dns, fns in os.walk(cache_dir):
+        for f in fns:
+            p = os.path.join(dp, f)
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            entries.append((st.st_mtime, st.st_size, p))
+            total += st.st_size
+    removed = 0
+    for _mt, size, p in sorted(entries):
+        if total <= limit_bytes:
+            break
+        try:
+            os.remove(p)
+            total -= size
+            removed += 1
+        except OSError:
+            pass
+    return removed
+
+
+def _touch(path: str) -> None:
+    """Marks a cache file as used now, so the pruning above removes the least recently used first."""
+    try:
+        os.utime(path)
+    except OSError:
+        pass
+
+
 def _to_library_entry(main_rs: str) -> str:
     """Turn the generated `fn main()` into `pub fn mono_run() -> i32` (the host process keeps running)."""
     head = "fn main() {\n    rt::init_hooks"
@@ -2349,6 +2391,7 @@ def _android_build(a, files, rt_dir) -> int:
     rt_hash = rt_hasher.hexdigest()[:16]
     cache = os.path.join("/tmp", "monolith_shard_cache", "android")
     os.makedirs(cache, exist_ok=True)
+    prune_shard_cache(os.path.dirname(cache))
 
     def run(cmd, what):
         r = subprocess.run(cmd, capture_output=True, text=True)
@@ -2499,8 +2542,10 @@ def _host_build(a, files, rt_dir) -> int:
     rt_hash = rt_hasher.hexdigest()[:16]
     cache_dir = os.path.join(tempfile.gettempdir(), "monolith_shard_cache")
     os.makedirs(cache_dir, exist_ok=True)
+    prune_shard_cache(cache_dir)
     cached_rlib = os.path.join(cache_dir, f"libmono_rt_{a.opt}_{rt_hash}.rlib")
     if os.path.exists(cached_rlib):
+        _touch(cached_rlib)
         shutil.copy(cached_rlib, rlib)
     else:
         build_runtime_rlib(target, rlib, str(a.opt))
@@ -2534,6 +2579,7 @@ def _host_build(a, files, rt_dir) -> int:
                     shutil.copy(older, obj)
                     return fn, obj, subprocess.CompletedProcess([], 0, "", "")
             if os.path.exists(cached_obj):
+                _touch(cached_obj)
                 shutil.copy(cached_obj, obj)
                 return fn, obj, subprocess.CompletedProcess([], 0, "", "")
             res = subprocess.run(["rustc", *TGT, *LNK, "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
