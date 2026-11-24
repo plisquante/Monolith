@@ -24,4 +24,15 @@ store). No exception or panic was logged.
 Concurrent GC (`MONO_GC_CONCURRENT=1`), one boot: title screen reached, process still running at 120 s, no
 ClassCastException, panic or fatal line in the log. The same three network-only error lines as the plain run.
 
+## Android native core (build and link, no device)
+
+| Step | Result |
+|---|---|
+| `cargo test --offline` in `android/touchcore/native` | pass: 28 of 28 host tests |
+| `tools/build_touchcore_apk.py` with `ANDROID_NDK_HOME` = NDK 26.3.11579264 | pass: Rust core for `aarch64-linux-android` (release), C bridge, APK signed, 5.58 MiB |
+| `libtouchcore_mono.so` in the APK | AArch64 shared object; exports `tc_init`, `tc_tick_frame`, `tc_shutdown`; needs only `libandroid`, `liblog`, `libc`, `libm`, `libdl` |
+
+Not covered: running the engine on a device or emulator, the GPU back ends (`rhi.rs` returns `UnsupportedBackend` for
+Vulkan and GL 3.3), the Minecraft engine library (`libminecraft_mono.so`) inside the APK.
+
 Not covered: multiplayer, Realms, audio output, a second session, long play, repeated boots, FPS and memory figures.

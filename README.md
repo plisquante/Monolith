@@ -62,7 +62,8 @@ The differential tests compare the output of the translated program with HotSpot
 `android/touchcore/` is a native `arm64-v8a` launcher APK (`com.monolith.touchcore`) with a touch HUD and a demo
 mode. It loads an engine library (`libminecraft_mono.so`) built with `python3 tools/mcbuild_rust.py --android <client.jar>`
 (needs the Android NDK and `rustup target add aarch64-linux-android`). The APK is built with
-`python3 tools/build_touchcore_apk.py`. The engine has not been run on a device yet.
+`python3 tools/build_touchcore_apk.py`; that build passes with NDK 26.3 and the native core's host tests pass
+(`docs/VERIFICATION.md`). The engine has not been run on a device yet.
 
 ## Launchers
 

@@ -1,13 +1,13 @@
 ---
 name: monolith-build
-description: Build, test, and run monolith. Use when running tests, transpiling, compiling Zig, building Minecraft, or the Android TouchCore launcher.
+description: Build, test, and run monolith. Use when running tests, transpiling, compiling the generated Rust, building Minecraft, or the Android TouchCore launcher.
 ---
 
 # monolith-build
 
 ## Environment
 - JDK 25 required: `export MONO_JDK_HOME=$HOME/.cache/monolith/temurin-25/jdk-25.0.5+8`. JAVA_HOME may be 21 and silently give wrong output.
-- Memory: Zig compile of Minecraft needs ~10 GB. Never run it with the test suite. One heavy job at a time (`.claude/hooks/guard.py` enforces it).
+- Memory: the Minecraft Rust build (`tools/mcbuild_rust.py`, 32 shards, 2 jobs) peaked near 12 GB. Never run it with the test suite. One heavy job at a time (`.claude/hooks/guard.py` enforces it).
 - Low RAM floors: `MONO_MIN_AVAIL_GIB`, `MONO_TEST_MIN_AVAIL_GIB`. Per-task needs: `docs/HARDWARE.md`.
 
 ## Commands

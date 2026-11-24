@@ -1,6 +1,6 @@
 ---
 name: cmd-output
-description: Filter long command output. Use before running tests, builds, zig/python compiles, git log/diff, or any command that can print more than ~40 lines.
+description: Filter long command output. Use before running tests, builds, rustc/python compiles, git log/diff, or any command that can print more than ~40 lines.
 ---
 
 # cmd-output
