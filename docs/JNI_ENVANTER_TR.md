@@ -43,4 +43,12 @@ sayıldı; birim testi `tests/rust/ncount_main.rs`.
 
 Netty (epoll/kqueue/unix) ve Tracy çağrısı **yok** (açılışta ağ ve profil aracı kullanılmıyor). Yani ilk 75 sn'de kaldırma hedefi:
 JNA'yı anlatıcı (Flite) çağıran taraf kullanıyor; anlatıcı kapatılırsa ya da Rust'a alınırsa bu ölçümdeki çağrıların tamamı gider.
-Henüz **ölçülmeyen**: dünyaya giriş, oynanış, çok oyunculu (netty), kapanış. Tablo yalnızca normal çıkışta yazılır.
+### İkinci ölçüm: açılıştan dünyaya, yürüyüşe ve kapanışa (aynı gün, son build)
+
+`tools/headless_play.sh --seconds 60 --clean-exit`, boş oyun dizini: ana menü, yeni dünya (Creative), 60 sn yürüyüş, `SIGTERM`
+ile kapanış (kancalar çalıştı, dünya kaydedildi, çıkış kodu 143). **139 çağrı, aynı 18 native**: JNA 129, Flite 10. Dünya
+yüklemek ve yürümek ek JNI/JNA çağrısı getirmedi (ilk ölçümden fark: `registerMethod` 14 → 21, Flite 12 → 10). Netty ve Tracy yine yok.
+
+Sonuç: Linux masaüstünde tek oyunculu oturumda JNI/JNA girişlerinin **tamamı anlatıcıdan (Flite, JNA üzerinden) ve JNA'nın
+kendi kaydından** geliyor. Anlatıcıyı çıkarmak ya da Rust'a almak bu ölçümde sayacı 0'a indirir (hedef WS2). Henüz ölçülmeyen:
+çok oyunculu (netty), uzun oynanış, Windows/macOS/Android.
