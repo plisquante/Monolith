@@ -18,7 +18,7 @@ Plan ile bu dosya çelişirse bu dosya geçerlidir. Bir görevde bu dosyada yazm
 
 | # | Karar |
 |---|---|
-| D1 | Tek arka uç Rust. Zig dondurulur (`runtime/*.zig`, `zigen.py`), Rust fark testleri yeşil olunca silinir. |
+| D1 | Tek arka uç Rust. Zig arka ucu (`runtime/*.zig`, `zigen.py`) kaldırıldı; Rust fark süiti yeşil (24/24, 4 atlandı). |
 | D2 | `mono_rt` rustc ile doğrudan derlenmeye devam eder (`rustgen.py` ~satır 2299). Üçüncü parti crate'ler `rt_deps/` (Cargo workspace, `Cargo.lock`, `vendor/`) içinde cargo ile `--release` rlib olarak derlenir; `rustgen` `--extern ad=yol` ve `-L dependency=dizin` geçirir. Doğrulandı: cargo/rustc 1.97 kurulu, crates.io erişilebilir. Sürümler `Cargo.lock` + `cargo vendor` ile sabit, `rust-toolchain.toml` ile rustc sabit. |
 | D3 | macOS: OpenGL 3.3 core. Gerekçe: bağlam zaten 3.3 core isteniyor (`natives_rhi.rs`), oyunun tüm gölgelendiricileri `#version 330`, macOS 4.1 core'a kadar destekler. Vulkan/MoltenVK yok. |
 | D4 | Android: GLES 3.0+ ve gölgelendirici başlık dönüştürme (`#version 330 core` -> `#version 300 es` + precision) metin geçişi, Zig `gl_shim.zig` mantığı Rust'a taşınır (B6). naga/SPIRV yok. |

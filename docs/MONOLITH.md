@@ -1,6 +1,6 @@
 # Monolith: Rust back end
 
-Monolith replaces the Zig back end. Same front end (class loading, reachability, indy desugaring, class library
+Monolith's only back end is Rust (the Zig back end was removed). Same front end (class loading, reachability, indy desugaring, class library
 overlay), Rust output. Entry point: `python3 -m monolith.rustgen --cp <dir> --main <Class> -o <out> [--run] [--strict]`.
 Tests: `python3 monolith/run_tests.py` (each `monolith/tests/*.java` runs on HotSpot and as Rust; stdout and exit
 code must be identical).
@@ -31,10 +31,10 @@ process with exit 70 and a message, nothing is silently skipped)
 - Reference arrays share one runtime class: no `ArrayStoreException`, `checkcast` to `T[]` is loose.
 - ServiceLoader provider table, MemorySegment VarHandles, JNI, NIO, files, sockets, zip, management natives.
 - Graphics/audio layer (RHI, GL shim, SDL shim) and the Android launcher entry are not ported.
-- Class loader, module and resource handling of the Zig runtime are not ported.
+- Class loader, module and resource handling of the old Zig runtime are not ported to the Rust runtime.
 
 ## Native surface still to port
-613 native entry points exist in the Zig runtime; about 130 are done. Largest groups: `NativeRhi` 159, UnixNativeDispatcher 49,
+613 native entry points exist in the original (Zig-era) runtime; about 130 are done in Rust. Largest groups: `NativeRhi` 159, UnixNativeDispatcher 49,
 `sun.nio.ch.Net` 40, Class 25, Unsafe 24 (most done), UnixFileDispatcherImpl 19, UnixFileSystem 14, zip 20.
 
 ## Android library (`--android`)

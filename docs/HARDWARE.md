@@ -17,7 +17,7 @@ on the machine that audited this repository in November 2026.
 
 | task | minimum sensible | on the 2 vCPU / 1.9 GiB box |
 |---|---|---|
-| `python3 -m py_compile`, `pyflakes`, `zig ast-check` | any | OK (< 1 s per file) |
+| `python3 -m py_compile`, `pyflakes`, `tools/rt_typecheck.py` | any | OK (< 1 s per file) |
 | `pyflakes`/`ast-check` full pass | any | OK |
 | **one** differential test, Debug, self-hosted backend (`tests/run_tests.py Arith`) | ~2 GiB free, 1 job | **PASS in 495 s** (build) + 0.58 s native; machine under heavy load (loadavg ~10), interactivity suffers |
 | differential suite, all of `tests/java/` | ≥ 4 GiB free, hours of CPU | thrash risk: do not run; tests are refused below `MONO_TEST_MIN_AVAIL_GIB` (default 0.5 GiB) |
@@ -39,6 +39,6 @@ on the machine that audited this repository in November 2026.
 ## Disk expectations
 
 `tests/build/<Name>` keeps about 1–1.4 GB per test (`--keep`); the harness deletes it after
-passed tests when several names are given. `tests/build/zig-cache` can grow by hundreds of MB.
-Minecraft builds need tens of GB and are out of scope for small disks. Use `rm -rf tests/build
-~/.cache/zig` between heavy runs (the gate does this).
+passed tests when several names are given. `tests/build` (rustc shards and binaries) can grow by hundreds of MB.
+Minecraft builds need tens of GB and are out of scope for small disks. Use `rm -rf tests/build`
+between heavy runs.

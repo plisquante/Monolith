@@ -26,8 +26,8 @@ Sürüm politikası: bir sürüm tek bir Minecraft sürümünü destekler (şu a
 | L5 Launcher | hesap girişi, indirme, başlatma | Python+HTML (masaüstü), Java TouchCore (Android) | var |
 | L6 Dağıtım | paketleme, imza, güncelleme, CI | Python/YAML | eksik |
 
-Çıkarılacaklar: Zig arka ucu (`runtime/*.zig`, `zigen.py`). Rust arka ucu fark testlerini (`tests/run_tests.py` kümesi) geçince Zig dondurulur,
-sürümden önce silinir. Tek arka uç = tek doğruluk kaynağı.
+Çıkarıldı: Zig arka ucu (`runtime/*.zig`, `zigen.py`). Rust arka ucu fark testlerini (`tests/run_tests.py` kümesi) geçiyor,
+Tek arka uç = tek doğruluk kaynağı.
 
 ## 3. Durum (kodda doğrulanan)
 
@@ -159,7 +159,7 @@ Hedef JVM'den ve Java'dan çıkmaktır; harici kütüphane yasağı yoktur. İyi
 - [ ] Ses tam, kopma/underrun yok; çevrimiçi sunucuya TLS ile katılma.
 - [ ] Menü açılışı <15 sn (masaüstü), kare süresi p99 ve RSS HotSpot'tan kötü değil (hedef tablosu bölüm 9'daki ölçümlerle doldurulur).
 - [ ] Vanilla dünya yükleme/kaydetme uyumlu; kaynak paketi ve ayarlar çalışıyor.
-- [ ] Fark testleri yeşil; Zig arka ucu silindi.
+- [x] Fark testleri yeşil; Zig arka ucu silindi.
 - [ ] Paketler üretiliyor, imzalı, "indir → aç → oyna" temiz makinede çalışıyor.
 - [ ] Launcher Python'sız paketli; güncelleme kontrolü çalışıyor.
 - [ ] Belgeler güncel; çökme raporlayıcı çalışıyor.
