@@ -77,7 +77,8 @@
       "desc": "(I)I",
       "file": "bitstorage.rs",
       "fn": "cell_index",
-      "orig": true
+      "orig": true,
+      "fingerprint": "78447ce9b339a60a"
     },
     {
       "class": "net/minecraft/util/SimpleBitStorage",
@@ -85,7 +86,8 @@
       "desc": "(I)I",
       "file": "bitstorage.rs",
       "fn": "get_value",
-      "orig": true
+      "orig": true,
+      "fingerprint": "293336b5497f9391"
     },
     {
       "class": "net/minecraft/util/SimpleBitStorage",
@@ -93,7 +95,8 @@
       "desc": "(II)V",
       "file": "bitstorage.rs",
       "fn": "set_value",
-      "orig": true
+      "orig": true,
+      "fingerprint": "57d29281288ad22e"
     },
     {
       "class": "net/minecraft/core/Holder$Reference",
@@ -101,7 +104,8 @@
       "desc": "()Ljava/lang/Object;",
       "file": "world_height.rs",
       "fn": "holder_value",
-      "orig": true
+      "orig": true,
+      "fingerprint": "47a2a7c0f6a39cef"
     },
     {
       "class": "net/minecraft/world/level/Level",
@@ -109,7 +113,8 @@
       "desc": "()Lnet/minecraft/world/level/dimension/DimensionType;",
       "file": "world_height.rs",
       "fn": "level_dimension_type",
-      "orig": true
+      "orig": true,
+      "fingerprint": "3ba24dc6e9111991"
     },
     {
       "class": "net/minecraft/world/level/LevelReader",
@@ -117,7 +122,8 @@
       "desc": "()I",
       "file": "world_height.rs",
       "fn": "reader_min_y",
-      "orig": true
+      "orig": true,
+      "fingerprint": "35f4523f47b2c5c6"
     },
     {
       "class": "net/minecraft/world/level/chunk/ChunkAccess",
@@ -125,7 +131,8 @@
       "desc": "()I",
       "file": "world_height.rs",
       "fn": "chunk_min_y",
-      "orig": true
+      "orig": true,
+      "fingerprint": "be33ef07052c7ba0"
     },
     {
       "class": "net/minecraft/util/datafix/DataFixers",
@@ -134,14 +141,16 @@
       "file": "datafix.rs",
       "fn": "optimize",
       "orig": true,
-      "verify": false
+      "verify": false,
+      "fingerprint": "93204c9bed2ec517"
     },
     {
       "class": "net/minecraft/server/level/ServerLevel",
       "method": "tickChunk",
       "desc": "(Lnet/minecraft/world/level/chunk/LevelChunk;I)V",
       "file": "tick_chunk.rs",
-      "fn": "tick_chunk"
+      "fn": "tick_chunk",
+      "fingerprint": "8d547482dfbcf98e"
     },
     {
       "class": "com/mojang/blaze3d/platform/MacosUtil",
@@ -150,7 +159,8 @@
       "file": "macos_util.rs",
       "fn": "disable_close_window_menu_item",
       "orig": true,
-      "verify": false
+      "verify": false,
+      "fingerprint": "5f2393195f1206e4"
     }
   ]
 }

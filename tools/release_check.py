@@ -45,7 +45,7 @@ def main() -> int:
                                                      "-o", "/tmp/monolith_crash_tests"]))
     results.append(run("crash reporter unit tests (run)", ["/tmp/monolith_crash_tests"],
                        check=lambda r: ("test result: ok" in r.stdout, r.stdout.strip().splitlines()[-1:][0] if r.stdout.strip() else "")))
-    for t in ("crc_tests", "netty_tests", "recycle_tests", "stack_tests", "patch_tests"):
+    for t in ("crc_tests", "netty_tests", "recycle_tests", "stack_tests", "patch_tests", "patch_fp_tests"):
         results.append(run(t, [sys.executable, "-m", f"monolith.{t}"], env={"MONO_JDK_HOME": jdk}, timeout=7200,
                            check=lambda r: (r.returncode == 0 and "ALL PASSED" in r.stdout,
                                             "ALL PASSED" if "ALL PASSED" in r.stdout else "not all passed")))

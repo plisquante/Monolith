@@ -24,7 +24,9 @@ A patch function has the signature of the generated method, `fn(this: rt::Ref, a
 (no `this` for static methods). With `"orig": true` it gets the translated original as its first parameter
 (`orig: impl Fn(rt::Ref, i32) -> rt::Res<i32>`) and may hand any input it does not handle to it, so the Java
 semantics (exceptions included) stay exact. `"verify": false` excludes a method with side effects from
-MONO_PATCH_VERIFY (which runs both implementations on every call). See patches/README.md.
+MONO_PATCH_VERIFY (which runs both implementations on every call). `"fingerprint": "<16 hex>"` (tools/patch_fingerprints.py
+writes it) pins the method body the patch was written against: when Minecraft changes that method the build stops with
+a PatchError instead of keeping a patch that no longer matches. See patches/README.md.
 
 Nothing of Mojang's code lives in the patch files: only our own Rust and the names of the methods it replaces.
 """
@@ -67,6 +69,7 @@ class Patch:
     orig: bool = False
     verify: bool = True   # False for methods with side effects: MONO_PATCH_VERIFY runs original and patch, so a patch that
                           # changes state would be applied twice
+    fingerprint: str = ""  # optional: fingerprint() of the method the patch was written against; a mismatch stops the build
 
     @property
     def key(self) -> tuple:
@@ -77,6 +80,23 @@ class Patch:
 
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def fingerprint(ci, m) -> str:
+    """16 hex digits identifying the behaviour of a method body: its decoded instructions (operands resolved, so constant-pool
+    numbering and unrelated edits to the class do not matter), exception table and frame sizes. Line numbers and local variable
+    names are not part of it. A patch that carries this value stops the build when Minecraft changes the method it replaces."""
+    from .bytecode import decode
+    from .classfile import DynamicConst
+    code = m.code
+    lines = [f"stack={code.max_stack} locals={code.max_locals}"]
+    for ins in decode(code.code, ci.cf.cp):
+        a = ins.arg
+        a = f"dyn:{a.is_indy}:{a.name}:{a.desc}" if isinstance(a, DynamicConst) else repr(a)  # bsm_index is a pool number
+        lines.append(f"{ins.pc} {ins.op} {a} {ins.arg2!r} {list(ins.targets)}")
+    for h in code.handlers:
+        lines.append(f"h {h.start_pc} {h.end_pc} {h.handler_pc} {h.catch_type}")
+    return hashlib.sha1("\n".join(lines).encode()).hexdigest()[:16]
 
 
 def _split_call(spec: str) -> tuple[str, str, str]:
@@ -118,6 +138,12 @@ class PatchSet:
                 raise PatchError(f"patch {p.where()}: no such method (descriptors of '{p.method}' in the class: {have})")
             if m.code is None:
                 raise PatchError(f"patch {p.where()}: the method has no body (native or abstract); only translated methods can be patched")
+            if p.fingerprint:
+                have = fingerprint(ci, m)
+                if have != p.fingerprint:
+                    raise PatchError(f"patch {p.where()}: the method body changed (fingerprint {have}, the patch was written for "
+                                     f"{p.fingerprint}). Review the patch against the new bytecode, then update the fingerprint "
+                                     f"(python3 tools/patch_fingerprints.py --cp <jars> --write)")
         self.patches = [p for p in self.patches if p.key in self.by_key]
 
     def roots(self) -> list[tuple[str, str, str]]:
@@ -329,7 +355,8 @@ def load(path: str | None = None) -> PatchSet:
             raise PatchError(f"patch {e['class']}.{e['method']}: file '{e['file']}' is not declared under \"files\"")
         if not _IDENT.match(e["fn"]):
             raise PatchError(f"patch {e['class']}.{e['method']}: fn '{e['fn']}' is not an identifier")
-        patches.append(Patch(e["class"], e["method"], e["desc"], e["file"], e["fn"], bool(e.get("orig", False)), bool(e.get("verify", True))))
+        patches.append(Patch(e["class"], e["method"], e["desc"], e["file"], e["fn"], bool(e.get("orig", False)), bool(e.get("verify", True)),
+                             str(e.get("fingerprint", ""))))
     seen = set()
     for p in patches:
         if p.key in seen:

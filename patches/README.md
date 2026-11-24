@@ -44,3 +44,8 @@ initialized first.
 * A patch whose class is not on the class path is skipped (the generator prints how many applied / were unused /
   skipped). A class that exists without the method stops the build, so a Minecraft update cannot silently
   disable a patch. `MONO_PATCH_MANIFEST=<file>` selects another manifest (tests).
+* `"fingerprint"`: 16 hex digits identifying the bytecode of the method the patch was written against (decoded instructions,
+  exception table, frame sizes; independent of constant-pool numbering and line numbers). When Minecraft changes that body the
+  build stops with a message naming both values. After reviewing the patch against the new bytecode, store the new value with
+  `python3 tools/patch_fingerprints.py --cp <client.jar:libs...> --write`. Without `--write` the tool only reports
+  (`ok`, `MISMATCH`, `no value`, `skipped`). All patches in the manifest carry one. Tests: `python3 -m monolith.patch_fp_tests`.
