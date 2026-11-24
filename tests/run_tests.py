@@ -27,8 +27,7 @@ JAVA_DIR = os.path.join(HERE, "java")
 # Programs that need something this harness cannot provide (a display, network access, a JNI library).
 SKIP = {
     "ClientCoreE2E": "needs the Zig-era Client Core harness; the Rust core is tested by cargo test",
-    "HttpFetch": "needs network access",
-    "NetIo": "needs network access",
+    "HttpFetch": "its HttpURLConnection/JSSE closure needs more than 8 GiB to compile (killed at 8 GiB on 2026-11-24); try with MONO_TEST_NO_SKIP=1 on a bigger machine",
     "Jni": "needs the native JNI library built by the Jni.c harness",
 }
 
@@ -123,7 +122,7 @@ def main() -> int:
                                  for p in glob.glob(os.path.join(JAVA_DIR, "*.java")))
     passed = failed = skipped = 0
     for name in names:
-        if name in SKIP:
+        if name in SKIP and not os.environ.get("MONO_TEST_NO_SKIP"):  # MONO_TEST_NO_SKIP=1 tries the skipped programs anyway
             print(f"SKIP   {name}: {SKIP[name]}")
             skipped += 1
             continue
