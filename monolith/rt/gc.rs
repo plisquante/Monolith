@@ -1300,6 +1300,11 @@ fn collect_impl(begin_only: bool) {
         if check == 2 { rt::abort("arena escape violation"); }
     }
     clear_dead_referents();
+    // monitors of dead objects (an object that was locked once keeps its table entry until it dies)
+    crate::sync::prune_dead_monitors(|a| unsafe {
+        let g = (*(a as *mut Obj)).gc;
+        g & GC_HEAP != 0 && g & GC_MARK == 0
+    });
     let t_mark = t_start.elapsed() - t_roots;
     // 5. Sweep slabs
     let since_gc = G.bytes_since_gc.load(Ordering::Relaxed);

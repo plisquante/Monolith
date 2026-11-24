@@ -98,6 +98,27 @@ pub fn exit(r: Ref) -> Res<()> {
     }
     Ok(())
 }
+/// Called by the collector between marking and sweeping: drops the monitors of dead objects. Without it every object that was
+/// ever locked (synchronized, wait, notify) would keep a table entry for the life of the process, and a later object at the
+/// same address would find it. A monitor that is owned or still referenced by a thread (blocked in `enter`, waiting) stays;
+/// such an object is reachable anyway. `is_dead(address)` must be true only for heap objects that were not marked.
+pub fn prune_dead_monitors(is_dead: impl Fn(usize) -> bool) -> usize {
+    let mut dropped = 0;
+    for shard in table() {
+        let mut t = shard.lock().unwrap();
+        let before = t.len();
+        t.retain(|&a, m| {
+            if !is_dead(a) || Arc::strong_count(m) > 1 {
+                return true;
+            }
+            let st = m.st.lock().unwrap();
+            st.owner != 0 || st.count != 0
+        });
+        dropped += before - t.len();
+    }
+    dropped
+}
+
 /// The monitor of `o` if one exists. Unlike `mon` it creates nothing: an object that was never locked has no owner.
 fn peek(o: *mut Obj) -> Option<Arc<Mon>> {
     let a = o as usize;
@@ -218,7 +239,11 @@ pub fn interrupt(t: Ref) -> Res<()> {
         let _g = ts.sleep_m.lock().unwrap();
         ts.sleep_cv.notify_all();
     }
-    if let Some(m) = ts.waiting.lock().unwrap().clone() {
+    // The `waiting` guard must be gone before the monitor lock is taken: `wait` takes `st` first and `waiting` second, and
+    // a guard kept alive by an `if let` scrutinee would make this the opposite order (deadlock when a timed wait ends
+    // while the thread is interrupted).
+    let waiting = ts.waiting.lock().unwrap().clone();
+    if let Some(m) = waiting {
         let _g = m.st.lock().unwrap();
         m.wait_cv.notify_all();
     }
