@@ -52,6 +52,13 @@ pub struct FallbackRange {
     len: usize,
 }
 
+impl FallbackRange {
+    /// Positions of this range in the frame's fallback list passed to `Backend::execute`.
+    pub fn range(&self) -> std::ops::Range<usize> {
+        self.start..self.start + self.len
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Command {
     BindPipeline(PipelineHandle),
@@ -59,6 +66,9 @@ pub enum Command {
     BindInstanceBuffer { binding: u32, buf: BufferHandle, offset_bytes: usize, size_bytes: usize, texel_stride: u32 },
     DrawIndexedInstanced { index_count: u32, instance_count: u32, first_index: u32, vertex_offset: i32, first_instance: u32 },
     DrawIndexedIndirectRange { indirect_buf: BufferHandle, offset_bytes: usize, draw_count: u32, stride: u32, fallback: FallbackRange },
+    /// Copies `len` bytes of the frame's staging ring, starting at the absolute ring offset `src_offset`, into `dst`
+    /// at `dst_offset`. Written by `RhiDevice::copy_to_buffer`.
+    CopyStaging { src_offset: usize, len: usize, dst: BufferHandle, dst_offset: usize },
 }
 
 /// Where an upload landed in the staging ring for this frame.
@@ -229,6 +239,11 @@ impl RhiDevice {
         });
     }
 
+    /// Copies a staging upload into a device buffer. The copy runs in the back end, in command order.
+    pub fn copy_to_buffer(&mut self, src: StagingSlice, dst: BufferHandle, dst_offset: usize) {
+        self.record(Command::CopyStaging { src_offset: src.offset, len: src.len, dst, dst_offset });
+    }
+
     fn fallback_of(&self, r: FallbackRange) -> &[DrawIndexedIndirect] {
         &self.fallback[r.start..r.start + r.len]
     }
@@ -314,6 +329,18 @@ mod tests {
         assert!(b.offset >= a.offset + 3);
         let too_big = vec![0u8; 2 * 1024 * 1024];
         assert_eq!(dev.upload(&too_big, 1), Err(RhiError::OutOfStaging));
+    }
+
+    #[test]
+    fn staging_copy_is_recorded_with_its_ring_offset() {
+        let mut dev = RhiDevice::init(BackendKind::Headless, PowerProfile::Balanced, 1).unwrap();
+        dev.begin_frame();
+        let s = dev.upload(&[1, 2, 3, 4], 4).unwrap();
+        dev.copy_to_buffer(s, BufferHandle(7), 16);
+        assert_eq!(
+            dev.commands(),
+            &[Command::CopyStaging { src_offset: s.offset, len: 4, dst: BufferHandle(7), dst_offset: 16 }]
+        );
     }
 
     #[test]
