@@ -92,14 +92,23 @@ Aşamalar kısmen paralel yürür (D ve E bağımsız).
 
 ## 7. İlerleme (güncellenir)
 
+Puan kuralı: bitti=1, sürüyor=0,5, başladı=0,25. "Kod bitti, derlenmedi" en fazla sürüyor sayılır (derlenip testi geçmeden bitti denmez).
+Kapı sayısı: yalnızca mevcut build için kanıtlanmış Q kapıları sayılır.
+
 | paket | durum | kanıt |
 |---|---|---|
 | L1 | bitti | `tools/lib_inventory.py`: 300 dosya, K1=68, K2=232 (`docs/KUTUPHANE_ENVANTER.json`) |
 | C0 | bitti | `monolith/stackmap.py`, `stackmap_tests.py`: java.util 3654 metot, 9750 çerçeve |
-| C1 | bitti | `monolith/mir.py`: java.base 13 059 sınıf, 111 407 metot, 0 hata, 27 sn; `mir_interp.py` ile 50 sonuç satırı JVM ile aynı (`mir_tests.py`) |
-| C2 | sürüyor | `monolith/mir_emit.py`, `MONO_MIR=1`: Collections1 MIR yolundan (geri düşme 0), satır içi ile ve olmadan çıktı JVM ile aynı; fark süiti MIR yolunda henüz koşmadı |
-| C4 | başladı | `monolith/mir_opt.py` `inline_leaf`: Collections1'de 1682 çağrı satır içi; devirt artık yalnızca RTA'nın örneklediği sınıfları sayar (yükleme sırasına bağlı değil) |
-| N1 | kod bitti, oyunda ölçülmedi | `patches/rust/narrator.rs`: JNA `Native.register` yerine dlopen kontrolü. `monolith/narrator_tests.py` PASS: HotSpot ile aynı anlatıcı (`NarratorLinux active=true`), JNI/JNA taklidine 2 çağrı (yalnızca flite'ın kendisi; JNA 0). Oyun içi `MONO_COUNT_NATIVES` ölçümü bir sonraki Minecraft derlemesinde |
-| N4 | kod bitti, oyunda doğrulanmadı | `patches/rust/netty.rs` (`remote()` her zaman NIO, epoll/kqueue `ioHandlerFactory` "replace") + epoll kanalları yansıma listesinden çıktı (`tools/mcbuild_common.py`). Minecraft kapanışı (yalnız analiz): native 976 → 803, netty 173 → 0. Çok oyunculu bağlantı (NIO) oyunda denenmedi |
-| N3 | kod bitti, derlenmedi | `patches/rust/sysinfo.rs` (oshi yerine /proc: SystemReport donanım/yazılım, F3 CPU satırı, CpuStats, NativeModuleLister), `Narrator.getNarrator` Linux dışında EMPTY, JNA `Structure$FFIType` yansıma listesinden çıktı. Minecraft kapanışı (analiz): native 976 → 747, JNA 56 → 0, netty 173 → 0. Windows/macOS anlatıcısı ve Windows modül listesi yok (belgeli) |
-| N2 | kod bitti, derlenmedi | `patches/rust/tracy.rs` (33 yama, jtracy bayt kodundan üretildi: `load()` UnsatisfiedLinkError, diğerleri UNAVAILABLE durumundaki davranış). Kapanış native 747 → 726, jtracy 21 → 0 |
+| C1 | bitti | `monolith/mir.py`: java.base 13 059 sınıf, 111 407 metot, 0 hata; `mir_tests.py` ALL PASSED (yorumlayıcı 50 satır JVM ile aynı) |
+| C2 | sürüyor | `MONO_MIR=1` ile Collections1 derlenip JVM çıktısıyla aynı; fark süiti MIR yolunda koşulmadı |
+| C4 | başladı | `monolith/mir_opt.py` `inline_leaf`: Collections1'de 1682 çağrı satır içi; devirt yalnızca RTA'nın örneklediği sınıflar (`d3df2e6`) |
+| N1 | sürüyor | `patches/rust/narrator.rs` + `narrator_tests.py` ALL PASSED (HotSpot ile aynı anlatıcı, JNA kaydı yok); oyunda ölçülmedi |
+| N2 | sürüyor | `patches/rust/tracy.rs` (33 yama): kod yazıldı, derlenip koşulmadı |
+| N3 | sürüyor | `patches/rust/sysinfo.rs` (oshi yerine /proc) + Linux dışı anlatıcı EMPTY: kod yazıldı, derlenmedi. Analiz: JNA native 56 → 0 |
+| N4 | sürüyor | `patches/rust/netty.rs` (`remote()` her zaman NIO) + epoll kanalları yansıma listesinden çıktı: kod yazıldı, oyunda denenmedi. Analiz: netty native 173 → 0 |
+
+Analiz (derleme değil, kapanış sayımı): native 976 → 726. Bu, Claude tarafının ölçtüğü tek kapanış sayısı.
+Son derleme: `--escape` Minecraft derlemesi tamamlandı (`mcesc/minecraft-26.3/run.sh`); bu derleme yamalardan önce, MIR kapalı.
+Varsayılan yolda fark süiti: koşuyor; şu ana kadar 16 PASS, 0 FAIL, 3 SKIP (ClientCoreE2E, HttpFetch, Jni: tasarım gereği).
+
+Q kapıları (mevcut build için): 0/12 kanıtlı. Q3 fark süiti bitmedi; Q5 oyun ve Q6 sızıntı mevcut build ile koşulmadı.
