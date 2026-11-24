@@ -53,6 +53,10 @@ def main() -> int:
     ap.add_argument("--target", default="",
                     help="Rust target triple (default: the host): x86_64-pc-windows-msvc, aarch64-apple-darwin, ...")
     ap.add_argument("--linker", default="", help="linker for a cross build (passed to rustc as -C linker=...)")
+    ap.add_argument("--escape", action="store_true",
+                    help="whole-program escape analysis (non-escaping objects in frame slots, arrays in the method arena); "
+                         "off by default; measured at idle it allocates about 40 percent more, see docs/VERIFICATION.md")
+    ap.add_argument("--inline", action="store_true", help="inline small callees before code generation (pairs with --escape)")
     a = ap.parse_args()
 
     jar = os.path.abspath(a.jar)
@@ -85,7 +89,8 @@ def main() -> int:
             fh.write("\n".join(sorted(set(mb.reflection_metadata(jars)) | set(jdk_runtime_data.provider_classes(os.environ["MONO_JDK_HOME"])))))
         gen = [sys.executable, "-m", "monolith.rustgen", "--cp", os.pathsep.join(jars), "--reflect-class", "@" + reflect,
                "--main", mb.MAIN_CLASS, "--no-lwjgl", "--shards", str(a.shards), "-o", rust] + (
-                   ["--android", "--api", str(a.api)] + (["--ndk", a.ndk] if a.ndk else []) if a.android else [])
+                   ["--android", "--api", str(a.api)] + (["--ndk", a.ndk] if a.ndk else []) if a.android else []) + (
+                   (["--escape"] if a.escape else []) + (["--inline"] if a.inline else []))
         if subprocess.run(gen, cwd=ROOT).returncode:
             return 1
     comp = common + ["--cp", "-", "--main", "-", "--resume"] + ([] if a.android else ["--compile"])

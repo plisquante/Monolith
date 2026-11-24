@@ -72,4 +72,22 @@ Where the 13 GB comes from (allocation profile of that run, `soak-prof.json`): 1
 run had a flat live set after warm-up, so the growth is uncollected garbage, not a leak. The idle allocation rate is
 the target for tiers 1-3 of `GC_PLAN.md`.
 
+## Escape analysis and inlining in the game build (measured, not enabled)
+
+Build: `tools/mcbuild_rust.py ... --escape --inline` (32 shards, 2 jobs). It finished. The build prints 525 link errors
+(baseline without the flags: 446). The verbose breakdown of the 525 (`MONO_VERBOSE=1`): 374 `NoSuchMethodError`, 90
+`NoClassDefFoundError`, 48 `NoSuchFieldError`, 13 catch-type errors. The largest callers are the optional
+log4j, netty-logging, JMS, Jackson, ZeroMQ and Disruptor paths the README already lists. The baseline breakdown has not
+been produced, so the extra 79 are not yet proven to be the same families.
+
+Idle allocation, 10 min standing still, same saved world, collector on:
+
+| Build | Allocated | Rate | Largest changes against the baseline |
+|---|---|---|---|
+| without flags (`docs/VERIFICATION.md` leak section, collector off, 624 s) | 11.85 GB | 19.0 MB/s | reference |
+| with `--escape --inline` (721 s) | 19.37 GB | 26.8 MB/s | `ImmutableCollections$ListItr` 294 to 939 MB, `int[]` 1.6 GB new, `Vec3` 355 to 753 MB |
+
+The flags raise idle allocation by about 40 percent, so they are not enabled. They stay opt-in for measurement. The
+first GC-removal step is not this change.
+
 Not covered: multiplayer, Realms, audio output, a second session, long play, repeated boots, FPS and memory figures.

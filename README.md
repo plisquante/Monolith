@@ -37,7 +37,7 @@ To run the same steps as the CI game job on your own machine (POSIX shells), wit
 
     sh tools/ci_local.sh --out build/ci-local        # fetch, build, 120 s boot, concurrent-GC boot on Linux
 
-The first start needs a world: create one in Singleplayer. Options for the build: `--opt`, `--shards`, `--shard-jobs`
+The first start needs a world: create one in Singleplayer. Options for the build: `--opt`, `--shards`, `--shard-jobs`, `--escape` and `--inline` (opt-in; the flags raised idle allocation in a measured run, see `docs/VERIFICATION.md`)
 (use 1 on a machine with little memory). On a 4-core machine, `--shards 4 --shard-jobs 4` built a small test program
 about 3.1x faster than one shard (measured, see `docs/BUILD_PERF.md`); the Minecraft defaults were not measured yet.
 
