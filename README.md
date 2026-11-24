@@ -44,10 +44,18 @@ about 3.1x faster than one shard (measured, see `docs/BUILD_PERF.md`); the Minec
 ## Tests
 
     rustc --edition 2021 --test tests/rust/audio_main.rs -o /tmp/audio_tests && /tmp/audio_tests
-    python3 -m monolith.crc_tests          # and netty_tests, recycle_tests, stack_tests, patch_tests (set MONO_JDK_HOME)
+    rustc --edition 2021 --test tests/rust/crash_main.rs -o /tmp/crash_tests && /tmp/crash_tests    # crash reporter
+    python3 -m monolith.crc_tests          # and netty_tests, recycle_tests, stack_tests, patch_tests, patch_fp_tests (set MONO_JDK_HOME)
     python3 -m pyflakes monolith/*.py tools/*.py tests/*.py
+    python3 tests/run_tests.py [Name ...]  # differential tests in tests/java (HotSpot against the translated program)
+    python3 tools/release_check.py         # the gates of docs/RELEASE.md in one run
 
-The differential tests compare the output of the translated program with HotSpot.
+The differential tests compare the output of the translated program with HotSpot. The link errors of a transpile are
+checked against the explained groups by `tools/check_link_errors.py` (`docs/LINK_ERRORS_TR.md`); the bytecode of every
+patched method is pinned by a fingerprint (`tools/patch_fingerprints.py`, `patches/README.md`).
+
+A crash (Rust panic, or SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT on Linux) writes `mono-crash-<pid>.txt` into the working
+directory, or into `MONO_CRASH_DIR`, with the thread, the message or fault address and a native backtrace.
 
 ## Repository layout
 

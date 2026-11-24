@@ -21,10 +21,11 @@ Amaç: MASTER_PLAN §8 "çalışma zamanında JVM, JNI, JNA, libffi yok". Her gr
 1. Tracy (21): WS6 sınıf seviyesi yama bekliyor (yukarıdaki not); çalışma zamanı sayacını etkilemez.
 2. kqueue (31): Linux/Windows build'lerinde hiç yüklenmiyor; macOS ayrı karar.
 3. Flite (7): kapat ya da taşı.
-4. JNA (56): çağıranları tek tek çıkar (`MONO_TRACE_NATIVES` ile gerçek çağrılar sayılır).
+4. JNA (56): çağıranları tek tek çıkar (gerçek çağrıları sayan araç henüz yok, aşağıdaki "Ölçü" bölümüne bak).
 5. Netty epoll + unix (~150): en büyük grup; NIO'ya düşme yolu doğrulanınca topluca silinir.
 
 ## Ölçü
 
-`MONO_TRACE_NATIVES=1` ile 30 dk oynanışta JNI/JNA giriş sayısı; hedef 0 (`MASTER_PLAN` WS2 çıkışı).
-Bu envanter statik; çalışma zamanı sayacı tam build gerektirir ve henüz alınmadı.
+Hedef: 30 dk oynanışta JNI/JNA giriş sayısı 0 (`MASTER_PLAN` WS2 çıkışı). `MASTER_PLAN` bunu `MONO_TRACE_NATIVES` ile
+ölçmeyi söylüyor, ama runtime'da böyle bir değişken yok; yalnız `MONO_JNA_TRACE` (JNA çağrılarını yazar) var. Sayaç henüz
+yazılmadı ve envanter statik; çalışma zamanı verisi alınmadı.
