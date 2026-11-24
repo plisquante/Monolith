@@ -173,7 +173,7 @@ function show(e, t){ tip.textContent = t; tip.hidden = false; tip.style.left = M
 const COLORS = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)"];
 const colorOf = d => COLORS[devices.indexOf(d) % COLORS.length];
 document.getElementById("legend").innerHTML = devices.map(d => "<span><i style='background:" + colorOf(d) + "'></i>" + d + "</span>").join("");
-// x axis = report order (every device's runs in the order they arrived); one line per device
+// x ekseni = rapor sırası (her cihazın çalıştırmaları geliş sırasıyla); her cihaz için bir çizgi
 const order = runs.map((r, i) => i);
 function chart([key, title, unit, digits]){
   const card = document.createElement("div"); card.className = "card";

@@ -105,7 +105,7 @@ class Interp:
     def run(self, fn: Fn, args: list):
         blk = fn.blocks[fn.entry]
         env = {}
-        # method arguments occupy the entry block params in slot order (long/double: one logical entry)
+        # metot argümanları giriş bloğunun parametrelerini yuva sırasıyla doldurur (long/double: tek mantıksal giriş)
         if len(args) != len(blk.params):
             raise Unsupported(f"{fn.name}: {len(args)} args for {len(blk.params)} entry params")
         for p, a in zip(blk.params, args):
