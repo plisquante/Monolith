@@ -30,8 +30,8 @@ Kaynak sütunu: dosya:bölüm. "Doğrulandı" sütunu: bu oturumda çalıştır�
 | G-01 | Lint `pyflakes` | [x] | 2026-11-24 `pyflakes monolith/*.py tools/*.py tests/*.py`, çıktı yok, çıkış 0 | Claude | tekrar gerekir: her değişiklikten sonra |
 | G-02 | Rust runtime unit: audio | [x] | `tests/rust/audio_main.rs` 12 passed | Claude | |
 | G-03 | Rust runtime unit: crash | [x] | `tests/rust/crash_main.rs` 5 passed | Claude | |
-| G-04 | Native diff: crc, netty, recycle, stack, patch | [ ] | Bu oturumda kesildi, çalıştırılmadı. JDK: `/root/.cache/monolith/temurin-25/jdk-25.0.5.1+2` | Claude | Süit çalışırken başlatılmaz (G-05) |
-| G-05 | Diferansiyel süit `tests/run_tests.py` | [~] | Bu oturumda başka bir süreç çalışıyor (PID 13606, `MONO_MIR=1`, log boş). Önceki sonuç: 27 pass / 3 skip (§22) | Claude | Süreç sahibi doğrulanmadan öldürülmez |
+| G-04 | Native diff: crc, netty, recycle, stack, patch | [x] | 2026-11-24, `MONO_JDK_HOME=/root/.cache/monolith/temurin-25/jdk-25.0.5.1+2`: crc, netty, recycle, stack, patch hepsi `ALL PASSED` | Claude | |
+| G-05 | Diferansiyel süit `tests/run_tests.py` (varsayılan ve `MONO_MIR=1`) | [ ] | MIR yolu (`MONO_MIR=1`): 3000 sn zaman aşımı, `rc=124`, PASS/FAIL özeti yok. Varsayılan yol önceki sonuç: 27 pass / 3 skip (§22) | Claude | MIR yolunun neden yavaş/takılı olduğu açık. Q3 kapısı açık |
 | G-06 | Link error açıklaması | [ ] | §22 tam üretim raporu: 446 hata, 0 açıklanmamış. Aynı §22'nin "Doğrulanmadı" listesi overlay silindikten sonraki 446/0 sonucunu yeniden istiyor | Claude | Tam üretim gerekir (~70 dk) |
 | G-07 | GC stres, iki mod | [ ] | §21: 6/6 plain ve concurrent. Overlay/çevirici değişikliğinden sonra tekrar | Claude | |
 | G-08 | Oyun başlatma, plain | [ ] | §22: bir koşu geçti (`headless_play.sh --seconds 60 --clean-exit`, SIGTERM, çıkış 143). Tam üretimden sonra tekrar | Claude | Tam üretim gerekir |
@@ -117,12 +117,12 @@ Antigravity / Gemini (ölçüm, envanter, belge; kod yazmaz ya da Claude'un onay
 - G-01: `pyflakes monolith/*.py tools/*.py tests/*.py`, çıkış 0, çıktı yok.
 - G-02: `rustc --edition 2021 --test tests/rust/audio_main.rs`, 12 passed.
 - G-03: `rustc --edition 2021 --test tests/rust/crash_main.rs`, 5 passed.
-- G-04: başlatıldı, kesildi. Sonuç yok.
-- G-05: başka süreç çalışıyor, sonuç yok.
+- G-04: `python3 -m monolith.{crc_tests,netty_tests,recycle_tests,stack_tests,patch_tests}`, hepsi `ALL PASSED`.
+- G-05: MIR süiti (`MONO_MIR=1 python3 tests/run_tests.py`) 3000 sn sonunda zaman aşımı (`rc=124`), sonuç yok.
 
 ## 6. Durum özeti
 
-Kapalı: G-01, G-02, G-03 (bu oturum). Kısmi: G-05, G-10, G-16, G-17, G-21, G-28, G-30. Açık: geri kalan. Donanım ve karar bekleyen: D-01..D-05.
+Kapalı: G-01, G-02, G-03, G-04 (bu oturum). Kısmi: G-05 (MIR süiti zaman aşımı), G-10, G-16, G-17, G-21, G-28, G-30. Açık: geri kalan. Donanım ve karar bekleyen: D-01..D-05.
 
 1.0 onay listesi (`MASTER_PLAN_TR.md` bölüm 8): 1 maddesi işaretli (fark testleri yeşil; önceki oturum). Kalanlar açık.
 
