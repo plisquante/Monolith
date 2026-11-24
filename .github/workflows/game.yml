@@ -1,6 +1,6 @@
 # Oyunun her platformda derlenip açılması. İstemci jar'ı tools/fetch_client_jar.py ile Mojang'ın resmi manifest'inden
 # indirilir ve SHA-1 ile doğrulanır; depoya ve artefaktlara konmaz. MC_CLIENT_JAR_URL gizli değişkeni tanımlıysa
-# (ayna) o adres kullanılır.
+# (ayna, yalnız https) o adres kullanılır; bu durumda MC_CLIENT_JAR_SHA1 gizli değişkeni de zorunludur (yoksa indirme reddedilir).
 name: game
 
 on:
@@ -13,6 +13,7 @@ permissions:
 
 env:
   MC_CLIENT_JAR_URL: ${{ secrets.MC_CLIENT_JAR_URL }}
+  MC_CLIENT_JAR_SHA1: ${{ secrets.MC_CLIENT_JAR_SHA1 }}
 
 jobs:
   boot-linux:

@@ -39,6 +39,33 @@ def log(msg: str):
     print(f"[mcbuild] {msg}", flush=True)
 
 
+_HEX40 = re.compile(r"^[0-9a-fA-F]{40}$")
+_NAME = re.compile(r"^[A-Za-z0-9._+ -]{1,64}$")
+
+
+def require_https(url: str) -> str:
+    """Downloads go over https only: urllib would also open file:// and ftp:// URLs, and a URL comes from a manifest."""
+    if not url.lower().startswith("https://"):
+        raise SystemExit(f"[mcbuild] refusing to download from a non-https URL: {url!r}")
+    return url
+
+
+def safe_join(root: str, rel: str) -> str:
+    """root/rel, refused when it resolves outside root ('..', an absolute rel: os.path.join would drop root for it)."""
+    root_abs = os.path.realpath(root)
+    p = os.path.realpath(os.path.join(root_abs, rel.lstrip("/\\")))
+    if not rel or p == root_abs or not p.startswith(root_abs + os.sep):
+        raise SystemExit(f"[mcbuild] path from the manifest leaves its directory: {rel!r}")
+    return p
+
+
+def safe_name(name: str) -> str:
+    """A version or asset-index id that is usable as a file name part."""
+    if not _NAME.match(name) or ".." in name or name == ".":
+        raise SystemExit(f"[mcbuild] unsafe id in the manifest: {name!r}")
+    return name
+
+
 def sha1_of(path: str) -> str:
     h = hashlib.sha1()
     with open(path, "rb") as fh:
@@ -117,6 +144,7 @@ def _safe_extract_tar(t: tarfile.TarFile, root: str) -> None:
 
 
 def fetch(url: str, dest: str, sha1: str | None = None, retries: int = 4) -> str:
+    require_https(url)
     if os.path.isfile(dest) and (sha1 is None or sha1_of(dest) == sha1):
         return dest
     os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -213,7 +241,7 @@ def version_metadata(vid: str, mc_dir: str | None) -> dict:
     man = fetch_json(MANIFEST, man_path)
     for v in man["versions"]:
         if v["id"] == vid:
-            return fetch_json(v["url"], os.path.join(CACHE, "mc", "versions", vid + ".json"), v.get("sha1"))
+            return fetch_json(v["url"], os.path.join(CACHE, "mc", "versions", safe_name(vid) + ".json"), v.get("sha1"))
     raise SystemExit(f"[mcbuild] version {vid} is not in Mojang's manifest; pass --mc-dir with a local copy")
 
 
@@ -286,7 +314,7 @@ def download_libraries(meta: dict, natives_dir: str, skip_natives: bool = False)
         art = lib.get("downloads", {}).get("artifact")
         if not art:
             continue
-        path = fetch(art["url"], os.path.join(libdir, art["path"]), art.get("sha1"))
+        path = fetch(art["url"], safe_join(libdir, art["path"]), art.get("sha1"))
         if is_native:
             with zipfile.ZipFile(path) as z:
                 for e in z.namelist():
@@ -301,13 +329,15 @@ def download_libraries(meta: dict, natives_dir: str, skip_natives: bool = False)
 
 def download_assets(meta: dict, assets_dir: str):
     idx = meta["assetIndex"]
-    index = fetch_json(idx["url"], os.path.join(assets_dir, "indexes", idx["id"] + ".json"), idx.get("sha1"))
+    index = fetch_json(idx["url"], os.path.join(assets_dir, "indexes", safe_name(idx["id"]) + ".json"), idx.get("sha1"))
     objs = index["objects"]
     log(f"assets: {len(objs)} objects (index {idx['id']})")
     from concurrent.futures import ThreadPoolExecutor
 
     def one(item):
         h = item["hash"]
+        if not _HEX40.match(h):  # the hash becomes part of a path and of a URL
+            raise SystemExit(f"[mcbuild] asset index has a hash that is not a SHA-1: {h!r}")
         fetch(f"{ASSET_BASE}/{h[:2]}/{h}", os.path.join(assets_dir, "objects", h[:2], h), h)
     with ThreadPoolExecutor(16) as ex:
         list(ex.map(one, objs.values()))

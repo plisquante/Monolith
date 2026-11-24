@@ -7,7 +7,8 @@ Akış: version_manifest_v2.json -> sürümün JSON'u -> downloads.client (url, 
 ve SHA-1'i tutmazsa betik 1 ile çıkar ve çıktıyı yazmaz.
 
 Ortam değişkenleri:
-    MC_CLIENT_JAR_URL    resmi adres yerine bu adres kullanılır (ayna). MC_CLIENT_JAR_SHA1 verilirse doğrulama onunla yapılır.
+    MC_CLIENT_JAR_URL    resmi adres yerine bu adres kullanılır (ayna, yalnız https). MC_CLIENT_JAR_SHA1 (40 onaltılı hane) ZORUNLUDUR:
+                         çalıştırılacak bir jar, sağlama toplamı olmayan bir aynadan kabul edilmez.
 
 Jar depoya ya da CI artefaktlarına konmaz; yalnızca derleme makinesinin geçici dizinine yazılır.
 """
@@ -52,6 +53,9 @@ def main() -> int:
         want_sha1 = os.environ.get("MC_CLIENT_JAR_SHA1", "").strip().lower() or None
         want_size = None
         source = "mirror (MC_CLIENT_JAR_URL)"
+        # the jar is executed code: a mirror is only as trustworthy as the checksum it is checked against
+        if want_sha1 is None or len(want_sha1) != 40 or any(c not in "0123456789abcdef" for c in want_sha1):
+            return fail("MC_CLIENT_JAR_URL needs MC_CLIENT_JAR_SHA1 (40 hex digits): a mirror is not accepted without a checksum")
     else:
         try:
             manifest = get_json(MANIFEST)
@@ -67,6 +71,8 @@ def main() -> int:
         url, want_sha1, want_size = client["url"], client["sha1"], client.get("size")
         source = "Mojang manifest"
 
+    if not url.lower().startswith("https://"):  # urllib would also open file:// and ftp://
+        return fail(f"refusing a non-https download URL: {url}")
     print(f"downloading {a.version} client from the {source}")
     # the temporary file sits next to the target: os.replace cannot move files between drives (Windows C: to D:)
     out_dir = os.path.dirname(os.path.abspath(a.out))
