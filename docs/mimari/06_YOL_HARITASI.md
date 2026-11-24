@@ -97,6 +97,6 @@ Aşamalar kısmen paralel yürür (D ve E bağımsız).
 | L1 | bitti | `tools/lib_inventory.py`: 300 dosya, K1=68, K2=232 (`docs/KUTUPHANE_ENVANTER.json`) |
 | C0 | bitti | `monolith/stackmap.py`, `stackmap_tests.py`: java.util 3654 metot, 9750 çerçeve |
 | C1 | bitti | `monolith/mir.py`: java.base 13 059 sınıf, 111 407 metot, 0 hata, 27 sn; `mir_interp.py` ile 50 sonuç satırı JVM ile aynı (`mir_tests.py`) |
-| C2 | sürüyor | `monolith/mir_emit.py`, `MONO_MIR=1`: Collections1 8666 metot MIR yolundan, geri düşme 0, çıktı JVM ile aynı; fark süiti MIR yolunda henüz koşmadı |
+| C2 | sürüyor | `monolith/mir_emit.py`, `MONO_MIR=1`: Collections1 MIR yolundan (geri düşme 0), satır içi ile ve olmadan çıktı JVM ile aynı; fark süiti MIR yolunda henüz koşmadı |
 | C4 | başladı | `monolith/mir_opt.py` `inline_leaf`: Collections1'de 1682 çağrı satır içi; devirt artık yalnızca RTA'nın örneklediği sınıfları sayar (yükleme sırasına bağlı değil) |
-| N1 | sürüyor | `patches/rust/narrator.rs`: JNA `Native.register` yerine dlopen kontrolü; `monolith/narrator_tests.py` koşmadı |
+| N1 | kod bitti, oyunda ölçülmedi | `patches/rust/narrator.rs`: JNA `Native.register` yerine dlopen kontrolü. `monolith/narrator_tests.py` PASS: HotSpot ile aynı anlatıcı (`NarratorLinux active=true`), JNI/JNA taklidine 2 çağrı (yalnızca flite'ın kendisi; JNA 0). Oyun içi `MONO_COUNT_NATIVES` ölçümü bir sonraki Minecraft derlemesinde |
