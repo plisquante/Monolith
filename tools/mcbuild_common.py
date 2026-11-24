@@ -346,8 +346,9 @@ def download_assets(meta: dict, assets_dir: str):
 NETTY_CHANNELS = {c + ".class" for c in (
     "io/netty/channel/local/LocalServerChannel", "io/netty/channel/local/LocalChannel",
     "io/netty/channel/socket/nio/NioSocketChannel", "io/netty/channel/socket/nio/NioServerSocketChannel",
-    "io/netty/channel/socket/nio/NioDatagramChannel", "io/netty/channel/epoll/EpollSocketChannel",
-    "io/netty/channel/epoll/EpollServerSocketChannel", "io/netty/channel/epoll/EpollDatagramChannel")}
+    "io/netty/channel/socket/nio/NioDatagramChannel")}
+# epoll/kqueue channels are not listed: patches/rust/netty.rs makes EventLoopGroupHolder.remote() always pick NIO, so no native
+# channel class is ever handed to ReflectiveChannelFactory (docs/mimari/04_KUTUPHANE_VE_YAMA.md section 6)
 
 
 def reflection_metadata(jars: list[str]) -> list[str]:
