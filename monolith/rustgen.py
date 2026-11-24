@@ -1226,6 +1226,7 @@ OPTIONAL_THROWN = [
     "java/net/BindException", "java/net/SocketTimeoutException",
     "java/net/ProtocolException", "java/net/NoRouteToHostException", "java/net/PortUnreachableException",
     "java/nio/channels/ClosedChannelException",
+    "com/mojang/text2speech/Narrator$InitializeException",   # patches/rust/narrator.rs
 ]
 
 
@@ -1241,6 +1242,7 @@ class Gen:
         self.use_mir = bool(os.environ.get("MONO_MIR"))
         self.mir_fallback = _c.Counter()
         self.mir_methods = 0
+        self.mir_inlined = 0
         self.lits: dict[str, tuple] = {}
         self.sels: dict[str, int] = {}
         self.class_q: list = []
@@ -1344,7 +1346,9 @@ class Gen:
                         for iface in self.world.all_interfaces(c):
                             m_map.setdefault(iface.name, []).append(c)
                 self._iface_impls = m_map
-            concs = self._iface_impls.get(owner_ci.name, ())
+            # only classes the RTA saw instantiated can be receivers (the closure is complete before code generation;
+            # counting every loaded class made the answer depend on the order classes happened to be loaded)
+            concs = [c for c in self._iface_impls.get(owner_ci.name, ()) if c.name in self.prog.instantiated]
             if 1 <= len(concs) <= 8:
                 by_cls = []
                 distinct = {}
@@ -1371,7 +1375,7 @@ class Gen:
                 if c.name in seen:
                     continue
                 seen.add(c.name)
-                if not c.is_interface and not (c.cf.access & 0x0400):
+                if not c.is_interface and not (c.cf.access & 0x0400) and c.name in self.prog.instantiated:
                     impl = self.world.select(c, name, desc)
                     if impl is None or impl[1].is_abstract or impl[1].is_native:
                         ok = False
@@ -1916,6 +1920,7 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
                         body_txt = mg.generate()
                     elif g.use_mir:
                         g.mir_methods += 1
+                        g.mir_inlined += mg.inlined
                     ms.append(body_txt)
                     class_weights[ci.name] = class_weights.get(ci.name, 64) + 40 + len(m.code.code)
                 except RustGenError as ex:
@@ -2728,7 +2733,7 @@ def main() -> int:
     sys.stderr.write(f"monolith: {len(g.seen_classes)} classes, {len(g.seen_methods)} methods, "
                      f"{len(g.errors)} untranslatable, {len(g.link_errors)} link-errors, {len(g.missing_natives)} natives missing\n")
     if g.use_mir:
-        sys.stderr.write(f"monolith: MIR path {g.mir_methods} methods, fallback {sum(g.mir_fallback.values())} "
+        sys.stderr.write(f"monolith: MIR path {g.mir_methods} methods ({g.mir_inlined} calls inlined), fallback {sum(g.mir_fallback.values())} "
                          f"{dict(g.mir_fallback.most_common(6))}\n")
     if g.patches:
         sys.stderr.write("monolith: " + g.patches.report() + "\n")

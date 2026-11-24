@@ -185,6 +185,12 @@ class Interp:
             raise Unsupported("ldc")
         if op == "aconst_null":
             return None
+        if op == "copy":
+            return a[0]
+        if op == "nullcheck":
+            if a[0] is None:
+                raise JavaThrow("java/lang/NullPointerException")
+            return None
         if op == "iinc":
             return i32(a[0] + at)
         c, k = op[0], op[1:]

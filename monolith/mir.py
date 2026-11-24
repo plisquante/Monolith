@@ -50,6 +50,7 @@ class Edge:
     target: int                 # block id == the pc of its first instruction
     args: list                  # Values (None = the thrown object of an exception edge)
     catch: Optional[str] = None  # exception edges: the caught class (None = any)
+    watched: Optional[dict] = None  # build(watch=...): local slot -> Value held on this edge
 
 
 @dataclass
@@ -60,6 +61,7 @@ class MInsn:
     attr: object = None
     pc: int = -1
     exc: list = field(default_factory=list)
+    ins: Optional[Insn] = None   # the bytecode instruction this came from (the emitter hands it to MethodGen.gen_insn)
 
 
 @dataclass
@@ -124,7 +126,8 @@ def _elem(arr_ty: str) -> str:
 
 
 class _B:
-    def __init__(self, ci, m, insns, frs):
+    def __init__(self, ci, m, insns, frs, watch=None):
+        self.watch = watch or {}
         self.ci, self.m = ci, m
         self.insns = insns
         self.idx = {i.pc: k for k, i in enumerate(insns)}
@@ -199,7 +202,8 @@ class _B:
         if nstack != len(stack):
             raise MirError(f"{self.ci.name}.{self.m.name}: stack depth {len(stack)} != {nstack} at edge to {pc}")
         args.extend(stack)
-        return Edge(pc, args)
+        w = self.watch.get(pc)
+        return Edge(pc, args, None, {sl: locs.get(sl) for sl in w} if w else None)
 
     def exc_edges(self, pc: int, locs: dict) -> list:
         out = []
@@ -263,7 +267,7 @@ class _B:
         def emit(dst_ty, args, attr=None, cls=None):
             dst = self.val(dst_ty, cls) if dst_ty else None
             exc = [] if op in _NOTHROW else self.exc_edges(pc, locs)
-            blk.insns.append(MInsn(op, dst, args, attr, pc, exc))
+            blk.insns.append(MInsn(op, dst, args, attr, pc, exc, ins))
             if dst is not None:
                 stack.append(dst)
             return dst
@@ -311,7 +315,7 @@ class _B:
         elif op == "iinc":
             old = locs[ins.arg]
             dst = self.val("int")
-            blk.insns.append(MInsn("iinc", dst, [old], ins.arg2, pc))
+            blk.insns.append(MInsn("iinc", dst, [old], ins.arg2, pc, [], ins))
             locs[ins.arg] = dst
         # ---- stack shuffling
         elif op == "pop":
@@ -464,15 +468,88 @@ class _B:
         return False
 
 
-def build(ci, m, insns) -> Fn:
+def build(ci, m, insns, watch=None) -> Fn:
+    """watch: {target pc: local slots}; edges into those pcs record the Values held in the slots (Edge.watched)."""
     if m.code is None:
         raise MirUnsupported("no code")
     frs = stack_frames(ci.cf, m)
-    return _B(ci, m, insns, frs).build()
+    return _B(ci, m, insns, frs, watch).build()
+
+
+def successors(b: Block) -> list:
+    out = [e.target for e in b.term.edges] + [e.target for e in b.term.exc]
+    for i in b.insns:
+        out.extend(e.target for e in i.exc)
+    return out
+
+
+def dominators(fn: Fn) -> dict:
+    """Immediate dominator of every reachable block (Cooper, Harvey, Kennedy); the entry maps to itself."""
+    order, seen = [], set()
+    stack = [(fn.entry, iter(successors(fn.blocks[fn.entry])))]
+    seen.add(fn.entry)
+    while stack:
+        b, it = stack[-1]
+        nxt = next(it, None)
+        if nxt is None:
+            order.append(b)
+            stack.pop()
+        elif nxt not in seen:
+            seen.add(nxt)
+            stack.append((nxt, iter(successors(fn.blocks[nxt]))))
+    rpo = order[::-1]
+    num = {b: i for i, b in enumerate(rpo)}
+    preds: dict = {b: [] for b in rpo}
+    for b in rpo:
+        for s in successors(fn.blocks[b]):
+            preds[s].append(b)
+    idom = {fn.entry: fn.entry}
+
+    def meet(a, b):
+        while a != b:
+            while num[a] > num[b]:
+                a = idom[a]
+            while num[b] > num[a]:
+                b = idom[b]
+        return a
+
+    changed = True
+    while changed:
+        changed = False
+        for b in rpo[1:]:
+            ps = [p for p in preds[b] if p in idom]
+            if not ps:
+                continue
+            d = ps[0]
+            for p in ps[1:]:
+                d = meet(p, d)
+            if idom.get(b) != d:
+                idom[b] = d
+                changed = True
+    return idom
 
 
 def verify(fn: Fn) -> None:
-    """Structural checks: edges match target parameter lists, every value is defined before use in its block, blocks end."""
+    """Structural checks: edges match target parameter lists, every use is dominated by its definition (same block: earlier;
+    other block: a dominating block), every block ends in a terminator."""
+    idom = dominators(fn)
+    def_block: dict = {}
+    for b in fn.blocks.values():
+        for p in b.params:
+            def_block[id(p)] = b.id
+        for i in b.insns:
+            if i.dst is not None:
+                def_block[id(i.dst)] = b.id
+
+    def dominates(a, b) -> bool:
+        while True:
+            if a == b:
+                return True
+            nb = idom.get(b)
+            if nb is None or nb == b:
+                return False
+            b = nb
+
     for b in fn.blocks.values():
         if b.term is None:
             raise MirError(f"{fn.cls}.{fn.name}: block {b.id} has no terminator")
@@ -481,7 +558,10 @@ def verify(fn: Fn) -> None:
         def use(v, where):
             if v is None:
                 return
-            if id(v) not in defined:
+            if id(v) in defined:
+                return
+            d = def_block.get(id(v))
+            if d is None or d == b.id or not dominates(d, b.id):
                 raise MirError(f"{fn.cls}.{fn.name}: {where} uses undefined {v!r} in block {b.id}")
 
         def check_edge(e: Edge, exc=False):

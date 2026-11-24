@@ -24,10 +24,15 @@ def kind(v) -> str:
 class MirMethodGen(MethodGen):
     def __init__(self, gen, ci, m):
         super().__init__(gen, ci, m)
-        if find_iterator_scopes(self.insns):
-            raise mir.MirUnsupported("iterator-scope")
-        self.fn = mir.build(ci, m, self.insns)
+        # for-each iterators handed back where the loop ends (MethodGen does it at the exit block with the slot variable;
+        # here every edge into the exit recycles the Value its slot holds)
+        self.iter_scopes = find_iterator_scopes(self.insns)
+        self.fn = mir.build(ci, m, self.insns, self.iter_scopes)
         mir.verify(self.fn)
+        from . import mir_opt
+        self.inlined = mir_opt.run_passes(self.fn, gen, ci)
+        if self.inlined:
+            mir.verify(self.fn)
         self.by_pc = {i.pc: i for i in self.insns}
         ln = sorted(m.code.line_numbers or [])
         self.line_pcs = [p for p, _l in ln]
@@ -106,12 +111,18 @@ class MirMethodGen(MethodGen):
         if mi.op == "iinc":
             lines.append(f"{self.vref(mi.dst)} = {self.vref(mi.args[0])}.wrapping_add({mi.attr});")
             return
+        if mi.op == "nullcheck":   # receiver of an inlined call (mir_opt.inline_leaf)
+            lines.append(f"rt::nn({self.vref(mi.args[0])})?;")
+            return
+        if mi.op == "copy":        # a value forwarded unchanged (mir_opt)
+            lines.append(f"{self.vref(mi.dst)} = {self.vref(mi.args[0])};")
+            return
         stk = []
         for i, a in enumerate(mi.args):
             k = kind(a)
             stk.append(k)
             lines.append(f"{self.sname(i, k)} = {self.vref(a)};")
-        ins = self.by_pc[mi.pc]
+        ins = mi.ins if mi.ins is not None else self.by_pc[mi.pc]
         r = self.gen_insn(ins, stk, lines, set())
         if r is not None:
             raise mir.MirError(f"{self.where}@{mi.pc}: {mi.op} returned successors")
@@ -131,7 +142,13 @@ class MirMethodGen(MethodGen):
 
         def go(e) -> str:
             a = self.edge_assign(e)
-            return f"{a} pc = {e.target}; continue;".strip()
+            rec = ""
+            if e.watched:
+                for sl in self.iter_scopes.get(e.target, ()):
+                    v = e.watched.get(sl)
+                    if v is not None and kind(v) == "A":
+                        rec += f"rt::recycle_scope({self.vref(v)}); "
+            return f"{rec}{a} pc = {e.target}; continue;".strip()
 
         if t.kind == "ret":
             mark(t.pc)

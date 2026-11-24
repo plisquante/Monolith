@@ -46,6 +46,9 @@ public class Sem {
     static int conv(double d, float f, long l) { return (int) d + (int) f + (int) l + (byte) l + (short) d + (char) f; }
     static long cmp(double a, double b) { return (a < b ? 1 : 0) + (a > b ? 2 : 0) + (a == b ? 4 : 0) + (Double.compare(a, b) * 8L); }
     static int nested(int n) { int c = 0; for (int i = 0; i < n; i++) for (int j = i; j < n; j++) { if ((i ^ j) % 3 == 0) continue; c += i * j; } return c; }
+    static int sq(int x) { return x * x; }
+    static int clamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
+    static long poly(int x) { return sq(x) + 3L * clamp(x, -5, 5) - sq(clamp(x, 0, 9)); }
     static long dupx(long[] a, int i) { long x = a[i]++; long y = ++a[i]; a[i] <<= 1; return x * 31 + y + a[i]; }
     public static void main(String[] x) {
         for (int n : new int[]{0, 1, 2, 10, 46}) System.out.println("fib " + n + " " + fib(n));
@@ -61,6 +64,7 @@ public class Sem {
         System.out.println("conv " + conv(1e20, -3.7f, 5000000000L) + " " + conv(-2.5, Float.NaN, -1L) + " " + conv(70000.9, 65537.5f, 129L));
         System.out.println("cmp " + cmp(1.0, 2.0) + " " + cmp(2.0, 1.0) + " " + cmp(1.0, 1.0) + " " + cmp(Double.NaN, 1.0) + " " + cmp(0.0, -0.0));
         for (int n : new int[]{0, 1, 9, 30}) System.out.println("nested " + n + " " + nested(n));
+        for (int n : new int[]{-7, 0, 3, 12}) System.out.println("poly " + n + " " + poly(n));
         System.out.println("dupx " + dupx(new long[]{5, 6, 7}, 1) + " " + dupx(new long[]{-9, 1L << 40, 3}, 1));
     }
 }
@@ -127,9 +131,22 @@ def semantic(d, world, prog):
     mine.append("cmp " + " ".join(str(call("cmp", a, b)) for a, b in ((1.0, 2.0), (2.0, 1.0), (1.0, 1.0), (nan, 1.0), (0.0, -0.0))))
     for n in (0, 1, 9, 30):
         mine.append(f"nested {n} {call('nested', n)}")
+    for n in (-7, 0, 3, 12):
+        mine.append(f"poly {n} {call('poly', n)}")
     mine.append(f"dupx {call('dupx', [5, 6, 7], 1)} {call('dupx', [-9, 1 << 40, 3], 1)}")
     bad = [f"jvm: {a}\nmir: {b}" for a, b in zip(jvm, mine) if a != b]
     check(f"MIR interpreter == JVM on {len(jvm)} result lines", not bad and len(jvm) == len(mine), "\n".join(bad[:6]) + f"\n({len(jvm)} vs {len(mine)})")
+    # the same after inlining (mir_opt.inline_leaf): poly calls sq and clamp, which are leaves
+    from monolith import mir_opt
+    from monolith.rustgen import Gen
+    g = Gen(world2, p2, os.path.join(ROOT, "monolith", "rt", "natives.rs"))
+    n_inl = 0
+    for k, f in fns.items():
+        n_inl += mir_opt.inline_leaf(f, g, ci)
+        mir.verify(f)
+    pm = [f"poly {n} {call('poly', n)}" for n in (-7, 0, 3, 12)]
+    check(f"inline_leaf: {n_inl} calls inlined, poly still == JVM", n_inl >= 4 and pm == [x for x in jvm if x.startswith("poly ")],
+          f"{n_inl} inlined; {pm}")
 
 
 def jdk_jmods_():
