@@ -15,9 +15,9 @@ Bu oturumun sınırı (dürüst durum):
 
 1. Tek kaynak bu dosyadır. Her iş bir ID taşır (G-xx). Durum: `[ ]` açık, `[~]` yapılıyor, `[x]` kanıtla kapandı.
 2. Kapanış kanıtı: çalıştırılan komut + filtreli çıktı + tarih. "Yazıldı" kanıt değildir.
-3. Dosya sahipliği çakışmaz. Bir dosyayı yalnızca sahibi düzenler; diğeri öneriyi bu dosyaya yorum olarak ekler.
+3. Dosya sahipliği çakışmaz. Bir dosyayı yalnızca sahibi düzenler; diğeri önerisini bu dosyanın "Öneriler" bölümüne yazar (bölüm 8).
 4. Ağır işler (tam üretim, oyun testi, soak) aynı anda yalnızca bir tane çalışır (`MASTER_PLAN_TR.md` bölüm 6, bellek sınırı).
-5. Commit ve push yalnızca kullanıcı istediğinde yapılır. Bu dosya şu an commit edilmemiş.
+5. Commit ve push yalnızca kullanıcı istediğinde yapılır. Bu dosyanın ilk sürümü `85ae2ef` ile commit ve push edildi. Sonraki düzeltmeler commit edilmedi.
 
 ## 2. Eksik envanteri
 
@@ -32,10 +32,10 @@ Kaynak sütunu: dosya:bölüm. "Doğrulandı" sütunu: bu oturumda çalıştır�
 | G-03 | Rust runtime unit: crash | [x] | `tests/rust/crash_main.rs` 5 passed | Claude | |
 | G-04 | Native diff: crc, netty, recycle, stack, patch | [ ] | Bu oturumda kesildi, çalıştırılmadı. JDK: `/root/.cache/monolith/temurin-25/jdk-25.0.5.1+2` | Claude | Süit çalışırken başlatılmaz (G-05) |
 | G-05 | Diferansiyel süit `tests/run_tests.py` | [~] | Bu oturumda başka bir süreç çalışıyor (PID 13606, `MONO_MIR=1`, log boş). Önceki sonuç: 27 pass / 3 skip (§22) | Claude | Süreç sahibi doğrulanmadan öldürülmez |
-| G-06 | Link error açıklaması | [ ] | §22: 446 hata, 0 açıklanmamış, ama overlay silindikten sonra tam üretimde yeniden doğrulanmadı | Claude | Tam üretim gerekir (~70 dk) |
+| G-06 | Link error açıklaması | [ ] | §22 tam üretim raporu: 446 hata, 0 açıklanmamış. Aynı §22'nin "Doğrulanmadı" listesi overlay silindikten sonraki 446/0 sonucunu yeniden istiyor | Claude | Tam üretim gerekir (~70 dk) |
 | G-07 | GC stres, iki mod | [ ] | §21: 6/6 plain ve concurrent. Overlay/çevirici değişikliğinden sonra tekrar | Claude | |
 | G-08 | Oyun başlatma, plain | [ ] | §22: bir koşu geçti (`headless_play.sh --seconds 60 --clean-exit`, SIGTERM, çıkış 143). Tam üretimden sonra tekrar | Claude | Tam üretim gerekir |
-| G-09 | Oyun başlatma, concurrent GC | [ ] | §22: iki koşu gerekli, bir koşu 120 sn (§ VERIFICATION). Tekrar yok | Antigravity (ölçüm kaydı) | Tam üretim gerekir |
+| G-09 | Oyun başlatma, concurrent GC | [ ] | `docs/RELEASE.md` bölüm 4: iki koşu başarılı, 120 sn'lik bir koşu `docs/VERIFICATION.md`'de (bu dosya bu oturumda okunmadı). Yeni koşu yok | Antigravity (ölçüm kaydı) | Tam üretim gerekir |
 | G-10 | Kaçak kapısı 60 dk | [~] | §22: +0.180 MiB/dk, bütçe içinde, tek koşu, idle dünya. Tekrar ve yürüyüş/başka dünya yok | Antigravity (koşu + rapor) | Tam üretim + 60 dk |
 | G-11 | Paketleme `tools/make_release.py` | [ ] | Betik var, bu oturumda çalıştırılmadı (üretilmiş `build/` yok) | Claude | Tam üretim sonrası |
 
@@ -74,7 +74,7 @@ Kaynak sütunu: dosya:bölüm. "Doğrulandı" sütunu: bu oturumda çalıştır�
 | ID | Eksik | Durum | Kanıt | Sahip | Not |
 |---|---|---|---|---|---|
 | G-27 | `CLAUDE.md` eski: "Zig back end, `monolith/` transpiler" diyor | [ ] | `ARCHITECTURE_MAP.md` satır 1: Zig arka ucu kaldırıldı | Kullanıcı (proje talimatı) | Değiştirilmedi. Onay gerekir |
-| G-28 | `.zig` referansları kalıntı | [~] | §22: "stale .zig references in comments point at Rust modules". Tam tarama yapılmadı | Antigravity (tarama) | Yorum düzeltmesi, Claude onaylar |
+| G-28 | `.zig` referansları kalıntı | [~] | §22: "stale .zig references in comments point at Rust modules". Tam tarama yapılmadı | Antigravity (tarama, öneri) | `monolith/` ve `tools/` yorumlarını Claude uygular |
 | G-29 | Eski belgeleri işaretleme | [ ] | `MASTER_PLAN_TR.md` bölüm 11 madde 5 | Antigravity | |
 | G-30 | Ürün kullanım kılavuzu, sürüm notları | [~] | `docs/KULLANICI_REHBERI_TR.md` var (§22) | Antigravity | Kılavuz ayarları kodla karşılaştırıldı |
 
@@ -85,7 +85,7 @@ Kaynak sütunu: dosya:bölüm. "Doğrulandı" sütunu: bu oturumda çalıştır�
 | D-01 | WS13 hukuk kapısı (dağıtım) | Sürümü durdurur (`MASTER_PLAN_TR.md` bölüm 10). Hukuki karar kullanıcıya ait |
 | D-02 | Gemini/Antigravity erişimi ve model kimliği | Bu ortamdan çağrılamıyor. Model adı doğrulanamadı |
 | D-03 | Donanım: GPU, Android cihaz, Windows/macOS | G-20, G-22, G-23 kapanmaz |
-| D-04 | Commit ve push izni | Bu dosya ve bu oturumdaki değişiklikler commit edilmedi |
+| D-04 | Bölüm 8 ve bu gözden geçirmenin düzeltmeleri | Commit edilmedi. Commit ve push izni gerekir |
 | D-05 | CLAUDE.md güncellemesi (G-27) | Proje talimatı; kullanıcı onayı olmadan değişmez |
 
 ## 3. İş dağılımı
@@ -125,3 +125,18 @@ Antigravity / Gemini (ölçüm, envanter, belge; kod yazmaz ya da Claude'un onay
 Kapalı: G-01, G-02, G-03 (bu oturum). Kısmi: G-05, G-10, G-16, G-17, G-21, G-28, G-30. Açık: geri kalan. Donanım ve karar bekleyen: D-01..D-05.
 
 1.0 onay listesi (`MASTER_PLAN_TR.md` bölüm 8): 1 maddesi işaretli (fark testleri yeşil; önceki oturum). Kalanlar açık.
+
+## 7. Gemini ilk görevi
+
+Bu bölüm Gemini'nin ilk oturumu için. Gemini bu dosyayı okuyup şunları yapar, her madde için kanıt ister:
+
+1. Model kimliğini ve erişim yolunu bildirir (bu oturum doğrulayamadı, D-02).
+2. Bölüm 2'den iki alan seçer: G-15 (HotSpot ölçüm tablosu) ve G-17 (JNI/JNA envanter gözden geçirme). Seçtiği maddeleri bölüm 8'e yazar.
+3. Bölüm 2'deki her `Antigravity` sahipli maddenin ilk adımını ve gereken donanımı yazar. Donanım yoksa "yapılamaz" der, tahmin yazmaz.
+4. Bölüm 3'teki çakışma kuralını kabul eder ya da itiraz eder.
+
+Çıktı formatı: bölüm 8 altında `### Gemini yanıtı (tarih)`, madde ID'leri ve kanıt. Kod değişikliği önermez, yalnızca öneri yazar.
+
+## 8. Öneriler
+
+Henüz kayıt yok. Gemini ve Claude buraya yazar. Format: `- [öneren] G-xx: öneri, kanıt, etki`.
