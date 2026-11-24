@@ -12,7 +12,6 @@ logical list, `Frame.slots_locals()` expands it). The implicit initial frame (me
 Methods without a StackMapTable (straight-line code) have only the initial frame.
 """
 from dataclasses import dataclass
-import struct
 
 from .classfile import ClassConst, ClassFile, ClassFormatError, MethodInfo
 from .world import parse_method_desc
