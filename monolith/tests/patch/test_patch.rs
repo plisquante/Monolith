@@ -1,4 +1,4 @@
-// Rust patches for Patch1.java. Each function must behave exactly like the Java method it replaces.
+// Patch1.java için Rust yamaları. Her fonksiyon, yerine geçtiği Java metoduyla birebir aynı davranmalıdır.
 
 pub fn mix(a: i32, b: i32) -> rt::Res<i32> {
     Ok(a.wrapping_mul(31) ^ (((b as u32) >> 3) as i32))
@@ -54,7 +54,7 @@ pub fn bits_set(orig: impl Fn(rt::Ref, i32, i32) -> rt::Res<()>, this: rt::Ref, 
     }
 }
 
-/// `a` is declared in Base, `b` in Derived: both offsets are resolved against Derived's layout.
+/// `a` Base içinde, `b` Derived içinde bildirilmiştir: iki ofset de Derived'ın yerleşimine karşı çözülür.
 pub fn derived_total(this: rt::Ref) -> rt::Res<i32> {
     rt::nn(this)?;
     unsafe { Ok(get::<i32>(this, F_a).wrapping_add(get::<i32>(this, F_b))) }
@@ -83,7 +83,7 @@ pub fn shapes_area(orig: impl Fn(rt::Ref) -> rt::Res<i32>, s: rt::Ref) -> rt::Re
     orig(s)
 }
 
-/// Interface call (Op.apply), virtual calls (Animal.legs / sound), a constructor (Pt) and an interned String, all from Rust.
+/// Arayüz çağrısı (Op.apply), sanal çağrılar (Animal.legs / sound), bir kurucu (Pt) ve kullanım havuzundaki (interned) bir String; hepsi Rust'tan.
 pub fn virt_run(op: rt::Ref, an: rt::Ref, n: i32) -> rt::Res<i32> {
     let p = n_pt(n, n.wrapping_add(1))?;
     let sum = unsafe { get::<i32>(p, F_pt_x).wrapping_add(get::<i32>(p, F_pt_y)) };

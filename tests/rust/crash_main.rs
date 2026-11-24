@@ -14,7 +14,7 @@ fn temp_dir(tag: &str) -> PathBuf {
     d
 }
 
-/// Runs the named child test in a separate process and returns (exit code, report text if one was written).
+/// Adı verilen çocuk testi ayrı bir süreçte çalıştırır ve (çıkış kodu, yazıldıysa rapor metni) döndürür.
 fn run_child(test: &str, tag: &str) -> (Option<i32>, Option<String>) {
     let dir = temp_dir(tag);
     let out = Command::new(std::env::current_exe().unwrap())

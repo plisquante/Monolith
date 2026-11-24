@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 const N: usize = 4096;
 
 pub struct Heap {
-    // refs[i] = index of the object i points to (usize::MAX = none). Roots: root[0..R].
+    // refs[i] = i nesnesinin gösterdiği nesnenin indeksi (usize::MAX = yok). Kökler: root[0..R].
     refs: Vec<AtomicUsize>,
     marks: Vec<AtomicU32>,
     marking: AtomicBool,

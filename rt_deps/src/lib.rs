@@ -1,1 +1,1 @@
-// The runtime has no third-party crates: CRC-32 is implemented in monolith/rt/natives_io.rs.
+// Çalışma zamanının üçüncü taraf crate'i yoktur: CRC-32, monolith/rt/natives_io.rs içinde gerçekleştirilmiştir.

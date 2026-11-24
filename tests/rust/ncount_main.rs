@@ -5,7 +5,7 @@ pub mod ncount;
 
 #[test]
 fn counts_only_when_enabled_and_renders_most_called_first() {
-    // off: nothing is recorded
+    // kapalı: hiçbir şey kaydedilmez
     ncount::count("n_a__never");
     assert!(ncount::render().starts_with("native calls through the JNI/JNA emulation: 0 calls, 0 distinct natives\n"));
 

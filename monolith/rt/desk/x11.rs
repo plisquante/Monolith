@@ -17,7 +17,7 @@ static SIZE_W: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(
 static SIZE_H: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(720);
 static GRABBED: AtomicBool = AtomicBool::new(false);
 
-/// MONO_WINDOW_SIZE=WxH overrides the initial window size.
+/// MONO_WINDOW_SIZE=WxH, ilk pencere boyutunu geçersiz kılar.
 fn window_size(w: i32, h: i32) -> (i32, i32) {
     if let Ok(v) = std::env::var("MONO_WINDOW_SIZE") {
         if let Some((a, b)) = v.split_once('x') {
@@ -39,7 +39,7 @@ pub fn set_grab(on: bool) {
     st.warped = false;
 }
 
-/// Desktop input state, filled from X11 events in the layout of the TouchCore snapshot.
+/// Masaüstü girdi durumu; X11 olaylarından, TouchCore anlık görüntüsünün düzeninde doldurulur.
 struct Input {
     keys: [u8; 19],
     slot: i32,
@@ -55,7 +55,7 @@ static INPUT: Mutex<Input> = Mutex::new(Input {
     text: std::collections::VecDeque::new(),
 });
 
-// keysym -> snapshot key index (same order as SDLEvents.BTN_KEYCODE; 7 and 8 are the mouse buttons)
+// keysym -> anlık görüntü tuş indeksi (SDLEvents.BTN_KEYCODE ile aynı sıra; 7 ve 8 fare tuşlarıdır)
 fn key_index(ks: u64) -> Option<usize> {
     Some(match ks {
         0x77 | 0x57 => 0, 0x61 | 0x41 => 1, 0x73 | 0x53 => 2, 0x64 | 0x44 => 3, // w a s d
@@ -65,7 +65,7 @@ fn key_index(ks: u64) -> Option<usize> {
         _ => return None,
     })
 }
-// keysym -> SDL keycode of the editing keys the game reads through the text queue
+// keysym -> oyunun metin kuyruğu üzerinden okuduğu düzenleme tuşlarının SDL tuş kodu
 fn edit_key(ks: u64) -> Option<i32> {
     Some(match ks {
         0xff08 => 8, 0xff0d | 0xff8d => 13, 0xffff => 127,
@@ -78,7 +78,7 @@ fn edit_key(ks: u64) -> Option<i32> {
 fn rd_i32(ev: &[u8; 192], off: usize) -> i32 { i32::from_ne_bytes(ev[off..off + 4].try_into().unwrap()) }
 fn rd_u32(ev: &[u8; 192], off: usize) -> u32 { u32::from_ne_bytes(ev[off..off + 4].try_into().unwrap()) }
 
-/// Drains the X11 event queue into INPUT.
+/// X11 olay kuyruğunu INPUT içine boşaltır.
 pub fn pump() {
     let dpy = DPY.load(Ordering::Acquire) as *mut c_void;
     let x11 = X11.load(Ordering::Acquire) as *mut c_void;
@@ -170,7 +170,7 @@ pub fn take_text(out: &mut [i32], max: usize) -> i32 {
     n as i32
 }
 
-// `sym_fn!` carries its own `unsafe` (needed in safe callers such as `pump`); the block below is already unsafe.
+// `sym_fn!` kendi `unsafe`'ini taşır (`pump` gibi güvenli çağıranlarda gerekir); aşağıdaki blok zaten unsafe'tir.
 #[allow(unused_unsafe)]
 pub fn try_init(w: i32, h: i32) -> bool {
     if INIT_OK.load(Ordering::Acquire) {
@@ -212,7 +212,7 @@ pub fn try_init(w: i32, h: i32) -> bool {
         let (w, h) = window_size(w, h);
         let win = x_create_simple(dpy, root, 0, 0, w.max(1) as u32, h.max(1) as u32, 0, 0, 0);
         if win == 0 { return false; }
-        // title, input events, then show the window (an unmapped window is never visible)
+        // başlık, girdi olayları, sonra pencereyi göster (eşlenmemiş bir pencere hiçbir zaman görünmez)
         if let Some(f) = sym_fn!(&[x11], "XStoreName", extern "C" fn(*mut c_void, usize, *const c_char) -> i32) {
             f(dpy, win, c"Monolith".as_ptr());
         }
