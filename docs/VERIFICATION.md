@@ -59,7 +59,10 @@ says nothing yet about removing the collector. One pass only.
 
 ## Collector-off switch (`MONO_GC=off`), test programs only
 
-`tests/run_tests.py GcStress Oop Threads` passes with `MONO_GC=off`. The game has not been run this way: the
-Minecraft binary in the build directory predates the switch, and a rebuild plus a 60 min soak are still needed.
+`tests/run_tests.py GcStress Oop Threads` passes with `MONO_GC=off`.
+
+Game run with `MONO_GC=off` (rebuilt binary, saved world, standing still): the process reached 13.3 GB resident memory
+after about 10 minutes on this 16 GB machine. The run was stopped there to avoid an out-of-memory kill, so the 60 min
+gate was not completed. With the collector off the heap is not bounded, and the collector stays in the build for now.
 
 Not covered: multiplayer, Realms, audio output, a second session, long play, repeated boots, FPS and memory figures.

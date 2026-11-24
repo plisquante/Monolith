@@ -21,7 +21,7 @@ is only for additive changes; see docs/IMPL_SPEC.md section 7).
 | GC stress, both modes | `tests/run_tests.py GcStress Oop Threads Lambdas Strings Collections1` with `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`, plain and `MONO_GC_CONCURRENT=1` | same output as HotSpot, no panic, six of six in each mode |
 | Game start, plain | `tools/headless_play.sh build --seconds 60` | game running, no crash report, no `Sound engine ERROR`, no `FFI types not initialized` |
 | Game start, concurrent GC | `MONO_GC_CONCURRENT=1 tools/headless_play.sh ...` | same as plain (one headless run reached the title and stayed up for 120 s, see `docs/VERIFICATION.md`; repeat runs needed) |
-| Leak gate | `tools/leak_soak.sh build --minutes 60`, then `tools/leak_budget.py --warmup-s 1800 --budget-mb-per-min 1` | slope <= 1 MiB/min (one pass with the collector on: slope -0.054 MiB/min, see `docs/VERIFICATION.md`; needs repetition and the collector-off run) |
+| Leak gate | `tools/leak_soak.sh build --minutes 60`, then `tools/leak_budget.py --warmup-s 1800 --budget-mb-per-min 1` | slope <= 1 MiB/min (one pass with the collector on: slope -0.054 MiB/min, see `docs/VERIFICATION.md`; needs repetition; the collector-off run was stopped at 13.3 GB resident after 10 min, see `docs/VERIFICATION.md`) |
 
 ## 3. Package
 
@@ -37,6 +37,8 @@ every file). The game's own files (saves, options, logs, crash reports) are neve
   panic or fatal line (`docs/VERIFICATION.md`). Two runs are not enough: the 60 min leak soak is needed before concurrent
   mode can be the default. Until then concurrent mode stays off by default, and the release uses stop-the-world collection.
 - The stop-the-world pause reaches about 1.1 s with a 500 MB live heap (measured, plain mode).
+- The collector cannot be switched off yet: with `MONO_GC=off` the game reached 13.3 GB resident after 10 min standing
+  still on a 16 GB machine (measured, stopped). Tiers 1-3 of `GC_PLAN.md` have to shrink allocation first.
 - Android audio and window back ends are not tested on a device. Windows and macOS back ends exist and their smoke test
   passes on CI runners; the game boots there in CI (`.github/workflows/game.yml`); no hardware run yet.
 - Java overlays (`classlib/`, `runtime/java_nolwjgl/`) and the JNA/Netty emulation are still in place.

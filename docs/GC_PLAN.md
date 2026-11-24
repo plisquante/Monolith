@@ -27,7 +27,8 @@ Targets, not results. Every row gets a measuring tool in phase 0 and is checked 
   inliner + iteration-local escape analysis, `tickChunk` patch, allocation profiler with steady-state diff.
 * Not done: any incremental or concurrent collection, any write barrier, owned (manually released) objects.
 * `MONO_GC=off` (phase 0 switch): done. Automatic collections never run; `System.gc()` still collects. Tests pass with it
-  (`GcStress Oop Threads`). Not yet measured in the game: that needs a Minecraft rebuild and a 60 min soak.
+  (`GcStress Oop Threads`). Measured in the game: 13.3 GB resident after about 10 min standing still on 16 GB; stopped, the collector stays
+  (`docs/VERIFICATION.md`).
 * Leak gate, first pass (collector on): 60 min standing still, slope after 1800 s warm-up -0.054 MiB/min against the
   1 MiB/min budget, passes as written. Heap grew from 7.9 to 593.5 MiB over the whole run, longest pause 1473 ms.
   Details in `docs/VERIFICATION.md`.
@@ -121,7 +122,7 @@ The translator owns every reference store, so the barrier is emitted, not patche
 | 3 | Write barrier in codegen, runtime API, native/patch audit; SATB concurrent marker, pacing, assists, hard limit | verify mode clean for a 30 min run, pause < 1 ms, barrier cost < 3 % |
 | 4 | Garbage backlog (section 6), region scopes for tick/frame | managed steady-state allocation < 5 MiB/s |
 | 5 | Owned memory for the top owners from the profile | live managed heap and collector CPU drop measurably per owner |
-| 6 | `MONO_GC=off` soak (60 min scripted play) | residual growth < 1 MiB/min; if met, collector off by default, kept behind feature `gc` as net; hard-limit event = fail |
+| 6 | `MONO_GC=off` soak (60 min scripted play; first run stopped at 13.3 GB RSS after 10 min) | residual growth < 1 MiB/min; if met, collector off by default, kept behind feature `gc` as net; hard-limit event = fail |
 | 7 | Platforms on the final runtime: Android `.so`, Windows/macOS windowing | each runs the leak script |
 
 ## 9. Build logistics (this decides the order)
