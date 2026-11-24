@@ -12,7 +12,7 @@ description: Working protocol for medium effort. Use at session start and before
 
 ## Reading
 - Never re-read a file already read this session unless it changed.
-- Read ranges (`offset`/`limit`), not whole files. Skip files over 100KB (generated Zig, logs, reports, `docs/STATUS.md` body) unless the task requires them; grep them.
+- Read ranges (`offset`/`limit`), not whole files. Skip files over 100KB (generated Rust shards, logs, reports, `docs/STATUS.md` body) unless the task requires them; grep them.
 - Generated output (`out/`, `mc/`, `classlib/build/`, `tests/build/`) is never read for editing. Fix the generator.
 
 ## Editing

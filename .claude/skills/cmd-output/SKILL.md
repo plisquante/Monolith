@@ -9,7 +9,7 @@ description: Filter long command output. Use before running tests, builds, zig/p
 
 ## Never print raw
 - Test suite: `python3 tests/run_tests.py ... 2>&1 | tail -40`; on failure add `| grep -nE 'FAIL|Error|error:|Traceback|panic' | head -30`.
-- Zig compile: `zig build-exe ... 2>&1 | grep -E 'error:|note:' | head -30`, then read only the cited file ranges.
+- Rust compile: `python3 -m monolith.rustgen ... --compile 2>&1 | grep -E '^error|^warning: unused|panicked' | head -30`, then read only the cited file ranges.
 - Transpile: `python3 -m monolith ... 2>&1 | tail -30`; details in `<out>/report.json` via `python3 -c` key extraction, never `cat`.
 - Git: `git log --oneline -n 15`, `git diff --stat`, then `git diff -- <one file>`. `git status -sb`.
 - Logs: `tail -n 60`, `grep -c` for counts, `grep -m 20` for first hits.
