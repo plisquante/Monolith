@@ -42,9 +42,11 @@ other objects or in statics.
    release at the points the Java semantics name (`WeakReference` clearing, `Cleaner`, `finalize` is not supported).
 2. Stack roots: the conservative stack scan goes away only if every reference held in a Rust local is owned by a
    handle type, which the generated code does not do today.
-3. Escape analysis (`--escape`) keeps non-escaping objects in frame slots (`rt::stack_obj`). Those never reach the
-   collector. The runtime has a scope arena (`rt::alloc_arena`), but the generator does not emit calls to it
-   (checked: `alloc_arena` appears in `rustgen.py` only in help text). The remaining work is the escaping allocations.
+3. Escape analysis (`--escape`) keeps non-escaping objects in frame slots (`rt::stack_obj`), and non-escaping arrays in
+   the method's arena (`rt::new_array_arena`, `rt::new_obj_array_arena`, released by `rt::ArenaGuard` when the method
+   returns). Neither reaches the collector. Loop allocations whose object survives one iteration but not the method
+   are not put in the arena yet: an arena lives until the method returns, so a long loop would keep every iteration's
+   object alive. Those need a per-iteration or per-scope reset first.
 
 ## Measured: generated code for `Stack1` with `--escape --inline`
 
@@ -52,21 +54,30 @@ Counted in the emitted Rust (static sites, not runtime counts):
 
 | allocation | sites | route |
 |---|---|---|
-| `rt::stack_obj` | 77 | frame slot, never reaches the collector |
-| `rt::alloc` | 4959 | collected heap |
-| `rt::new_array` | 979 | collected heap |
-| `rt::new_obj_array` | 945 | collected heap |
+| `rt::stack_obj` | 78 | frame slot, never reaches the collector |
+| `rt::new_array_arena` | 14 | method arena, released at return |
+| `rt::new_obj_array_arena` | 38 | method arena, released at return |
+| `rt::alloc` | 4972 | collected heap |
+| `rt::new_array` | 977 | collected heap |
+| `rt::new_obj_array` | 930 | collected heap |
 | `rt::alloc_recyclable` | 18 | collected heap, recycled per class |
-| `alloc_arena` (generated) | 0 | scope arena is not emitted by the generator yet |
 
-About 98% of allocation sites are still on the collected heap, even with escape analysis on. The scope arena
-exists in the runtime (`rt::alloc_arena`) but the generator does not use it. The first real GC-removal step is
-to make the generator emit arena allocations for every site the escape analysis already proves short-lived.
-Escape analysis currently marks only 77 sites as frame-local; the rest escape, so the ownership model is the
-real work.
+Counts from the generated `Stack1` output (`--escape --inline`, `--opt 1`, one run). The earlier note that the
+arena is not emitted was wrong for arrays: 52 arena sites are already emitted. Objects have no arena route: the
+`new` path emits `stack_obj` or the heap, never `alloc_arena`.
+
+About 98% of emitted allocation sites (6897 of 7027) are still on the collected heap, even with escape analysis on. The generator message
+under `--escape` reports 223 frame or arena sites (it counts all analysed methods, including ones the output does
+not reach). The loop region candidates on the closure without `--inline` were 4 of 1513 classified sites; they
+have not been counted with `--inline` yet. Escaping sites are the bulk, so the ownership model for escaping
+objects is the real work.
 
 ## Next steps (not started)
 
-- Measure how many escaping allocations a typical Minecraft-sized program makes (`--escape` statistics).
+- Measure how many escaping allocations a typical Minecraft-sized program makes (`--escape` statistics). The
+  `--escape` message now prints the frame and arena site count (it was a count of everything not escaping, which
+  included loop sites that are not frame-local).
+- Count the loop region candidates (survive an iteration, not the method) with `--inline` on Stack1 and on a
+  Minecraft-sized program, before deciding whether a per-iteration reset is worth building.
 - Choose the ownership model for escaping objects and write it down before changing `gc.rs`.
 - Replace the collector behind `heap.rs` one allocation class at a time, each with `tests/run_tests.py` green.

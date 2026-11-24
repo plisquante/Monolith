@@ -32,8 +32,11 @@ Targets, not results. Every row gets a measuring tool in phase 0 and is checked 
 Every allocation ends up in exactly one tier. A tier is chosen by proof (analysis) or by a patch (declared owner), never by guess.
 
 1. **Frame**: does not outlive the method. Stack slot. Free at return. (done, growing with inline/escape coverage)
-2. **Region**: lives until the end of a known scope (tick, frame, packet). Bump arena, freed in one step. (arena exists; scope
-   markers for tick/frame to be added; verified by the escape-violation checker)
+2. **Region**: lives until the end of a known scope (tick, frame, packet). Bump arena, freed in one step. (arena exists;
+   non-escaping arrays already use it, per method, via `rt::ArenaGuard`; objects do not yet. Loop allocations that
+   survive one iteration need a per-iteration or per-scope reset before they can use it, otherwise a long loop keeps
+   every iteration's object alive until the method returns. Scope markers for tick/frame still to be added; verified
+   by the escape-violation checker)
 3. **Owned**: has one owner with a defined release point (chunk, section, block entity, entity, GPU-side wrappers). Allocated
    outside the sweep set, traced through (it holds references to managed objects) but never swept; freed by `rt::release`
    when the owner dies. Patches declare ownership; debug mode poisons and quarantines released objects to catch use-after-release.

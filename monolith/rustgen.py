@@ -1796,7 +1796,8 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
     if use_escape:
         from .escape import analyze as escape_analyze
         esc_res = escape_analyze(prog, budget_s=float(escape_budget))
-        sys.stderr.write(f"monolith: escape analysis {esc_res.seconds:.0f}s, {sum(len(r.sites) - len(r.escaped) for r in esc_res.methods.values())} non-escaping allocation sites\n")
+        n_frame = sum(len(esc_res.noescape_sites(cn, key)) for (cn, key) in esc_res.methods)
+        sys.stderr.write(f"monolith: escape analysis {esc_res.seconds:.0f}s, {n_frame} frame-slot allocation sites\n")
     g = Gen(world, prog, natives_src, esc_res=esc_res, patches=pset)
     g.shards = shards
 
@@ -2579,7 +2580,8 @@ def main() -> int:
     ap.add_argument("--opt", default="1")
     ap.add_argument("--escape", action="store_true",
                     help="run the whole-program escape analysis: allocation sites whose object cannot outlive the method "
-                         "live in a frame slot (rt::stack_obj) instead of the collected heap")
+                         "live in a frame slot (rt::stack_obj) and non-escaping arrays in the method's arena "
+                         "(rt::new_array_arena, released at return) instead of the collected heap")
     ap.add_argument("--inline", action="store_true",
                     help="inline small callees into their callers before the analysis (monolith/inline.py): the allocations "
                          "of `a.subtract(b)`-style helpers become the caller's own and can be proven non-escaping")
