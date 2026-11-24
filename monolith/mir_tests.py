@@ -30,10 +30,111 @@ public class Mt {
 """
 
 
+SEM = """
+public class Sem {
+    static int fib(int n) { int a = 0, b = 1; for (int i = 0; i < n; i++) { int t = a + b; a = b; b = t; } return a; }
+    static long collatz(long n) { long steps = 0; while (n != 1) { n = (n & 1) == 0 ? n >> 1 : 3 * n + 1; steps++; } return steps; }
+    static int gcd(int a, int b) { while (b != 0) { int t = a % b; a = b; b = t; } return a; }
+    static int incs(int i) { int j = i++ + ++i; return j * 100 + i; }
+    static long wide(int n) { long[] a = new long[n + 3]; double[] d = new double[n + 3]; long s = 0;
+        for (int i = 0; i < a.length; i++) { a[i] += i * 3L; a[i]++; d[i] = a[i] / 7.0; s += a[i]--; s ^= (long) d[i]; } return s + a[n]; }
+    static int sw(int k) { switch (k) { case 1: return 10; case 5: return 50; case 9: return 90; case -3: return 33; default: return -1; } }
+    static int shifts(int x, int s) { return (x << s) ^ (x >> s) ^ (x >>> s) ^ (int) ((long) x << s) ^ (int) ((long) x >>> s); }
+    static int dd(int a, int b) { try { return a / b + a % b; } catch (ArithmeticException e) { return -999; } }
+    static int arr(int i) { int[] a = new int[4]; try { a[i] = 7; return a[i] + a.length; } catch (ArrayIndexOutOfBoundsException e) { return -1; } finally { a[0]++; } }
+    static double mix(int i, long l, float f, double d) { return (i * f + l / (d + 1.5)) % 5.5 - (float) l; }
+    static int conv(double d, float f, long l) { return (int) d + (int) f + (int) l + (byte) l + (short) d + (char) f; }
+    static long cmp(double a, double b) { return (a < b ? 1 : 0) + (a > b ? 2 : 0) + (a == b ? 4 : 0) + (Double.compare(a, b) * 8L); }
+    static int nested(int n) { int c = 0; for (int i = 0; i < n; i++) for (int j = i; j < n; j++) { if ((i ^ j) % 3 == 0) continue; c += i * j; } return c; }
+    static long dupx(long[] a, int i) { long x = a[i]++; long y = ++a[i]; a[i] <<= 1; return x * 31 + y + a[i]; }
+    public static void main(String[] x) {
+        for (int n : new int[]{0, 1, 2, 10, 46}) System.out.println("fib " + n + " " + fib(n));
+        for (long n : new long[]{1, 7, 27, 97}) System.out.println("collatz " + n + " " + collatz(n));
+        System.out.println("gcd " + gcd(84, 36) + " " + gcd(17, 5) + " " + gcd(0, 9));
+        for (int n : new int[]{0, 5, -7, 2147483647}) System.out.println("incs " + n + " " + incs(n));
+        for (int n : new int[]{0, 1, 5, 40}) System.out.println("wide " + n + " " + wide(n));
+        for (int n : new int[]{1, 5, 9, -3, 4, 100}) System.out.println("sw " + n + " " + sw(n));
+        for (int[] p : new int[][]{{1, 3}, {-1, 5}, {-2147483648, 31}, {123456789, 33}, {-5, 0}}) System.out.println("shifts " + p[0] + " " + p[1] + " " + shifts(p[0], p[1]));
+        for (int[] p : new int[][]{{7, 2}, {-7, 2}, {7, -2}, {5, 0}, {-2147483648, -1}}) System.out.println("dd " + p[0] + " " + p[1] + " " + dd(p[0], p[1]));
+        for (int n : new int[]{0, 3, 4, -1}) System.out.println("arr " + n + " " + arr(n));
+        System.out.println("mix " + Double.doubleToLongBits(mix(3, 1234567890123L, 1.25f, 0.5)) + " " + Double.doubleToLongBits(mix(-2, -99L, 3.5f, -1.5)));
+        System.out.println("conv " + conv(1e20, -3.7f, 5000000000L) + " " + conv(-2.5, Float.NaN, -1L) + " " + conv(70000.9, 65537.5f, 129L));
+        System.out.println("cmp " + cmp(1.0, 2.0) + " " + cmp(2.0, 1.0) + " " + cmp(1.0, 1.0) + " " + cmp(Double.NaN, 1.0) + " " + cmp(0.0, -0.0));
+        for (int n : new int[]{0, 1, 9, 30}) System.out.println("nested " + n + " " + nested(n));
+        System.out.println("dupx " + dupx(new long[]{5, 6, 7}, 1) + " " + dupx(new long[]{-9, 1L << 40, 3}, 1));
+    }
+}
+"""
+
+
 def check(name, ok, detail=""):
     global fails
     print(("PASS " if ok else "FAIL ") + name + ("" if ok else "\n" + detail))
     fails += 0 if ok else 1
+
+
+def _dbits(x):
+    import struct
+    if x != x:
+        return 0x7ff8000000000000
+    return struct.unpack(">q", struct.pack(">d", x))[0]
+
+
+def semantic(d, world, prog):
+    """Interpret the MIR of Sem and compare each printed line with the JVM's output."""
+    from monolith import mir
+    from monolith.mir_interp import Interp
+    with open(os.path.join(d, "Sem.java"), "w") as fh:
+        fh.write(SEM)
+    r = subprocess.run([f"{JDK}/bin/javac", "-d", d, os.path.join(d, "Sem.java")], capture_output=True, text=True, env=ENV)
+    if r.returncode:
+        sys.exit("javac failed:\n" + r.stderr[-800:])
+    jvm = subprocess.run([f"{JDK}/bin/java", "-cp", d, "Sem"], capture_output=True, text=True, env=ENV).stdout.splitlines()
+    world2 = type(world)(type(world.cp)([d] + jdk_jmods_(), release=25, boot_start=1))
+    ci = world2.get("Sem")
+    from monolith.program import Program
+    p2 = Program(world2)
+    fns = {}
+    for m in ci.cf.methods:
+        if m.code is not None and m.name != "main":
+            fns[(m.name, m.desc)] = mir.build(ci, m, p2.insns(ci, m))
+            mir.verify(fns[(m.name, m.desc)])
+    it = Interp(fns)
+    it.owner = "Sem"
+    call = lambda n, *a: it.call(n, next(k[1] for k in fns if k[0] == n), list(a))  # noqa: E731
+    mine = []
+    for n in (0, 1, 2, 10, 46):
+        mine.append(f"fib {n} {call('fib', n)}")
+    for n in (1, 7, 27, 97):
+        mine.append(f"collatz {n} {call('collatz', n)}")
+    mine.append(f"gcd {call('gcd', 84, 36)} {call('gcd', 17, 5)} {call('gcd', 0, 9)}")
+    for n in (0, 5, -7, 2147483647):
+        mine.append(f"incs {n} {call('incs', n)}")
+    for n in (0, 1, 5, 40):
+        mine.append(f"wide {n} {call('wide', n)}")
+    for n in (1, 5, 9, -3, 4, 100):
+        mine.append(f"sw {n} {call('sw', n)}")
+    for a, b in ((1, 3), (-1, 5), (-2147483648, 31), (123456789, 33), (-5, 0)):
+        mine.append(f"shifts {a} {b} {call('shifts', a, b)}")
+    for a, b in ((7, 2), (-7, 2), (7, -2), (5, 0), (-2147483648, -1)):
+        mine.append(f"dd {a} {b} {call('dd', a, b)}")
+    for n in (0, 3, 4, -1):
+        mine.append(f"arr {n} {call('arr', n)}")
+    from monolith.mir_interp import f32
+    mine.append(f"mix {_dbits(call('mix', 3, 1234567890123, f32(1.25), 0.5))} {_dbits(call('mix', -2, -99, f32(3.5), -1.5))}")
+    mine.append(f"conv {call('conv', 1e20, f32(-3.7), 5000000000)} {call('conv', -2.5, float('nan'), -1)} {call('conv', 70000.9, f32(65537.5), 129)}")
+    nan = float("nan")
+    mine.append("cmp " + " ".join(str(call("cmp", a, b)) for a, b in ((1.0, 2.0), (2.0, 1.0), (1.0, 1.0), (nan, 1.0), (0.0, -0.0))))
+    for n in (0, 1, 9, 30):
+        mine.append(f"nested {n} {call('nested', n)}")
+    mine.append(f"dupx {call('dupx', [5, 6, 7], 1)} {call('dupx', [-9, 1 << 40, 3], 1)}")
+    bad = [f"jvm: {a}\nmir: {b}" for a, b in zip(jvm, mine) if a != b]
+    check(f"MIR interpreter == JVM on {len(jvm)} result lines", not bad and len(jvm) == len(mine), "\n".join(bad[:6]) + f"\n({len(jvm)} vs {len(mine)})")
+
+
+def jdk_jmods_():
+    from monolith.classpath import jdk_jmods
+    return jdk_jmods()
 
 
 def main() -> int:
@@ -68,6 +169,8 @@ def main() -> int:
         check("switch: terminator with 3 keys + default", any(b.term.kind == "switch" and len(b.term.keys) >= 3 for b in sw.blocks.values()))
         tc = mir.build(ci, ci.cf.method("tc", "(D[I)D"), prog.insns(ci, ci.cf.method("tc", "(D[I)D")))
         check("try/catch: some instruction has an exception edge", any(i.exc for b in tc.blocks.values() for i in b.insns), mir.dump(tc))
+
+        semantic(d, world, prog)
 
         names = [n for n in cp.all_names() if n.startswith("java/util/") and "/" not in n[10:]][:400]
         ok = fb = 0

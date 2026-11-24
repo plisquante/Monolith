@@ -49,6 +49,7 @@ class Value:
 class Edge:
     target: int                 # block id == the pc of its first instruction
     args: list                  # Values (None = the thrown object of an exception edge)
+    catch: Optional[str] = None  # exception edges: the caught class (None = any)
 
 
 @dataclass
@@ -213,7 +214,7 @@ class _B:
                             raise MirError(f"{self.ci.name}.{self.m.name}: slot {s} undefined for handler {h.handler_pc} at {pc}")
                         args.append(v)
                 args.append(None)
-                out.append(Edge(h.handler_pc, args))
+                out.append(Edge(h.handler_pc, args, h.catch_type))
         return out
 
     # ---- build
