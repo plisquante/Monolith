@@ -253,6 +253,7 @@ pub fn start(t: Ref, stack: i64) -> Res<()> {
     let addr = rt::nn_ref(t)?.0 as usize;
     let ss = if stack > 0 { (stack as usize).max(1 << 20) } else { 64 << 20 };
     let r = std::thread::Builder::new().stack_size(ss).spawn(move || {
+        crate::crash::init_thread();
         let _gc_guard = crate::heap::ThreadGuard::enter();
         let t = Ref(addr as *mut Obj);
         set_current(t);

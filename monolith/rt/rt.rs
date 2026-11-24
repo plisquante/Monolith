@@ -230,68 +230,11 @@ pub struct Hooks {
 }
 /// Runtime hooks, set once by `init_hooks` before any Java code runs. Null until then.
 static HOOKS: std::sync::atomic::AtomicPtr<Hooks> = std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
-#[cfg(target_os = "linux")]
-extern "C" fn segv_handler(sig: std::os::raw::c_int, info: *const usize, _ctx: *const u8) {
-    unsafe extern "C" {
-        fn backtrace(buffer: *mut *mut std::os::raw::c_void, size: std::os::raw::c_int) -> std::os::raw::c_int;
-        fn backtrace_symbols_fd(buffer: *const *mut std::os::raw::c_void, size: std::os::raw::c_int, fd: std::os::raw::c_int);
-        fn _exit(status: std::os::raw::c_int) -> !;
-    }
-    let addr = if !info.is_null() { unsafe { *info.add(2) } } else { 0 };
-    let mut hdr = *b"\n[mono:SIGSEGV] addr=0x0000000000000000 backtrace:\n";
-    let hex = b"0123456789abcdef";
-    for i in 0..16 {
-        hdr[23 + i] = hex[(addr >> ((15 - i) * 4)) & 0xf];
-    }
-    unsafe {
-        let _ = libc_write(2, hdr.as_ptr() as *const std::os::raw::c_void, hdr.len());
-    }
-    let mut buf = [std::ptr::null_mut::<std::os::raw::c_void>(); 48];
-    let n = unsafe { backtrace(buf.as_mut_ptr(), 48) };
-    unsafe {
-        backtrace_symbols_fd(buf.as_ptr(), n, 2);
-        _exit(128 + sig);
-    }
-}
-#[cfg(target_os = "linux")]
-#[repr(C)]
-struct StackT {
-    ss_sp: *mut std::os::raw::c_void,
-    ss_flags: std::os::raw::c_int,
-    ss_size: usize,
-}
-#[cfg(target_os = "linux")]
-#[repr(C)]
-struct SigAction {
-    sa_handler: usize,
-    sa_mask: [u64; 16],
-    sa_flags: std::os::raw::c_int,
-    sa_restorer: usize,
-}
-#[cfg(target_os = "linux")]
-unsafe extern "C" {
-    #[link_name = "write"]
-    fn libc_write(fd: std::os::raw::c_int, buf: *const std::os::raw::c_void, count: usize) -> isize;
-    fn sigaltstack(ss: *const StackT, old_ss: *mut StackT) -> std::os::raw::c_int;
-    fn sigaction(sig: std::os::raw::c_int, act: *const u8, oldact: *mut u8) -> std::os::raw::c_int;
-}
 pub fn init_hooks(h: Hooks) {
     // leaked on purpose: the hooks live for the whole process and are read without a lock
     HOOKS.store(Box::leak(Box::new(h)), std::sync::atomic::Ordering::Release);
     crate::prof::init();
-    #[cfg(target_os = "linux")]
-    unsafe {
-        let alt = Box::leak(vec![0u8; 65536].into_boxed_slice());
-        let ss = StackT { ss_sp: alt.as_mut_ptr() as *mut std::os::raw::c_void, ss_flags: 0, ss_size: alt.len() };
-        let _ = sigaltstack(&ss, std::ptr::null_mut());
-        let sa = SigAction {
-            sa_handler: segv_handler as *const () as usize,
-            sa_mask: [0u64; 16],
-            sa_flags: 0x08000004u32 as i32, // SA_ONSTACK | SA_SIGINFO
-            sa_restorer: 0,
-        };
-        let _ = sigaction(11, (&sa as *const SigAction).cast(), std::ptr::null_mut());
-    }
+    crate::crash::install();
 }
 #[inline(always)]
 pub fn hooks() -> &'static Hooks {

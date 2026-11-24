@@ -16,7 +16,7 @@ is only for additive changes; see docs/IMPL_SPEC.md section 7).
 | gate | how | pass |
 |---|---|---|
 | Lint | `pyflakes monolith/*.py tools/*.py tests/*.py` | no output |
-| Runtime unit tests | `rustc --test tests/rust/audio_main.rs` | all pass |
+| Runtime unit tests | `rustc --edition 2021 --test tests/rust/audio_main.rs` and `tests/rust/crash_main.rs` | all pass (audio 12, crash reporter 5) |
 | Native differential tests | `python3 -m monolith.crc_tests`, `netty_tests`, `recycle_tests`, `stack_tests`, `patch_tests` (MONO_JDK_HOME set) | all `ALL PASSED` |
 | GC stress, both modes | `tests/run_tests.py GcStress Oop Threads Lambdas Strings Collections1` with `MONO_GC_MB=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`, plain and `MONO_GC_CONCURRENT=1` | same output as HotSpot, no panic, six of six in each mode |
 | Game start, plain | `tools/headless_play.sh build --seconds 60` | game running, no crash report, no `Sound engine ERROR`, no `FFI types not initialized` |

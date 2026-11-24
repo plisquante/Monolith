@@ -43,6 +43,11 @@ jobs:
           rustc --edition 2021 --test tests/rust/audio_main.rs -o /tmp/audio_tests
           /tmp/audio_tests
 
+      - name: Runtime crash reporter unit tests (panic and SIGSEGV child processes)
+        run: |
+          rustc --edition 2021 --test tests/rust/crash_main.rs -o /tmp/crash_tests
+          /tmp/crash_tests
+
       - name: Runtime dependencies build offline (rt_deps, vendored)
         run: |
           cd rt_deps

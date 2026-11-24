@@ -50,6 +50,11 @@ jobs:
           rustc --edition 2021 --test tests/rust/audio_main.rs -o audio_tests
           ./audio_tests
 
+      - name: Crash reporter unit tests
+        run: |
+          rustc --edition 2021 --test tests/rust/crash_main.rs -o crash_tests
+          ./crash_tests
+
       - name: Sanal ekran (Linux)
         if: runner.os == 'Linux'
         run: |
