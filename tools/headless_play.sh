@@ -2,21 +2,26 @@
 # Plays the natively built game headless (Xvfb + xdotool) so a change can be checked and profiled the same way
 # every time: opens the saved world, walks and looks around for a while, takes screenshots.
 #
-#   tools/headless_play.sh <build-dir> [--seconds 180] [--shots DIR] [--display :7]
+#   tools/headless_play.sh <build-dir> [--seconds 180] [--shots DIR] [--display :7] [--clean-exit]
 #
 # <build-dir> is what tools/mcbuild_rust.py wrote: it holds rust/prog, resources/ and assets/. Needs xvfb, xdotool
 # and imagemagick (import). Environment passes through, so this works too:
 #   MONO_ALLOC_PROFILE=/tmp/p.json  MONO_PATCH_VERIFY=1  MONO_ARENA_CHECK=abort  tools/headless_play.sh build/minecraft-26.3
-# The world "New World" must exist (create it once by hand: Singleplayer, Create New World).
+# A game directory without a saved world gets one: Singleplayer then opens "Create New World" and the script creates
+# it (checked on 2026-11-24 from an empty game directory). With a saved world it selects the first one.
+# --clean-exit ends the run like a player: Escape, "Save and Quit to Title", "Quit Game", then waits for the process to end
+# (so exit handlers run, e.g. the MONO_COUNT_NATIVES table) and fails if the exit status is not 0.
+# A crash writes mono-crash-<pid>.txt into the game directory (MONO_CRASH_DIR); its presence fails the run.
 # The click coordinates assume the 1280x720 window the game opens with.
 set -e
-BUILD="$1"; shift || { echo "usage: $0 <build-dir> [--seconds N] [--shots DIR] [--display :N]"; exit 2; }
-SECONDS_TOTAL=180; SHOTS="${BUILD}/shots"; DISPLAY_NUM=":7"
+BUILD="$1"; shift || { echo "usage: $0 <build-dir> [--seconds N] [--shots DIR] [--display :N] [--clean-exit]"; exit 2; }
+SECONDS_TOTAL=180; SHOTS="${BUILD}/shots"; DISPLAY_NUM=":7"; CLEAN_EXIT=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --seconds) SECONDS_TOTAL="$2"; shift 2;;
     --shots) SHOTS="$2"; shift 2;;
     --display) DISPLAY_NUM="$2"; shift 2;;
+    --clean-exit) CLEAN_EXIT=1; shift;;
     *) echo "unknown option $1"; exit 2;;
   esac
 done
@@ -31,7 +36,8 @@ XVFB=$!
 sleep 2
 trap 'kill $GAME 2>/dev/null; kill $XVFB 2>/dev/null' EXIT INT TERM
 
-MONO_RESOURCES="$BUILD/resources" "$EXE" -Dmono.graphics.backend=opengl --version "${MC_VERSION:-26.3}" \
+rm -f "$BUILD"/game/mono-crash-*.txt
+MONO_CRASH_DIR="$BUILD/game" MONO_RESOURCES="$BUILD/resources" "$EXE" -Dmono.graphics.backend=opengl --version "${MC_VERSION:-26.3}" \
   --gameDir "$BUILD/game" --assetsDir "$BUILD/assets" --assetIndex "${MC_ASSET_INDEX:-34}" \
   --username "${MC_USERNAME:-Player}" --accessToken 0 --userType legacy > "$BUILD/game/headless.log" 2>&1 &
 GAME=$!
@@ -41,8 +47,16 @@ sleep 50                                   # start-up
 import -window root "$SHOTS/01-title.png"
 click 638 671 6                            # Continue (first-run accessibility screen)
 click 638 353 6                            # Singleplayer
-click 500 200 2                            # select the world
-click 402 593 70                           # Play Selected World, wait for the terrain
+if [ -n "$(ls -A "$BUILD/game/saves" 2>/dev/null)" ]; then
+  click 500 200 2                          # select the world
+  click 402 593 70                         # Play Selected World, wait for the terrain
+else
+  # no world yet: the screen is "Create New World". Game Mode cycles Survival, Hardcore, Creative: two clicks make it
+  # Creative, so a random spawn in water cannot drown the walking player and end the run
+  click 638 257 1
+  click 638 257 1
+  click 402 671 100                        # create it, wait for the terrain
+fi
 import -window root "$SHOTS/02-world.png"
 END=$(( $(date +%s) + SECONDS_TOTAL ))
 N=3
@@ -55,4 +69,16 @@ while [ "$(date +%s)" -lt "$END" ]; do
 done
 if kill -0 $GAME 2>/dev/null; then echo "game still running after $SECONDS_TOTAL s: OK"; else echo "game exited"; wait $GAME || true; exit 1; fi
 ls "$BUILD/game/crash-reports" 2>/dev/null && { echo "crash report found"; exit 1; } || true
+ls "$BUILD"/game/mono-crash-*.txt 2>/dev/null && { echo "native crash report found"; exit 1; } || true
+if [ "$CLEAN_EXIT" = 1 ]; then
+  # no window manager under Xvfb: the keyboard focus follows the pointer, and the look-around loop drifts the pointer away
+  xdotool mousemove 640 360; sleep 1
+  xdotool key Escape; sleep 8              # software GL is slow: give the menu time to appear
+  import -window root "$SHOTS/99-pause.png"
+  click 638 521 12                         # Save and Quit to Title
+  click 790 641 3                          # Quit Game
+  i=0; while kill -0 $GAME 2>/dev/null && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
+  if kill -0 $GAME 2>/dev/null; then echo "the game did not end after Quit Game"; exit 1; fi
+  wait $GAME && echo "clean exit: status 0" || { echo "exit status $? after Quit Game"; exit 1; }
+fi
 echo "screenshots: $SHOTS"

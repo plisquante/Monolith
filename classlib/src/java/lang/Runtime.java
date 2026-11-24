@@ -33,6 +33,7 @@ public class Runtime {
             if (hooks.contains(hook)) throw new IllegalArgumentException("Hook previously registered");
             hooks.add(hook);
         }
+        MonoSignals.install(); // from now on SIGTERM, SIGINT and SIGHUP run the hooks (outside the hooks lock)
     }
 
     public boolean removeShutdownHook(Thread hook) {

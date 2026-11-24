@@ -8,6 +8,7 @@ pub mod patch;
 pub mod prof;
 pub mod crash;
 pub mod ncount;
+pub mod signals;
 pub mod natives;
 pub mod natives_reflect;
 pub mod natives_io;

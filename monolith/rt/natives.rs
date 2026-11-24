@@ -13,6 +13,7 @@ pub use crate::natives_net::*;
 pub use crate::natives_sys::*;
 pub use crate::natives_jni::*;
 pub use crate::natives_rhi::*;
+pub use crate::signals::*;
 
 fn arr_data(a: Ref) -> *mut u8 {
     unsafe { (a.0 as *mut u8).add(24) }

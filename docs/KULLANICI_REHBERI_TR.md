@@ -47,6 +47,13 @@ Hepsi çalışma zamanı kodunda okunur (`monolith/rt/`); belirtilmeyen varsayı
 | `MONO_JAVA_HOME=<dizin>` | `java.home` (conf/ ve lib/tzdb.dat burada) |
 | `-Dad=değer` | yürütülebilire verilen argümanlar sistem özelliği olur |
 
+## Kapatma ve sinyaller
+
+`SIGTERM`, `SIGINT` (terminalde Ctrl-C) ve `SIGHUP`, Java'daki `System.exit(128 + sinyal)` gibi davranır: önce kapanış
+kancaları çalışır (Minecraft dünyayı bu kancada kaydeder), sonra süreç çıkar (`kill` için çıkış kodu 143). Kanca, programda ilk
+kapanış kancası kaydedildiğinde kurulur. Şu an yalnızca Linux'ta; Windows ve macOS'ta sinyaller varsayılan eylemini
+korur (süreç hemen biter, kancalar çalışmaz). Test: `tests/java/SignalExit.java`.
+
 ## 4. Sorun giderme
 
 **Oyun çöktü.** Çalışma dizininde (ya da `MONO_CRASH_DIR`'de) `mono-crash-<pid>.txt` yazılır: tür (`panic` ya da sinyal adı),
