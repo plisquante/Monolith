@@ -2,90 +2,74 @@
 
 # MONOLITH
 
-Monolith turns Java bytecode into a native program that runs **without a JVM**. It reads the class files of an
-application and of the libraries it uses, analyses which code is reachable, translates that code to Rust, and builds
-an executable. Nothing is decompiled and nothing is written by hand; the translation is done from the bytecode.
+Monolith, Java bytecode'unu **JVM olmadan** çalışan yerel bir programa çevirir. Bir uygulamanın ve kullandığı kütüphanelerin sınıf dosyalarını okur, hangi kodun erişilebilir olduğunu analiz eder, bu kodu Rust'a çevirir ve bir çalıştırılabilir dosya üretir. Hiçbir şey tersine derlenmez ve elle yazılmaz; çeviri doğrudan bytecode'dan yapılır.
 
-The first target is Minecraft Java Edition 26.3 (client).
+İlk hedef Minecraft Java Edition 26.3 istemcisidir.
 
-## Status (honest)
+## Durum (dürüst)
 
-| Area | State |
+| Alan | Durum |
 |---|---|
-| Translation (bytecode to Rust), class and method coverage | works: 6 196 classes of the client closure, 0 untranslatable |
-| Desktop game on Linux x86_64 (menu, world, input, sound) | runs in plain mode; headless tests pass. Headless run (Xvfb, software GL, 26.3 client): title, menu, create and load a world, walking, save and quit, and reload all pass in a scripted run, see [`docs/VERIFICATION.md`](VERIFICATION.md). Multiplayer, Realms and long play are not verified |
-| Known link gaps | 446 link-errors at translation time (CI log, 26.3 client). All are in optional dependency paths the game does not use on its boot path: log4j appenders (ZeroMQ, JMS, mail, Jackson, CSV, zstd), OSGi and netty logging, and the `ca.weblite` bridge of Minecraft's macOS-only code. Calls into them throw at run time. macOS is not a supported target. |
-| Garbage collector | stop-the-world mark and sweep (pauses up to about 1 s at 500 MB live); concurrent mode (`MONO_GC_CONCURRENT=1`, off by default) passes the 120 s Linux boot after the SATB fixes: unbarriered reference overwrites (Unsafe put/CAS, VarHandle store/CAS, `recycle`) now log the old value. `MONO_GC_POISON=1` fills freed slots with `0xDD` for use-after-free checks |
-| Sound | Linux ALSA (`libasound`, loaded at run time), Windows WASAPI; silent fallback when no device |
-| Windows | window (Win32+WGL), input and sound back ends are written; CI runs the back-end smoke test and a full game boot (`.github/workflows/game.yml`). Not yet tested on real hardware |
-| Android | a launcher APK exists; the native engine has not been tested on a device |
-| Java class library overlays and JNA/Netty emulation | still in use; being replaced. Today: 243 Java files in `runtime/java_nolwjgl` and 56 in `classlib` ([`docs/WS7_ENVANTER_TR.md`](WS7_ENVANTER_TR.md)), 259 JNI/JNA emulation natives ([`docs/JNI_ENVANTER_TR.md`](JNI_ENVANTER_TR.md)); `MONO_COUNT_NATIVES=1` counts their calls at run time (no measurement of a real game yet) |
-| Continuous integration | the GitHub Actions runs of this repository end in 3 to 4 seconds with a failure before any step runs, also on commits from before 2026-11-24 (no job log exists); the job exists but has no log, which points at the account or the runner (quota, billing, runner start) rather than at the workflow files, but that is not confirmed. No CI result can be relied on until it is fixed. `tools/release_check.py` runs the gates locally |
+| Çeviri (bytecode'dan Rust'a), sınıf ve metot kapsamı | çalışıyor: istemci kapanışında 6 196 sınıf, 0 çevrilemeyen |
+| Linux x86_64 masaüstü oyunu (menü, dünya, girdi, ses) | düz modda çalışıyor; headless testler geçiyor. Headless koşu (Xvfb, yazılım GL, 26.3 istemcisi): başlık ekranı, menü, dünya oluşturma ve yükleme, yürüme, kaydetme ve çıkış, komut dosyalı bir koşuda yeniden yükleme başarılı, bkz. [`docs/VERIFICATION.md`](VERIFICATION.md). Çok oyunculu, Realms ve uzun oyun doğrulanmadı |
+| Bilinen link boşlukları | Çeviri sırasında 446 link hatası (CI günlüğü, 26.3 istemcisi). Hepsi oyunun açılış yolunda kullanmadığı isteğe bağlı bağımlılık yollarında: log4j appender'ları (ZeroMQ, JMS, mail, Jackson, CSV, zstd), OSGi ve netty günlüğü ve Minecraft'ın yalnızca macOS'a özgü kodunun `ca.weblite` köprüsü. Bunlara çalışma zamanında çağrı yapılırsa hata fırlatırlar. macOS desteklenen bir hedef değil. |
+| Çöp toplayıcı | durdur-dünya (stop-the-world) işaretle ve süpür (500 MB canlı veride duraklama yaklaşık 1 sn'ye kadar çıkabilir); eşzamanlı mod (`MONO_GC_CONCURRENT=1`, varsayılan kapalı) SATB düzeltmelerinden sonra 120 sn'lik Linux açılışını geçiyor: bariyersiz referans üzerine yazmaları (Unsafe put/CAS, VarHandle store/CAS, `recycle`) artık eski değeri günlüğe alıyor. `MONO_GC_POISON=1` serbest bırakılan yuvaları `0xDD` ile doldurarak serbest bırakıldıktan sonra erişimi yakalar |
+| Ses | Linux ALSA (`libasound`, çalışma zamanında yüklenir), Windows WASAPI; aygıt yoksa sessiz yedek |
+| Windows | pencere (Win32+WGL), girdi ve ses arka uçları yazıldı; CI arka uç duman testini ve tam oyun açılışını çalıştırıyor (`.github/workflows/game.yml`). Gerçek donanımda henüz test edilmedi |
+| Android | launcher APK'sı var; yerel motor bir cihazda test edilmedi |
+| Java sınıf kütüphanesi kaplamaları ve JNA/Netty öykünmesi | hâlâ kullanımda; değiştiriliyor. Bugün: `runtime/java_nolwjgl` içinde 243, `classlib` içinde 56 Java dosyası ([`docs/WS7_ENVANTER_TR.md`](WS7_ENVANTER_TR.md)), 259 JNI/JNA öykünme native'i ([`docs/JNI_ENVANTER_TR.md`](JNI_ENVANTER_TR.md)). `MONO_COUNT_NATIVES=1` çalışma zamanında çağrılarını sayar (gerçek bir oyun ölçümü henüz yok) |
+| Sürekli entegrasyon (CI) | bu deponun GitHub Actions koşuları, hiçbir adım çalışmadan 3-4 saniyede hatayla bitiyor; bu, 2026-11-24 öncesi commit'ler için de geçerli (iş günlüğü yok). İş var ama günlüğü yok; bu, iş akışı dosyalarından çok hesap ya da çalıştırıcı (kota, faturalama, çalıştırıcı başlatma) sorununa işaret ediyor, ama bu doğrulanmadı. Düzeltilene kadar hiçbir CI sonucuna güvenilmemeli. `tools/release_check.py` kapıları yerelde çalıştırır |
 
-The project is not a finished product. Read [`docs/RELEASE.md`](RELEASE.md) for what must pass before a release,
-and [`docs/IMPL_SPEC.md`](IMPL_SPEC.md) for the decisions and measurements.
+Proje bitmiş bir ürün değil. Bir sürümden önce neyin geçmesi gerektiği için [`docs/RELEASE.md`](RELEASE.md), kararlar ve ölçümler için [`docs/IMPL_SPEC.md`](IMPL_SPEC.md) dosyasını okuyun.
 
-## Quick start (Linux x86_64)
+## Hızlı başlangıç (Linux x86_64)
 
-Requirements: Python 3.10 or newer, a JDK 25 (`MONO_JDK_HOME` points to it), rustc (stable), `jq` is not needed,
-about 12 GB of RAM for the three-shard build, and about an hour for the build.
+Gereksinimler: Python 3.10 veya üstü, bir JDK 25 (`MONO_JDK_HOME` ona işaret etmeli), rustc (stable), `jq` gerekmez, üç shard'lık derleme için yaklaşık 12 GB RAM ve derleme için yaklaşık bir saat.
 
-    python3 tools/fetch_client_jar.py --version 26.3 --out client.jar     # from Mojang's manifest, SHA-1 checked
+    python3 tools/fetch_client_jar.py --version 26.3 --out client.jar     # Mojang manifestinden, SHA-1 doğrulamalı
     python3 tools/mcbuild_rust.py client.jar -o build/minecraft-26.3
     build/minecraft-26.3/run.sh      (Windows: build\minecraft-26.3\run.bat)
 
-To run the same steps as the CI game job on your own machine (POSIX shells), with a log per step:
+CI oyun işinin aynı adımlarını kendi makinenizde (POSIX kabuklarda), adım başına bir günlükle çalıştırmak için:
 
-    sh tools/ci_local.sh --out build/ci-local        # fetch, build, 120 s boot, concurrent-GC boot on Linux
+    sh tools/ci_local.sh --out build/ci-local        # indirme, derleme, 120 sn açılış, Linux'ta eşzamanlı GC açılışı
 
-The first start needs a world: create one in Singleplayer. Options for the build: `--opt`, `--shards`, `--shard-jobs`, `--escape` and `--inline` (opt-in; the flags raised idle allocation in a measured run, see `docs/VERIFICATION.md`)
-(use 1 on a machine with little memory). On a 4-core machine, `--shards 4 --shard-jobs 4` built a small test program
-about 3.1x faster than one shard (measured, see `docs/BUILD_PERF.md`); the Minecraft defaults were not measured yet.
+İlk açılışta bir dünya gerekir: Singleplayer'da bir tane oluşturun. Derleme seçenekleri: `--opt`, `--shards`, `--shard-jobs`, `--escape` ve `--inline` (isteğe bağlı; bu bayraklar bir ölçülmüş koşuda boşta tahsisi artırdı, bkz. `docs/VERIFICATION.md`). Az belleği olan bir makinede `--shard-jobs 1` kullanın. 4 çekirdekli bir makinede `--shards 4 --shard-jobs 4`, küçük bir test programını tek shard'a göre yaklaşık 3,1 kat hızlı derledi (ölçüldü, bkz. `docs/BUILD_PERF.md`); Minecraft varsayılanları henüz ölçülmedi.
 
-## Tests
+## Testler
 
     rustc --edition 2021 --test tests/rust/audio_main.rs -o /tmp/audio_tests && /tmp/audio_tests
-    rustc --edition 2021 --test tests/rust/crash_main.rs -o /tmp/crash_tests && /tmp/crash_tests    # crash reporter
-    python3 -m monolith.crc_tests          # and netty_tests, recycle_tests, stack_tests, patch_tests, patch_fp_tests (set MONO_JDK_HOME)
+    rustc --edition 2021 --test tests/rust/crash_main.rs -o /tmp/crash_tests && /tmp/crash_tests    # çökme raporlayıcı
+    python3 -m monolith.crc_tests          # ayrıca netty_tests, recycle_tests, stack_tests, patch_tests, patch_fp_tests (MONO_JDK_HOME ayarlı olmalı)
     python3 -m pyflakes monolith/*.py tools/*.py tests/*.py
-    python3 tests/run_tests.py [Name ...]  # differential tests in tests/java (HotSpot against the translated program)
-    python3 tools/release_check.py         # the gates of docs/RELEASE.md in one run
+    python3 tests/run_tests.py [Ad ...]    # tests/java içindeki fark testleri (HotSpot ile çevrilmiş programı karşılaştırır)
+    python3 tools/release_check.py         # docs/RELEASE.md kapılarının tümü tek koşuda
 
-The differential tests compare the output of the translated program with HotSpot. The link errors of a transpile are
-checked against the explained groups by `tools/check_link_errors.py` (`docs/LINK_ERRORS_TR.md`); the bytecode of every
-patched method is pinned by a fingerprint (`tools/patch_fingerprints.py`, `patches/README.md`).
+Fark testleri, çevrilmiş programın çıktısını HotSpot ile karşılaştırır. Bir çevirinin link hataları, `tools/check_link_errors.py` ile açıklanmış gruplara karşı denetlenir (`docs/LINK_ERRORS_TR.md`); yamalanmış her metodun bytecode'u bir parmak izi ile sabitlenir (`tools/patch_fingerprints.py`, `patches/README.md`).
 
-A crash (Rust panic, or SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT on Linux) writes `mono-crash-<pid>.txt` into the working
-directory, or into `MONO_CRASH_DIR`, with the thread, the message or fault address and a native backtrace.
+Bir çökme (Rust panic'i ya da Linux'ta SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT) çalışma dizinine ya da `MONO_CRASH_DIR` içine `mono-crash-<pid>.txt` yazar; iş parçacığını, mesajı ya da hata adresini ve yerel bir geri izlemeyi içerir.
 
-## Repository layout
+## Depo yapısı
 
-- `monolith/` — the translator (`rustgen.py`, `inline.py`, `escape.py`, `patches.py`, ...) and the Rust runtime (`monolith/rt/`).
-- `patches/rust/` — Rust replacements for selected methods (DataFixer, tickChunk, bit storage, world height).
-- `classlib/`, `runtime/` — Java overlays of parts of the class library (being replaced).
-- `tools/` — build, packaging (`make_release.py`), measurement (`alloc_report.py`, `leak_soak.sh`, `leak_budget.py`).
-- `docs/` — plans, specification, measurements, release procedure.
+- `monolith/` — çevirici (`rustgen.py`, `inline.py`, `escape.py`, `patches.py`, ...) ve Rust çalışma zamanı (`monolith/rt/`).
+- `patches/rust/` — seçili metotlar için Rust yerine koyma kodları (DataFixer, tickChunk, bit depolama, dünya yüksekliği).
+- `classlib/`, `runtime/` — sınıf kütüphanesinin parçaları için Java kaplamaları (değiştiriliyor).
+- `tools/` — derleme, paketleme (`make_release.py`), ölçüm (`alloc_report.py`, `leak_soak.sh`, `leak_budget.py`).
+- `docs/` — planlar, şartname, ölçümler, sürüm süreci.
 
 ## Android (TouchCore launcher)
 
-`android/touchcore/` is a native `arm64-v8a` launcher APK (`com.monolith.touchcore`) with a touch HUD and a demo
-mode. It loads an engine library (`libminecraft_mono.so`) built with `python3 tools/mcbuild_rust.py --android <client.jar>`
-(needs the Android NDK and `rustup target add aarch64-linux-android`). The APK is built with
-`python3 tools/build_touchcore_apk.py`; that build passes with NDK 26.3 and the native core's host tests pass
-(`docs/VERIFICATION.md`). The engine has not been run on a device yet.
+`android/touchcore/`, dokunmatik HUD ve demo modu olan yerel bir `arm64-v8a` launcher APK'sıdır (`com.monolith.touchcore`). Motor kütüphanesini (`libminecraft_mono.so`) yükler; bu kütüphane `python3 tools/mcbuild_rust.py --android <client.jar>` ile üretilir (Android NDK ve `rustup target add aarch64-linux-android` gerekir). APK, `python3 tools/build_touchcore_apk.py` ile derlenir; bu derleme NDK 26.3 ile geçiyor ve yerel çekirdeğin host testleri geçiyor (`docs/VERIFICATION.md`). Motor henüz bir cihazda çalıştırılmadı.
 
-## Launchers
+## Launcher'lar
 
-| Platform | Start | Notes |
+| Platform | Başlatma | Notlar |
 |---|---|---|
-| Linux | `./launch.sh` | needs python3 >= 3.10 |
-| Windows | `run.bat` in the build directory | back end written, verified by CI only |
+| Linux | `./launch.sh` | python3 >= 3.10 gerekir |
+| Windows | derleme dizinindeki `run.bat` | arka uç yazıldı, yalnızca CI ile doğrulandı |
 
-The desktop launcher (`launcher/launcher.py`, standard library only) opens a local page in the browser; it starts the
-`run.sh` that the build wrote. CLI: `./launch.sh --cli --play --username Steve`.
+Masaüstü launcher'ı (`launcher/launcher.py`, yalnızca standart kütüphane) tarayıcıda yerel bir sayfa açar; derlemenin yazdığı `run.sh`'ı başlatır. CLI: `./launch.sh --cli --play --username Steve`.
 
-## Legal note
+## Lisans notu
 
-This repository contains only the translator, its runtime and original overlays of the class library. It does not
-contain Minecraft binaries or code derived from them, and must not be used to distribute them (Minecraft EULA). Build
-output stays in local directories; `.gitignore` excludes `*.jar`, `build/` and `out/`.
+Bu depo yalnızca çeviriciyi, onun çalışma zamanını ve sınıf kütüphanesinin özgün kaplamalarını içerir. Minecraft ikili dosyalarını ya da onlardan türetilmiş kodu içermez ve bunları dağıtmak için kullanılmamalıdır (Minecraft EULA). Derleme çıktıları yerel dizinlerde kalır; `.gitignore` `*.jar`, `build/` ve `out/` dosyalarını dışarıda tutar.
