@@ -626,3 +626,19 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
   - `android/touchcore/native` `cargo test`: 29/29.
 - Correction: `GcStress` is no longer open. §18 and §16 lines about it are historical; this run passed both GC modes.
 - Not run here (hardware or time limit): full Minecraft build, `tools/headless_play.sh` game start, 60 min leak soak, Android device run, Client Core E2E.
+
+## 22. Code changes of 2026-11-24 and what is still unverified
+
+Done, with the check that was run:
+- `monolith/rt/crash.rs`: panic hook and Linux fatal-signal handlers (SEGV, BUS, ILL, FPE, ABRT) write `mono-crash-<pid>.txt` (dir: `MONO_CRASH_DIR`). Replaces the SIGSEGV-only stderr handler in `rt.rs`. `tests/rust/crash_main.rs`: 5/5 (real panic and real SIGSEGV in child processes). `tools/rt_typecheck.py`: PASS.
+- `tools/check_link_errors.py` and `docs/LINK_ERRORS_TR.md`: all 446 link errors of the Minecraft 26.3 transpile fall into five explained groups; a new unexplained one fails the gate (positive and negative case run).
+- Patch fingerprints (`monolith/patches.py`, `tools/patch_fingerprints.py`): all 10 patches pin their method body; `monolith.patch_fp_tests` 9/9.
+- WS7: 35 unused Java overlay files deleted from `runtime/java_nolwjgl` (277 to 242); the remaining tree compiles with the same `javac` call the pipeline uses (295 classes). `docs/WS7_ENVANTER_TR.md`.
+- `docs/JNI_ENVANTER_TR.md`: 259 JNI/JNA emulation natives by group; the Tracy natives are not called in normal play (bytecode checked).
+- Zig leftovers: dead `touchcore_core.zig` removed, stale `.zig` file references in comments point at the Rust modules.
+
+Not verified (needs a full Minecraft pipeline run and a game start, left to the end on request):
+- That the transpile after the overlay deletion still reports 446 link errors with 0 unexplained and 0 missing natives.
+- That a game started from the new runtime (crash reporter installed at `init_hooks`) behaves as before.
+- That the pipeline accepts the 10 fingerprints (the tool and `validate()` use the same function on the same classes; the pipeline itself was not run after the change).
+- The 16-shard desktop run was stopped at 7 of 16 shards, on request, to free the machine for code work.
