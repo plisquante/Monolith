@@ -76,10 +76,12 @@ public final class MojangDownloader {
             JSONObject v = versions.getJSONObject(i);
             String type = v.optString("type", "");
             if ("release".equals(type) || out.size() < 4) {
-                out.add(new VersionEntry(
-                        v.getString("id"),
-                        type,
-                        v.getString("url")));
+                String id = v.getString("id");
+                String url = v.getString("url");
+                // an entry whose id could not be a directory name, or whose URL is not an official one, cannot be
+                // downloaded safely and is not offered
+                if (!DownloadGuard.isSafeVersionId(id) || !DownloadGuard.isTrustedUrl(url)) continue;
+                out.add(new VersionEntry(id, type, url));
             }
         }
         return out;
@@ -101,7 +103,8 @@ public final class MojangDownloader {
             File assetsRoot,
             boolean downloadAssetObjects,
             ProgressListener listener) throws Exception {
-        File verDir = new File(versionsRoot, ver.id);
+        if (!DownloadGuard.isSafeVersionId(ver.id)) throw new Exception("Geçersiz sürüm kimliği: " + ver.id);
+        File verDir = DownloadGuard.under(versionsRoot, ver.id);
         verDir.mkdirs();
 
         if (listener != null) listener.onStatus("Sürüm bilgisi indiriliyor: " + ver.id);
@@ -115,6 +118,8 @@ public final class MojangDownloader {
         String clientUrl = client.getString("url");
         String clientSha1 = client.optString("sha1", "");
         long expectedSize = client.optLong("size", 0L);
+        // the client is the one file that is executed: it is never accepted without a SHA-1 to check it against
+        if (!DownloadGuard.isSha1(clientSha1)) throw new Exception("client.jar için geçerli SHA-1 yok: " + ver.id);
 
         File clientJar = new File(verDir, "client.jar");
         if (!verifyFile(clientJar, clientSha1, expectedSize)) {
@@ -139,7 +144,7 @@ public final class MojangDownloader {
                 String path = art.optString("path", "");
                 String url = art.optString("url", "");
                 if (path.isEmpty() || url.isEmpty()) continue;
-                File dst = new File(librariesRoot, path);
+                File dst = DownloadGuard.under(librariesRoot, path);
                 String sha1 = art.optString("sha1", "");
                 long sz = art.optLong("size", 0L);
                 if (!verifyFile(dst, sha1, sz)) {
@@ -156,9 +161,10 @@ public final class MojangDownloader {
             File idxDir = new File(assetsRoot, "indexes");
             idxDir.mkdirs();
             String idxId = assetIdx.getString("id");
+            if (!DownloadGuard.isSafeVersionId(idxId)) throw new Exception("Geçersiz asset indeks kimliği: " + idxId);
             String idxSha1 = assetIdx.optString("sha1", "");
             long idxSize = assetIdx.optLong("size", 0L);
-            File idxFile = new File(idxDir, idxId + ".json");
+            File idxFile = DownloadGuard.under(idxDir, idxId + ".json");
             if (!verifyFile(idxFile, idxSha1, idxSize)) {
                 if (listener != null) listener.onStatus("Asset indeksi indiriliyor (" + idxId + ")...");
                 downloadFileVerified(assetIdx.getString("url"), idxFile, idxSha1, idxSize);
@@ -176,9 +182,11 @@ public final class MojangDownloader {
                         if (entry == null) continue;
                         String hash = entry.optString("hash", "");
                         long sz = entry.optLong("size", 0L);
-                        if (hash.length() < 2) continue;
+                        if (hash.isEmpty()) continue;
+                        // the hash names a file below objects/: a value that is not a SHA-1 could name anything
+                        if (!DownloadGuard.isSha1(hash)) throw new Exception("Asset indeksinde geçersiz hash: " + key);
                         String prefix = hash.substring(0, 2);
-                        File dst = new File(new File(objectsDir, prefix), hash);
+                        File dst = DownloadGuard.under(objectsDir, prefix + "/" + hash);
                         if (!verifyFile(dst, hash, sz)) {
                             objQueue.add(new DownloadItem(RESOURCES_BASE + prefix + "/" + hash, dst, hash, sz));
                         }
@@ -247,10 +255,13 @@ public final class MojangDownloader {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-1");
             FileInputStream in = new FileInputStream(f);
-            byte[] buf = new byte[32768];
-            int n;
-            while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
-            in.close();
+            try {
+                byte[] buf = new byte[32768];
+                int n;
+                while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+            } finally {
+                in.close();
+            }
             byte[] dig = md.digest();
             StringBuilder sb = new StringBuilder(40);
             for (byte b : dig) {
@@ -280,39 +291,58 @@ public final class MojangDownloader {
         throw lastErr;
     }
 
-    private static String downloadText(String urlStr) throws Exception {
+    /** Only https URLs on Mojang or Minecraft hosts are fetched, whatever the manifest says. */
+    private static HttpURLConnection open(String urlStr, int readTimeoutMs) throws Exception {
+        if (!DownloadGuard.isTrustedUrl(urlStr)) throw new Exception("Güvenilmeyen indirme adresi: " + urlStr);
         HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
         c.setConnectTimeout(12000);
-        c.setReadTimeout(20000);
+        c.setReadTimeout(readTimeoutMs);
         c.setRequestProperty("User-Agent", "TouchCore-MONOLITH/2.0");
-        InputStream in = c.getInputStream();
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        byte[] buf = new byte[16384];
-        int n;
-        while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-        in.close();
-        c.disconnect();
-        return new String(bos.toByteArray(), StandardCharsets.UTF_8);
+        return c;
+    }
+
+    private static String downloadText(String urlStr) throws Exception {
+        HttpURLConnection c = open(urlStr, 20000);
+        try {
+            InputStream in = c.getInputStream();
+            try {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                byte[] buf = new byte[16384];
+                int n;
+                while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                return new String(bos.toByteArray(), StandardCharsets.UTF_8);
+            } finally {
+                in.close();
+            }
+        } finally {
+            c.disconnect();
+        }
     }
 
     private static void downloadFile(String urlStr, File dst) throws Exception {
         File tmp = new File(dst.getParentFile(), dst.getName() + ".part." + Thread.currentThread().getId());
-        HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
-        c.setConnectTimeout(12000);
-        c.setReadTimeout(30000);
-        c.setRequestProperty("User-Agent", "TouchCore-MONOLITH/2.0");
-        InputStream in = c.getInputStream();
-        FileOutputStream out = new FileOutputStream(tmp);
-        byte[] buf = new byte[32768];
-        int n;
-        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-        out.close();
-        in.close();
-        c.disconnect();
-        if (dst.exists()) dst.delete();
-        if (!tmp.renameTo(dst)) {
-            tmp.delete();
-            throw new Exception("Dosya taşınamadı: " + dst.getAbsolutePath());
+        HttpURLConnection c = open(urlStr, 30000);
+        boolean moved = false;
+        try {
+            InputStream in = c.getInputStream();
+            try {
+                FileOutputStream out = new FileOutputStream(tmp);
+                try {
+                    byte[] buf = new byte[32768];
+                    int n;
+                    while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                } finally {
+                    out.close();
+                }
+            } finally {
+                in.close();
+            }
+            if (dst.exists()) dst.delete();
+            if (!tmp.renameTo(dst)) throw new Exception("Dosya taşınamadı: " + dst.getAbsolutePath());
+            moved = true;
+        } finally {
+            c.disconnect();
+            if (!moved) tmp.delete(); // a failed or interrupted download leaves no .part file behind
         }
     }
 

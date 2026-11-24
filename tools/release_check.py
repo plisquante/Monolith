@@ -49,6 +49,13 @@ def main() -> int:
                                                      "-o", "/tmp/monolith_ncount_tests"]))
     results.append(run("native counter unit tests (run)", ["/tmp/monolith_ncount_tests"],
                        check=lambda r: ("test result: ok" in r.stdout, r.stdout.strip().splitlines()[-1:][0] if r.stdout.strip() else "")))
+    results.append(run("download guard (compile)", [os.path.join(jdk, "bin", "javac"), "-d", "/tmp/monolith_dg",
+                                                    "android/touchcore/src/com/monolith/touchcore/DownloadGuard.java",
+                                                    "android/touchcore/test/DownloadGuardTest.java"],
+                       check=lambda r: (r.returncode == 0, "compiled" if r.returncode == 0 else r.stderr.strip()[-120:])))
+    results.append(run("download guard (run)", [os.path.join(jdk, "bin", "java"), "-cp", "/tmp/monolith_dg",
+                                                "com.monolith.touchcore.DownloadGuardTest"],
+                       check=lambda r: ("ALL PASSED" in r.stdout, "ALL PASSED" if "ALL PASSED" in r.stdout else "not all passed")))
     for t in ("crc_tests", "netty_tests", "recycle_tests", "stack_tests", "patch_tests", "patch_fp_tests", "cache_tests"):
         results.append(run(t, [sys.executable, "-m", f"monolith.{t}"], env={"MONO_JDK_HOME": jdk}, timeout=7200,
                            check=lambda r: (r.returncode == 0 and "ALL PASSED" in r.stdout,
