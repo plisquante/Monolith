@@ -1,39 +1,32 @@
-# Build speed: shards and parallel jobs
+# Derleme hızı: shard'lar ve paralel işler
 
-Question: does compiling the generated Rust in parallel (more `rustc` shards, more concurrent jobs) make the build
-faster on a multi-core machine?
+Soru: üretilen Rust kodunu paralel derlemek (daha fazla `rustc` shard'ı, daha fazla eşzamanlı iş), çok çekirdekli bir makinede derlemeyi hızlandırır mı?
 
-## Measurement (one run each, same input)
+## Ölçüm (her ayar için bir koşu, aynı girdi)
 
-Input: `monolith/tests/stack/Stack1.java` compiled with javac, then `python3 -m monolith.rustgen --main Stack1
---opt 1 --compile`. The class library was already built (cached), so the numbers are the program build only.
+Girdi: `monolith/tests/stack/Stack1.java` javac ile derlenir, ardından `python3 -m monolith.rustgen --main Stack1 --opt 1 --compile`. Sınıf kütüphanesi zaten derlenmiş (önbellekte) olduğu için sayılar yalnızca program derlemesidir.
 
-| shards | shard jobs | wall time |
+| shard | shard işi | duvar saati |
 |---|---|---|
-| 1 | 1 | 217.6 s |
-| 4 | 4 | 70.5 s |
+| 1 | 1 | 217.6 sn |
+| 4 | 4 | 70.5 sn |
 
-Speedup: about 3.1x on 4 cores (1358 classes, 7036 methods in the output).
+Hızlanma: 4 çekirdekte yaklaşık 3.1 kat (çıktıda 1358 sınıf, 7036 metot).
 
-Machine: 4 vCPU, 15 GB RAM, Linux. One run per setting; the numbers are not averaged.
+Makine: 4 vCPU, 15 GB RAM, Linux. Her ayar için bir koşu; sayılar ortalaması alınmamış.
 
-## How to reproduce
+## Nasıl tekrarlanır
 
-    tools/bench_build.sh <classes dir> <main class> <shards> <jobs>
+    tools/bench_build.sh <sınıflar dizini> <ana sınıf> <shard> <iş>
 
-It prints the wall-clock time of one build with a fresh output directory. Run it twice per setting and compare.
+Yeni bir çıktı dizini ile tek bir derlemenin duvar saati süresini yazdırır. Ayar başına iki kez çalıştırıp karşılaştırın.
 
-## Notes
+## Notlar
 
-* The defaults follow the core count: `tests/run_tests.py` and `monolith/stack_tests.py` use `min(4, cores)` shards
-  and `cores` jobs. `tools/mcbuild_rust.py` (the Minecraft build) still uses `--shards 32 --shard-jobs 3`; it has
-  not been measured on this machine.
-## Not measured yet
+* Varsayılanlar çekirdek sayısını izler: `tests/run_tests.py` ve `monolith/stack_tests.py` `min(4, çekirdek)` shard ve `çekirdek` iş kullanır. `tools/mcbuild_rust.py` (Minecraft derlemesi) hâlâ `--shards 32 --shard-jobs 3` kullanır; bu makinede ölçülmedi.
 
-* The Minecraft build (about 65 min and 12 GB with the defaults). It needs the client jar and a quiet machine; run
-  `tools/bench_build.sh` on the Minecraft classes with `--shards 4 --shard-jobs 4` and with the defaults, and
-  record both here.
-* Repeated runs: one run per setting is not enough for a claim about speed. Three runs each would be the minimum.
+## Henüz ölçülmedi
 
-* Memory: each concurrent `rustc` takes its own share. The 4x4 run stayed well inside 15 GB for Stack1, which is
-  much smaller than a Minecraft build.
+* Minecraft derlemesi (varsayılanlarla yaklaşık 65 dakika ve 12 GB). Client jar'ı ve sakin bir makine gerektirir; Minecraft sınıfları üzerinde `tools/bench_build.sh` çalıştırın, `--shards 4 --shard-jobs 4` ve varsayılanlarla birlikte, ikisini de buraya kaydedin.
+* Tekrarlı koşular: ayar başına tek koşu, hız hakkında bir iddia için yeterli değil. En az üç koşu gerekir.
+* Bellek: eşzamanlı her `rustc` kendi payını alır. 4x4 koşusu Stack1 için 15 GB'ın çok altında kaldı; bu, Minecraft derlemesinden çok daha küçük.

@@ -1,44 +1,35 @@
-# Hardware requirements per task
+# Görev başına donanım gereksinimleri
 
-Last updated: 2026-11-16. Numbers for the big machine are from the original author's 4-core,
-llvmpipe box (see `docs/STATUS.md` sections 8–12). The constrained-machine column was measured
-on the machine that audited this repository in November 2026.
+Son güncelleme: 2026-11-16. Büyük makine için rakamlar, orijinal yazarın 4 çekirdekli, llvmpipe kullanan makinesinden alındı
+(bkz. `docs/STATUS.md` bölüm 8–12). Kısıtlı makine sütunu, Kasım 2026'da bu depoyu denetleyen makinede ölçüldü.
 
-## The machine that audited this repo (2026-11-16)
+## Bu depoyu denetleyen makine (2026-11-16)
 
-| resource | value |
+| kaynak | değer |
 |---|---|
 | CPU | 2 vCPU, Intel Xeon @ 2.60 GHz |
-| RAM | 1.94 GiB (`MemTotal: 2030416 kB`), **no swap** |
-| disk | ~25 GB, 17% used at start |
-| kernel | 6.1.189+ x86_64 |
+| RAM | 1.94 GiB (`MemTotal: 2030416 kB`), **takas (swap) yok** |
+| disk | ~25 GB, başlangıçta %17 dolu |
+| çekirdek | 6.1.189+ x86_64 |
 
-## What fits where
+## Nerede ne sığar
 
-| task | minimum sensible | on the 2 vCPU / 1.9 GiB box |
+| görev | asgari makul | 2 vCPU / 1.9 GiB kutusunda |
 |---|---|---|
-| `python3 -m py_compile`, `pyflakes`, `tools/rt_typecheck.py` | any | OK (< 1 s per file) |
-| `pyflakes`/`ast-check` full pass | any | OK |
-| **one** differential test, Debug, self-hosted backend (`tests/run_tests.py Arith`) | ~2 GiB free, 1 job | **PASS in 495 s** (build) + 0.58 s native; machine under heavy load (loadavg ~10), interactivity suffers |
-| differential suite, all of `tests/java/` | ≥ 4 GiB free, hours of CPU | thrash risk: do not run; tests are refused below `MONO_TEST_MIN_AVAIL_GIB` (default 0.5 GiB) |
-| full Minecraft build (`build.sh client.jar`) | Debug self-hosted: ~10 GB peak; LLVM unsharded: > 15 GB (OOM-killed on the author's 16 GB machine) | impossible; nothing in `./build.sh` will succeed here |
-| Client Core E2E (`tests/run_client_core_e2e.py`), transpile 5 901 classes + compile | ≥ 8 GiB, tens of minutes | impossible; not run here |
-| microbench (`tools/microbench/run_client_core_bench.py`) | ReleaseFast, ~2–4 GiB | not run here (ReleaseFast LLVM memory needs) |
+| `python3 -m py_compile`, `pyflakes`, `tools/rt_typecheck.py` | herhangi biri | Uygun (dosya başına < 1 sn) |
+| `pyflakes`/`ast-check` tam geçiş | herhangi biri | Uygun |
+| **Tek** fark testi, Debug, kendi arka ucumuz (`tests/run_tests.py Arith`) | ~2 GiB boş, 1 iş | **495 sn'de GEÇTİ** (derleme) + 0.58 sn yerel; makine ağır yük altında (loadavg ~10), etkileşim zayıf |
+| `tests/java/` içindeki tüm fark paketi | ≥ 4 GiB boş, saatlerce CPU | takılma riski: çalıştırmayın; `MONO_TEST_MIN_AVAIL_GIB` (varsayılan 0.5 GiB) altında testler reddedilir |
+| tam Minecraft derlemesi (`build.sh client.jar`) | Debug kendi arka ucu: ~10 GB tepe; bölünmemiş LLVM: > 15 GB (yazarın 16 GB makinesinde OOM ile öldürüldü) | imkânsız; buradaki `./build.sh` hiçbir şeyi başarıyla tamamlamaz |
+| Client Core E2E (`tests/run_client_core_e2e.py`), 5 901 sınıfı çevirme + derleme | ≥ 8 GiB, onlarca dakika | imkânsız; burada çalıştırılmadı |
+| microbench (`tools/microbench/run_client_core_bench.py`) | ReleaseFast, ~2–4 GiB | burada çalıştırılmadı (ReleaseFast LLVM bellek gereksinimi) |
 
-## Rules the scripts now enforce
+## Betiklerin artık uyguladığı kurallar
 
-- `tests/run_tests.py` refuses to start a test build below `--min-avail-gib`
-  (default 0.5 GiB, env `MONO_TEST_MIN_AVAIL_GIB`), re-checks before every test and stops the
-  suite with exit code 3 rather than thrashing.
-- `.claude/hooks/guard.py` refuses starting a heavy job below 1 GiB available
-  (4 GiB on ≥ 8 GiB machines; `MONO_MIN_AVAIL_GIB` overrides), refuses a second concurrent
-  heavy job and blocks committing artifacts.
-- One heavy job at a time. Never alongside the test suite on a big machine either
-  (CLAUDE.md); on this box, never at all.
+- `tests/run_tests.py`, test derlemesini `--min-avail-gib` altında (varsayılan 0.5 GiB, ortam değişkeni `MONO_TEST_MIN_AVAIL_GIB`) başlatmayı reddeder; her testten önce yeniden denetler ve takılmak yerine çıkış koduyla 3 ile durdurur.
+- `.claude/hooks/guard.py`, 1 GiB'ın altında boş belleğe sahip bir ağır işi başlatmayı reddeder (≥ 8 GiB'lık makinelerde 4 GiB; `MONO_MIN_AVAIL_GIB` ile değiştirilir), ikinci bir eşzamanlı ağır işi reddeder ve derleme çıktılarının commit edilmesini engeller.
+- Aynı anda tek bir ağır iş. Büyük makinede de fark paketiyle asla birlikte çalıştırılmaz (CLAUDE.md); bu kutuda hiç çalıştırılmaz.
 
-## Disk expectations
+## Disk beklentileri
 
-`tests/build/<Name>` keeps about 1–1.4 GB per test (`--keep`); the harness deletes it after
-passed tests when several names are given. `tests/build` (rustc shards and binaries) can grow by hundreds of MB.
-Minecraft builds need tens of GB and are out of scope for small disks. Use `rm -rf tests/build`
-between heavy runs.
+`tests/build/<Ad>` test başına yaklaşık 1–1,4 GB tutar (`--keep`); birden çok ad verildiğinde araç geçen testlerin ardından bunu siler. `tests/build` (rustc shard'ları ve ikili dosyalar) yüzlerce MB büyüyebilir. Minecraft derlemeleri onlarca GB ister ve küçük disklerin kapsamı dışındadır. Ağır koşular arasında `rm -rf tests/build` kullanın.
