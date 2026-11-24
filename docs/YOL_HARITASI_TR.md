@@ -39,7 +39,7 @@ Bu doküman, repodaki güncel kod tabanı ve doğrulanmış ölçümler esas al�
    * Bu telefon ortamında (7.2 GiB toplam / ~2.6 GiB boş RAM) tam `26.3-client.jar` `.so` derlemesi fiziksel olarak sığmaz; ancak **0 LWJGL link hatası**, **`MethodHandle.invokeBasic`**, **`LevelRenderer.resetLevelRenderData` yaması**, **`SDL3` + `GLES3` + `OpenAL` + `STB`** ve **`ci.yml` / `build-so.yml` NDK + `--skip-assets` düzeltmeleri** hazırdır. Kullanıcı GitHub Actions `build-so.yml` iş akışıyla `libminecraft_mono.so`'yu yüksek RAM'li sunucuda derleyebilir.
 2. **Canlı Cihaz Ekranı (`SurfaceFlinger` + `GameActivity`) Doğrulaması**:
    * `BionicSdlCheck` (`17,438 KiB` 4-shard `.so`) gerçek Android `/system/bin/linker64` üzerinde `EA_ARENA_OK`, `SDL_NO_SURFACE_GUARD_OK`, `GL_SHIM_OK`, `OPENAL_SHIM_OK`, `STB_PNG_OK`, `FREETYPE_FALLBACK_OK`, `BIONIC_EXIT=0` ile doğrulanmıştır.
-   * [`releases/Monolith.apk`](../releases/Monolith.apk) (`0.98 MiB`, 109 D8 sınıf) derlenip `zipalign` + `apksigner` v2/v3 ile doğrulanmıştır.
+   * `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) (`0.98 MiB`, 109 D8 sınıf) derlenip `zipalign` + `apksigner` v2/v3 ile doğrulanmıştır.
    * **Kalan adım:** Bulutta (`build-so.yml`) derlenen gerçek `26.3` `libminecraft_mono.so` dosyasının telefona kurulan TouchCore APK içinden yüklenip gerçek `SurfaceFlinger` ekranında test edilmesi ve `MojangDownloader` HTTPS indirmesinin gerçek cihaz ağında denenmesidir.
 
 ---

@@ -540,7 +540,7 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
     editor with landscape preview + fine nudge pad, explicit **"DEMO MODU (Zig RHI Voxel)"** labeling, and explicit
     error dialog when an external `libminecraft_mono.so` fails (no silent fallback to Demo Mode).
 * **Verified live on this ARM64 Android phone:**
-  - `python3 tools/build_touchcore_apk.py`: built [`releases/Monolith.apk`](../releases/Monolith.apk) (`0.98 MiB`), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS, `nm -D` confirms all `Java_com_monolith_touchcore_NativeBridge_*` & `tc_android_*` symbols.
+  - `python3 tools/build_touchcore_apk.py`: built `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) (`0.98 MiB`), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS, `nm -D` confirms all `Java_com_monolith_touchcore_NativeBridge_*` & `tc_android_*` symbols.
   - Bionic PIE native tests via `/system/bin/linker64`: verified `libtouchcore_mono.so` (`tc_zig_init`, 10 ticks, `tc_zig_shutdown`), single-shard & 4-shard `--no-lwjgl` `-dynamic` `libminecraft_mono.so` (`mono_android_entry` returned `0` in `1 ms`, `NO_SURFACE_EXPLICIT_THROW=true`, `NativeRhi.pollOsInput` reading `KEY_W=1` across `.so` boundary, `GL11C` GL→GLES3 dispatch, `EXIT=0`).
   - Regression suites: `tests/run_tests.py Arith IoZip` PASS; `tests/run_client_core_e2e.py` ALL 4 E2E CHECKS PASS (`mem_pool 6/6`, `thread_pool 1/1`, `rhi 7/7`, `world_render 9/9`, `gpu_instancing 12/12`, `4-Subsystem E2E 14/14`, `ClientCoreE2E` native `JAVA_CLIENT_CORE_E2E_OK`).
 
@@ -558,7 +558,7 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
 * **Android Multiarch C Header Fix (`monolith/__main__.py`)**:
   - Added `_android_include_flags()` passing `/data/data/com.termux/files/usr/include/aarch64-linux-android` (`asm/types.h`) to `zig build-obj` and `clang` so `@cImport(@cInclude("zlib.h"))` in `runtime/io.zig` compiles cleanly when building Android `--target aarch64-linux-android.26` `-dynamic` libraries using `java.util.zip.*` / `STBImage`.
 * **Verified after these updates**:
-  - `python3 tools/build_touchcore_apk.py`: built [`releases/Monolith.apk`](../releases/Monolith.apk) (`0.98 MiB`, 13 Java files, 107 D8 classes), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS.
+  - `python3 tools/build_touchcore_apk.py`: built `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) (`0.98 MiB`, 13 Java files, 107 D8 classes), `apksigner verify` PASS (v2/v3), `zipalign -c -p 4` PASS.
   - 4-shard Android `aarch64-linux-android.26` `-dynamic --no-lwjgl` build (`FullNoLwjglTest` -> `libminecraft_mono.so`, `26233 KiB`) executed directly on Android Bionic `/system/bin/linker64`: `mono_android_entry` returned `0` in `0.82 ms`, `STBIMAGE_PNG_OK 2x2 RGBA`, `GL_CAPS_OK OpenGL33=true`, `OPENAL_OK buf=1 src=2`, `GLFW_SURFACE_CHECK_OK vm=1280x720` (plus explicit `UnsupportedOperationException` without attached OS surface), `FULL_NOLWJL_BIONIC_OK`, `Bionic exit=0`.
   - `zig test -lc runtime/rhi.zig`: `All 7 tests passed.`
   - `python3 tests/run_tests.py Arith IoZip`: `2/2 passed`.
@@ -582,7 +582,7 @@ Audited and resolved the latent bugs and bottlenecks exposed after merging the v
   - `tests/run_client_core_e2e.py`: `ALL 4 CLIENT CORE E2E CHECKS PASSED (Debug)` (`mem_pool 6/6`, `thread_pool 1/1`, `rhi 7/7`, `world_render 9/9`, `gpu_instancing 12/12`, `4-Subsystem E2E 14/14`, `JAVA_CLIENT_CORE_E2E_OK`, `0 missing-native`, `0 link-error`, `0 unsupported-varhandle`).
   - 4-shard Android ARM64 `-dynamic --no-lwjgl` Bionic `/system/bin/linker64` test (`BionicSdlCheck`, `17438 KiB` `.so`): emitted `rt.arenaMark`/`newObjectArena`/`newArrayArena`, printed `HOST_ENTRY_RC=0`, `EA_ARENA_OK=1002502500`, `SDL_NO_SURFACE_GUARD_OK=true`, `GL_SHIM_OK=true`, `OPENAL_SHIM_OK=true`, `STB_PNG_OK=true`, `FREETYPE_FALLBACK_OK=-1`, `BIONIC_SDL_E2E_PASS`, `BIONIC_EXIT=0`.
   - Differential tests (`tests/run_tests.py`): `Arith` (`1/1 PASS`), `MHandles` (`1/1 PASS`); `GcStress` matched `churn`/`big arrays`/`threads`/`map 200000 262501012965` while `WeakReference` returned `weak cleared=false` under GC-free `SlabPool`.
-  - TouchCore APK (`python3 tools/build_touchcore_apk.py`): built [`releases/Monolith.apk`](../releases/Monolith.apk) (`0.98 MiB`, 13 Java files, 109 D8 classes), `zipalign -c -p 4` PASS, `apksigner verify` v2/v3 PASS.
+  - TouchCore APK (`python3 tools/build_touchcore_apk.py`): built `releases/Monolith.apk` (ikili dosya, repoda yok; `tools/build_touchcore_apk.py` ile yerelde üretilir) (`0.98 MiB`, 13 Java files, 109 D8 classes), `zipalign -c -p 4` PASS, `apksigner verify` v2/v3 PASS.
 * **Remaining external/hardware blockers**:
   - Full `26.3-client.jar` LLVM `.so` compilation (~`7–15 GiB` RAM) must run on GitHub Actions ([`build-so.yml`](../.github/workflows/build-so.yml)) or an `x86_64` host; live on-device `SurfaceFlinger` rendering + shader compatibility + HTTPS Mojang downloads await testing on the physical phone with the compiled `.so` loaded into TouchCore APK.
 
