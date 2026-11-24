@@ -165,6 +165,7 @@ class Program:
         self._insns: dict[tuple[str, str], list[Insn]] = {}
         self.reachable: set[tuple[str, str]] = set()   # (class, name+desc)
         self.instantiated: set[str] = set()
+        self.skip_scan: set = set()   # (class, method, desc) whose body is not analysed (patches with "replace": true)
         self.initialized: set[str] = set()
         self.loaded: set[str] = set()
         self.vcalls: dict[str, set[str]] = collections.defaultdict(set)  # key -> owners
@@ -819,6 +820,8 @@ class Program:
 
     def scan(self, ci: ClassInfo, m: MethodInfo):
         self._cur = (ci.name, m.key)
+        if (ci.name, m.name, m.desc) in self.skip_scan:
+            return   # replaced by a Rust patch ("replace": true): the original's references are not part of the program
         for h in m.code.handlers:
             if h.catch_type:
                 self.load(h.catch_type)

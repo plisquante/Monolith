@@ -803,6 +803,10 @@ class MethodGen:
     def generate(self) -> str:
         if self.m.code is None:
             self.err("native/abstract methods are not in this slice")
+        pe = self.g.patches.by_key.get((self.ci.name, self.m.name, self.m.desc))
+        if pe is not None and pe.replace:
+            # the patch replaces the method: the original is not translated (nothing calls it; RTA did not follow it)
+            return self.assemble({0: [f"return rt::unsupported_code({rstr('replaced by ' + pe.fn)});"]}, False)
         blocks, has_sp = self.build_blocks()
         return self.assemble(blocks, has_sp)
 
@@ -1808,6 +1812,7 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
     from . import patches as P
     pset = P.load(os.environ.get("MONO_PATCH_MANIFEST") or None) if use_patches else P.PatchSet({}, [])
     pset.validate(world)
+    prog.skip_scan = pset.replaced()
     prog.run(main, extra_roots=pset.roots(), extra_vroots=pset.virtual_roots())
     if analyze_only:
         return world, prog, cp

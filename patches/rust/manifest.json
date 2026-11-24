@@ -69,7 +69,12 @@
         "random_tick": "randomTick"
       }
     },
-    "narrator.rs": {}
+    "narrator.rs": {},
+    "netty.rs": {
+      "statics": {
+        "nio": "net/minecraft/server/network/EventLoopGroupHolder.NIO"
+      }
+    }
   },
   "patches": [
     {
@@ -182,6 +187,36 @@
       "orig": true,
       "verify": false,
       "fingerprint": "dde15b2f33507a16"
+    },
+    {
+      "class": "net/minecraft/server/network/EventLoopGroupHolder",
+      "method": "remote",
+      "desc": "(Z)Lnet/minecraft/server/network/EventLoopGroupHolder;",
+      "file": "netty.rs",
+      "fn": "remote_nio",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "cda3031ef4afe349"
+    },
+    {
+      "class": "net/minecraft/server/network/EventLoopGroupHolder$2",
+      "method": "ioHandlerFactory",
+      "desc": "()Lio/netty/channel/IoHandlerFactory;",
+      "file": "netty.rs",
+      "fn": "no_native_transport",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "37a37071ee090e2b"
+    },
+    {
+      "class": "net/minecraft/server/network/EventLoopGroupHolder$3",
+      "method": "ioHandlerFactory",
+      "desc": "()Lio/netty/channel/IoHandlerFactory;",
+      "file": "netty.rs",
+      "fn": "no_native_transport",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "5b4da77b5fa3413a"
     }
   ]
 }

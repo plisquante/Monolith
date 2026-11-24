@@ -70,6 +70,7 @@ class Patch:
     verify: bool = True   # False for methods with side effects: MONO_PATCH_VERIFY runs original and patch, so a patch that
                           # changes state would be applied twice
     fingerprint: str = ""  # optional: fingerprint() of the method the patch was written against; a mismatch stops the build
+    replace: bool = False  # the original body is neither analysed (RTA) nor translated: what only it reached leaves the build
 
     @property
     def key(self) -> tuple:
@@ -145,6 +146,10 @@ class PatchSet:
                                      f"{p.fingerprint}). Review the patch against the new bytecode, then update the fingerprint "
                                      f"(python3 tools/patch_fingerprints.py --cp <jars> --write)")
         self.patches = [p for p in self.patches if p.key in self.by_key]
+
+    def replaced(self) -> set:
+        """(class, method, desc) of the patches whose original is dropped (\"replace\": true)."""
+        return {p.key for p in self.patches if p.replace}
 
     def roots(self) -> list[tuple[str, str, str]]:
         """Methods the bindings call directly (or construct): they must be compiled even if nothing else reaches them."""
@@ -355,8 +360,10 @@ def load(path: str | None = None) -> PatchSet:
             raise PatchError(f"patch {e['class']}.{e['method']}: file '{e['file']}' is not declared under \"files\"")
         if not _IDENT.match(e["fn"]):
             raise PatchError(f"patch {e['class']}.{e['method']}: fn '{e['fn']}' is not an identifier")
+        if e.get("replace") and e.get("orig"):
+            raise PatchError(f"patch {e['class']}.{e['method']}: \"replace\" removes the original, it cannot also take \"orig\"")
         patches.append(Patch(e["class"], e["method"], e["desc"], e["file"], e["fn"], bool(e.get("orig", False)), bool(e.get("verify", True)),
-                             str(e.get("fingerprint", ""))))
+                             str(e.get("fingerprint", "")), bool(e.get("replace", False))))
     seen = set()
     for p in patches:
         if p.key in seen:
