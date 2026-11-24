@@ -4,6 +4,8 @@ Goal (owner's words): GC at zero, zero leaks, never a visible drop. Route: make 
 (always-on, small, paced), shrink what it has to do (less garbage, owned data), then switch it off only when a
 measured leak budget says it is safe. Nothing below is implemented yet unless it says "done".
 
+Current measurements (allocation and root sites, escape analysis on `Stack1`): `docs/GC_REMOVAL_INVENTORY.md`.
+
 ## 0. Definition of done
 
 | Metric | Today | Target (idle collector) | End state (collector off) |

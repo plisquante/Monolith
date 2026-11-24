@@ -2579,7 +2579,7 @@ def main() -> int:
     ap.add_argument("--opt", default="1")
     ap.add_argument("--escape", action="store_true",
                     help="run the whole-program escape analysis: allocation sites whose object cannot outlive the method "
-                         "use the scope arena (rt::alloc_arena) instead of the collected heap")
+                         "live in a frame slot (rt::stack_obj) instead of the collected heap")
     ap.add_argument("--inline", action="store_true",
                     help="inline small callees into their callers before the analysis (monolith/inline.py): the allocations "
                          "of `a.subtract(b)`-style helpers become the caller's own and can be proven non-escaping")
