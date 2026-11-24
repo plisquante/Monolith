@@ -54,7 +54,7 @@ def make_proxy(w: World, name: str, interfaces: list[str]):
     fields = [FieldInfo(ACC_PRIVATE | ACC_STATIC, f"m{k}", "Ljava/lang/reflect/Method;")
               for k in range(len(methods_info))]
     methods = []
-    # <clinit>: resolve the Method objects
+    # <clinit>: Method nesnelerini çöz
     a = Asm()
     for k, (owner, mname, desc, _exc) in enumerate(methods_info):
         params, _ret = parse_method_desc(desc)
@@ -79,7 +79,7 @@ def make_proxy(w: World, name: str, interfaces: list[str]):
     a.op("invokespecial", mref(PROXY, "<init>", f"(L{IH};)V"))
     a.op("return")
     methods.append(make_method("<init>", f"(L{IH};)V", ACC_PUBLIC, a, 2))
-    # forwarding methods
+    # ileten metotlar
     for k, (owner, mname, desc, exc) in enumerate(methods_info):
         params, ret = parse_method_desc(desc)
         a = Asm()

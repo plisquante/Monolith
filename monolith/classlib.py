@@ -28,9 +28,9 @@ def build_classlib(force: bool = False) -> str:
     out = classlib_out()
     os.makedirs(CLASSLIB_BUILD, exist_ok=True)
     with open(out + ".lock", "w") as lock:
-        # Advisory lock only: the output is content-addressed (immutable, keyed by sources), so
-        # losing the lock is safe (worst case: duplicate javac work). fcntl is Unix-only; on
-        # Windows use msvcrt, and where neither exists, proceed.
+        # Yalnızca tavsiye niteliğinde kilit: çıktı içerik adreslidir (değişmez, kaynaklara göre anahtarlı), bu yüzden
+        # kilidi kaybetmek güvenlidir (en kötü durum: yinelenen javac işi). fcntl yalnızca Unix'e özgüdür;
+        # Windows'ta msvcrt kullan, ikisi de yoksa devam et.
         try:
             import fcntl
             fcntl.flock(lock, fcntl.LOCK_EX)
@@ -46,12 +46,12 @@ def build_classlib(force: bool = False) -> str:
 def _build_classlib(out: str, force: bool) -> str:
     import hashlib
     gen = os.path.join(out, "gen")
-    # JavaLangAccess differs between JDK releases: generate it for the selected JDK
+    # JavaLangAccess JDK sürümleri arasında farklıdır: seçilen JDK için üret
     jla = os.path.join(gen, "java", "lang", "MonoJavaLangAccess.java")
     subprocess.run([sys.executable, os.path.join(ROOT, "tools", "gen_jla.py"), jla], check=True)
     srcs = sorted(glob.glob(os.path.join(CLASSLIB_SRC, "**", "*.java"), recursive=True)) + [jla]
-    # Output directories are immutable and keyed by the sources, so a transpile that is reading
-    # one is never affected by a concurrent rebuild.
+    # Çıktı dizinleri değişmezdir ve kaynaklara göre anahtarlıdır; bu yüzden birini okuyan bir çeviri
+    # eşzamanlı bir yeniden derlemeden asla etkilenmez.
     h = hashlib.sha1()
     for x in srcs:
         h.update(x.encode())
@@ -73,7 +73,7 @@ def _build_classlib(out: str, force: bool) -> str:
         sys.stderr.write(r.stdout + r.stderr)
         shutil.rmtree(tmp, ignore_errors=True)
         raise SystemExit("classlib compilation failed")
-    # javac --patch-module puts classes under <out>/java.base/...
+    # javac --patch-module sınıfları <out>/java.base/... altına koyar
     base = os.path.join(tmp, "java.base")
     if os.path.isdir(base):
         for item in os.listdir(base):

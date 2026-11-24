@@ -53,12 +53,12 @@ class Unsupported(Exception):
 class IndyDesugarer:
     def __init__(self, report):
         self.report = report  # callable(kind, message)
-        # synthetic class names are numbered per enclosing class: a new lambda in one class must not rename the
-        # synthetic classes of every class desugared after it (that would change their generated code)
+        # sentetik sınıf adları çevreleyen sınıf başına numaralanır: bir sınıftaki yeni bir lambda, kendisinden sonra
+        # indirgenen her sınıfın sentetik sınıflarını yeniden adlandırmamalıdır (bu üretilen kodlarını değiştirirdi)
         self.counters: dict[str, int] = {}
         self.new_classes: list[ClassFile] = []
 
-    # -------------------------------------------------------------- conversions
+    # -------------------------------------------------------------- dönüşümler
     def convert(self, a: Asm, frm: str, to: str):
         """Emit an asType-style conversion of the value on top of stack from `frm` to `to`."""
         if frm == to:
@@ -87,7 +87,7 @@ class IndyDesugarer:
         if not fp and tp:
             p = _unbox_owner(frm)
             if p is None:
-                # Object/Number/Comparable -> cast to wrapper of the target primitive
+                # Object/Number/Comparable -> hedef ilkelin sarmalayıcısına cast et
                 p = to
                 a.op("checkcast", ClassConst(BOX[p]))
             a.op("invokevirtual", mref(BOX[p], UNBOX_NAME[p], f"(){p}"))
@@ -97,7 +97,7 @@ class IndyDesugarer:
         if to != "Ljava/lang/Object;" and to != frm:
             a.op("checkcast", ClassConst(_ref_name(to)))
 
-    # -------------------------------------------------------------- dispatch
+    # -------------------------------------------------------------- dağıtım
     def desugar(self, cf: ClassFile, method, ins: Insn) -> Insn:
         d: DynamicConst = ins.arg
         bsm = cf.bootstrap_methods[d.bsm_index]
@@ -149,7 +149,7 @@ class IndyDesugarer:
         a.op("athrow")
         return self._static_holder(cf, name, "call", d.desc, a, sum(slots_of(x) for x in args))
 
-    # -------------------------------------------------------------- lambdas
+    # -------------------------------------------------------------- lambdalar
     def lambda_(self, cf: ClassFile, d: DynamicConst, bargs, alt: bool):
         sam_t: MethodTypeConst = bargs[0]
         impl: MethodHandleConst = bargs[1]
@@ -173,7 +173,7 @@ class IndyDesugarer:
         name = f"{cf.name}$$Lambda${self._next(cf)}"
         fields = [FieldInfo(ACC_FINAL, f"cap{i}", t) for i, t in enumerate(caps)]
         methods = []
-        # <init>(caps)
+        # <init>(yakalananlar)
         a = Asm()
         a.op("aload", 0)
         a.op("invokespecial", mref("java/lang/Object", "<init>", "()V"))
@@ -186,7 +186,7 @@ class IndyDesugarer:
         a.op("return")
         init_desc = "(" + "".join(caps) + ")V"
         methods.append(make_method("<init>", init_desc, ACC_PUBLIC, a, slot))
-        # static factory
+        # statik fabrika
         a = Asm()
         a.op("new", ClassConst(name))
         a.op("dup")
@@ -197,7 +197,7 @@ class IndyDesugarer:
         a.op("invokespecial", mref(name, "<init>", init_desc))
         a.op("areturn")
         methods.append(make_method("create", d.desc, ACC_PUBLIC | ACC_STATIC, a, slot))
-        # SAM implementation (+ bridges)
+        # SAM uygulaması (+ köprüler)
         for sam_desc in [sam_t.desc] + [b for b in bridges if b != sam_t.desc]:
             methods.append(self._lambda_body(name, d.name, sam_desc, inst_t.desc, impl, caps))
         self.new_classes.append(make_class(name, "java/lang/Object", [iface] + markers, fields, methods))
@@ -221,7 +221,7 @@ class IndyDesugarer:
             params = [f"L{r.owner};"] + list(impl_args)
         else:
             raise Unsupported(f"lambda impl handle kind {kind}")
-        # sources: captured fields then SAM args
+        # kaynaklar: önce yakalanan alanlar, sonra SAM argümanları
         sources = []  # (load-fn, from-desc)
         for i, t in enumerate(caps):
             sources.append(("cap", i, t, t))
@@ -269,7 +269,7 @@ class IndyDesugarer:
         a.ret(sam_ret)
         return make_method(mname, sam_desc, ACC_PUBLIC, a, slot)
 
-    # -------------------------------------------------------------- string concat
+    # -------------------------------------------------------------- dize birleştirme
     def concat(self, cf: ClassFile, d: DynamicConst, recipe: str, consts):
         args, _ = parse_method_desc(d.desc)
         name = self._holder(cf, "Concat")
@@ -316,7 +316,7 @@ class IndyDesugarer:
         a.op("areturn")
         return self._static_holder(cf, name, "concat", d.desc, a, slot)
 
-    # -------------------------------------------------------------- records
+    # -------------------------------------------------------------- record'lar
     def object_methods(self, cf: ClassFile, d: DynamicConst, bargs):
         rec = bargs[0].name
         names = bargs[1][1].split(";") if bargs[1][1] else []
@@ -406,7 +406,7 @@ class IndyDesugarer:
             return self._static_holder(cf, name, "equals", d.desc, a, 3)
         raise Unsupported(f"ObjectMethods.{d.name}")
 
-    # -------------------------------------------------------------- pattern switch
+    # -------------------------------------------------------------- kalıp switch
     def type_switch(self, cf: ClassFile, d: DynamicConst, labels, enum: bool):
         args, _ = parse_method_desc(d.desc)  # (Object target, int restart)I
         name = self._holder(cf, "Switch")

@@ -30,7 +30,7 @@ from .world import parse_method_desc
 
 EMPTY: frozenset = frozenset()
 
-# natives and library methods that are known not to let their reference arguments escape
+# referans argümanlarının kaçmasına izin vermediği bilinen yerel metotlar ve kütüphane metotları
 NOESCAPE_NATIVES = {
     ("java/lang/System", "arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V"),
     ("java/lang/Object", "hashCode()I"),
@@ -108,7 +108,7 @@ class EscapeAnalysis:
         self._methods: dict[tuple[str, str], tuple] = {}
         self._targets_cache: dict[tuple[str, str, str], Optional[list]] = {}
 
-    # ------------------------------------------------------------------ setup
+    # ------------------------------------------------------------------ kurulum
     def _collect(self) -> None:
         for cn, key in self.p.reachable:
             ci = self.w.classes.get(cn)
@@ -122,7 +122,7 @@ class EscapeAnalysis:
             self.csummary[(cn, key)] = tuple(False for _ in _ref_params(m, m.is_static))
             self.ret_fresh[(cn, key)] = m.desc.rpartition(")")[2][:1] in ("L", "[")   # optimistic; only ever turns False
 
-    # ------------------------------------------------------------------ call targets
+    # ------------------------------------------------------------------ çağrı hedefleri
     def _cha_targets(self, owner: str, name: str, desc: str) -> Optional[list]:
         """All implementations an invokevirtual/invokeinterface on `owner` can reach, or None if unbounded."""
         k = (owner, name, desc)
@@ -192,13 +192,13 @@ class EscapeAnalysis:
             return cs
         n = len(_ref_params(m, m.is_static))
         if (dc.name, m.key) in NOESCAPE_NATIVES:
-            # arraycopy moves elements from one array into the other: what is inside both may flow anywhere
+            # arraycopy elemanları bir diziden diğerine taşır: her ikisinin içindekiler herhangi bir yere akabilir
             return tuple(m.name == "arraycopy" for _ in range(n))
         if dc.name == "java/lang/Object" and m.name == "<init>":
             return (False,)
         return tuple(True for _ in range(n))
 
-    # ------------------------------------------------------------------ one method
+    # ------------------------------------------------------------------ tek bir metot
     def _analyze(self, ci, m) -> Optional[MethodResult]:
         insns: list[Insn] = self.p.insns(ci, m)
         code = m.code
@@ -209,7 +209,7 @@ class EscapeAnalysis:
         nparams = len(refp)
         nloc = max(code.max_locals, 1) + 2
 
-        # leaders, loops, allocation sites
+        # öncüller (leaders), döngüler, tahsis noktaları
         leaders = {0}
         loops: list[tuple[int, int]] = []
         sites: dict[int, str] = {}
@@ -239,7 +239,7 @@ class EscapeAnalysis:
         for slot, ordn in refp:
             init_locs[slot] = frozenset((("P", ordn),))
         in_states: dict[int, tuple[list, list]] = {0: (init_locs, [])}
-        # handlers may start with any local holding any origin seen in the method (sound over-approximation)
+        # işleyiciler, metotta görülen herhangi bir kökene sahip herhangi bir yerelle başlayabilir (sağlam aşırı yaklaşım)
         if code.handlers:
             every = frozenset([("A", pc) for pc in sites] + [("P", o) for _, o in refp])
             for h in code.handlers:
@@ -429,7 +429,7 @@ class EscapeAnalysis:
                     popped.reverse()
                     if op != "invokestatic":
                         popped.insert(0, stk.pop())
-                    # reference arguments in order (receiver first): the index into a callee summary
+                    # referans argümanları sırayla (önce alıcı): bir çağrılan özetine indeks
                     kinds = ([] if op == "invokestatic" else ["L"]) + args
                     ref_vals = [popped[j][0] for j, d in enumerate(kinds) if d[0] in ("L", "[")]
                     targets = self._call_targets(ci, op, a)
@@ -501,11 +501,11 @@ class EscapeAnalysis:
                         in_states[spc] = (ml, ms)
                         work.append(spc)
         except _Bail:
-            # not analyzable: everything escapes
+            # analiz edilemez: her şey kaçar
             return MethodResult(tuple(True for _ in range(nparams)), sites,
                                 {pc: "unanalyzable" for pc in sites}, loop_pcs, frozenset(callees), False,
                                 cparams=tuple(True for _ in range(nparams)))
-        # an escaping owner takes everything stored inside it along; an escaping content takes what was stored there
+        # kaçan bir sahip, içinde saklananların hepsini birlikte götürür; kaçan bir içerik, orada saklananı alır
         closing = True
         while closing:
             closing = False
@@ -521,7 +521,7 @@ class EscapeAnalysis:
         esc_sites = {pc: escaped[("A", pc)] for pc in sites if ("A", pc) in escaped}
         rloop = frozenset(pc for pc in rsites if any(a <= pc <= b for a, b in loops))
         resc = {pc: escaped[("R", pc)] for pc in rsites if ("R", pc) in escaped}
-        # a returned reference moves to the caller only if it is a fresh object whose sole escape is this return
+        # döndürülen bir referans, yalnızca tek kaçışı bu dönüş olan taze bir nesneyse çağırana geçer
         fresh = bool(ret_vals)
         for vals in ret_vals:
             if not vals:
@@ -533,7 +533,7 @@ class EscapeAnalysis:
         return MethodResult(params, sites, esc_sites, loop_pcs, frozenset(callees), fresh,
                             frozenset(rsites), resc, rloop, dict(rsites), cparams, iter_pcs)
 
-    # ------------------------------------------------------------------ allocation sites that live one loop iteration
+    # ------------------------------------------------------------------ bir döngü turu yaşayan tahsis noktaları
     def _iteration_local(self, insns, idx, loops, loop_pcs, escaped, in_states, contents, code) -> frozenset:
         """Loop allocation sites whose object cannot be seen by the next iteration.
 
@@ -545,7 +545,7 @@ class EscapeAnalysis:
         if not cand:
             return EMPTY
         n = len(insns)
-        # liveness of locals, backward over instructions
+        # yerellerin canlılığı, komutlar üzerinde geriye doğru
         gen: list = [None] * n
         kill: list = [None] * n
         succ: list = [None] * n
@@ -622,7 +622,7 @@ class EscapeAnalysis:
                 ok.append(pc)
         return frozenset(ok)
 
-    # ------------------------------------------------------------------ driver
+    # ------------------------------------------------------------------ sürücü
     def run(self) -> Result:
         t0 = time.time()
         self._collect()

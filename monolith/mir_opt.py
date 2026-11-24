@@ -139,14 +139,14 @@ def _splice(fn, b, k, mi, body, tgt, gen, ci, next_id):
         fn.nvalues += 1
         return nv
 
-    # continuation: the rest of b, entered with the call's result
+    # devam: b'nin geri kalanı, çağrının sonucuyla girilir
     cont_id = new_id()
     cparams = [new_val(mi.dst)] if mi.dst is not None else []
     cont = mir.Block(cont_id, cparams, [-1] * len(cparams), b.insns[k + 1:], b.term)
     if mi.dst is not None:
-        # uses of the call result after the call now read the continuation parameter
+        # çağrı sonucunun çağrıdan sonraki kullanımları artık devam parametresini okur
         _rename(cont, {id(mi.dst): cparams[0]})
-        # and every later block that used it (dominated by b): keep the old Value defined by a copy
+        # ve onu kullanan her sonraki blok (b tarafından baskılanan): eski Value'yu bir kopyayla tanımlı tut
         cont.insns.insert(0, mir.MInsn("copy", mi.dst, [cparams[0]], None, mi.pc, [], None))
     fn.blocks[cont_id] = cont
 
@@ -157,7 +157,7 @@ def _splice(fn, b, k, mi, body, tgt, gen, ci, next_id):
     else:
         pre.append(mir.MInsn("nullcheck", None, [mi.args[0]], None, mi.pc, mi.exc, None))
 
-    # clone the callee
+    # çağrılanı kopyala
     vmap: dict = {}
     bmap = {bid: new_id() for bid in body.blocks}
 

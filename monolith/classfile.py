@@ -12,7 +12,7 @@ import struct
 from dataclasses import dataclass, field
 from typing import Optional
 
-# Constant pool tags
+# Sabit havuzu etiketleri
 CONSTANT_Utf8 = 1
 CONSTANT_Integer = 3
 CONSTANT_Float = 4
@@ -31,7 +31,7 @@ CONSTANT_InvokeDynamic = 18
 CONSTANT_Module = 19
 CONSTANT_Package = 20
 
-# Access flags
+# Erişim bayrakları
 ACC_PUBLIC = 0x0001
 ACC_PRIVATE = 0x0002
 ACC_PROTECTED = 0x0004
@@ -52,7 +52,7 @@ ACC_ANNOTATION = 0x2000
 ACC_ENUM = 0x4000
 ACC_MODULE = 0x8000
 
-# MethodHandle reference kinds
+# MethodHandle referans türleri
 REF_getField = 1
 REF_getStatic = 2
 REF_putField = 3
@@ -245,8 +245,8 @@ def _decode_mutf8(b: bytes) -> str:
     try:
         s = b.decode("utf-8")
         if "\x00" not in s:
-            # Fast path: plain UTF-8 does not contain encoded surrogates as 3-byte sequences
-            # (python would reject them), so this is correct.
+            # Hızlı yol: düz UTF-8, vekil çiftlerini (surrogate) 3 baytlık diziler olarak içermez
+            # (python bunları reddederdi), bu yüzden bu doğrudur.
             return s
     except UnicodeDecodeError:
         pass
@@ -264,7 +264,7 @@ def _decode_mutf8(b: bytes) -> str:
         else:
             out.append(chr(((c & 0x0F) << 12) | ((b[i + 1] & 0x3F) << 6) | (b[i + 2] & 0x3F)))
             i += 3
-    # Keep lone surrogates as-is (Java strings are UTF-16 code unit sequences).
+    # Yalnız vekilleri olduğu gibi tut (Java dizeleri UTF-16 kod birimi dizileridir).
     return "".join(out)
 
 

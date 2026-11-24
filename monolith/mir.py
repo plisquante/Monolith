@@ -146,7 +146,7 @@ class _B:
         self.nv += 1
         return v
 
-    # ---- blocks
+    # ---- bloklar
     def _slots(self, frame: Frame):
         out, s = [], 0
         for t in frame.locals:
@@ -221,7 +221,7 @@ class _B:
                 out.append(Edge(h.handler_pc, args, h.catch_type))
         return out
 
-    # ---- build
+    # ---- kurma
     def build(self) -> Fn:
         params, slots = [], []
         for s, t in self._slots(self.init):
@@ -272,7 +272,7 @@ class _B:
                 stack.append(dst)
             return dst
 
-        # ---- constants
+        # ---- sabitler
         if op == "nop":
             return False
         if op == "aconst_null":
@@ -299,7 +299,7 @@ class _B:
                 emit("Ljava/lang/Class;", [], a)
             else:
                 raise MirUnsupported(f"ldc {type(a).__name__}")
-        # ---- locals (renaming only)
+        # ---- yerel değişkenler (yalnızca yeniden adlandırma)
         elif op in ("iload", "lload", "fload", "dload", "aload"):
             v = locs.get(ins.arg)
             if v is None:
@@ -317,7 +317,7 @@ class _B:
             dst = self.val("int")
             blk.insns.append(MInsn("iinc", dst, [old], ins.arg2, pc, [], ins))
             locs[ins.arg] = dst
-        # ---- stack shuffling
+        # ---- yığın karıştırma
         elif op == "pop":
             stack.pop()
         elif op == "pop2":
@@ -366,7 +366,7 @@ class _B:
                     stack.extend([b, a, d, c, b, a])
         elif op == "swap":
             stack[-1], stack[-2] = stack[-2], stack[-1]
-        # ---- arithmetic
+        # ---- aritmetik
         elif op in _CONV:
             emit(_CONV[op], [stack.pop()])
         elif op in ("lcmp", "fcmpl", "fcmpg", "dcmpl", "dcmpg"):
@@ -377,7 +377,7 @@ class _B:
         elif op[0] in "ilfd" and op[1:] in ("add", "sub", "mul", "div", "rem", "shl", "shr", "ushr", "and", "or", "xor"):
             b, a = stack.pop(), stack.pop()
             emit(_ARITH[op[0]], [a, b])
-        # ---- arrays
+        # ---- diziler
         elif op in ("iaload", "laload", "faload", "daload", "aaload", "baload", "caload", "saload"):
             i, a = stack.pop(), stack.pop()
             ty = _elem(a.ty) if op == "aaload" else {"i": "int", "l": "long", "f": "float", "d": "double", "b": "int", "c": "int",
@@ -398,7 +398,7 @@ class _B:
         elif op == "multianewarray":
             dims = [stack.pop() for _ in range(ins.arg2)][::-1]
             emit(ins.arg.name, dims, ins.arg)
-        # ---- objects and fields
+        # ---- nesneler ve alanlar
         elif op == "new":
             emit("uninit@%d" % pc, [], ins.arg, cls=ins.arg.name)
         elif op == "checkcast":
@@ -416,7 +416,7 @@ class _B:
             emit(None, [o, v], ins.arg)
         elif op in ("monitorenter", "monitorexit"):
             emit(None, [stack.pop()])
-        # ---- calls
+        # ---- çağrılar
         elif op in ("invokevirtual", "invokespecial", "invokestatic", "invokeinterface"):
             ref: MemberRef = ins.arg
             ats, rt = parse_method_desc(ref.desc)
@@ -434,7 +434,7 @@ class _B:
             emit(None, [], ins.arg)
         elif op == "invokedynamic":
             raise MirUnsupported("invokedynamic left after desugaring")
-        # ---- control
+        # ---- kontrol
         elif op in _IFS:
             n = _IF_ARGS[op]
             a = [stack.pop() for _ in range(n)][::-1]

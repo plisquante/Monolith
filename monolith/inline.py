@@ -53,7 +53,7 @@ class Inliner:
         self.stats = {"methods": 0, "sites": 0, "bytes": 0}
         self._cha: dict = {}
 
-    # ------------------------------------------------------------------ target resolution
+    # ------------------------------------------------------------------ hedef çözümü
     def _single_target(self, ci, ins: Insn):
         a = ins.arg
         op = ins.op
@@ -117,7 +117,7 @@ class Inliner:
         self._cha[k] = res
         return res
 
-    # ------------------------------------------------------------------ eligibility
+    # ------------------------------------------------------------------ uygunluk
     def _inlinable(self, dc, m, caller_key) -> list[Insn] | None:
         """The callee's instructions when `m` can be inlined, else None."""
         key = (dc.name, m.key)
@@ -148,7 +148,7 @@ class Inliner:
                     return None                               # super call
         return insns
 
-    # ------------------------------------------------------------------ the transformation
+    # ------------------------------------------------------------------ dönüşüm
     def final_insns(self, ci, m) -> list[Insn]:
         key = (ci.name, m.key)
         if key in self.done:
@@ -171,7 +171,7 @@ class Inliner:
         next_local = code.max_locals + 2
         changed = False
         n = len(orig)
-        # the pc of the instruction after each one (the target of an inlined `return`)
+        # her komuttan sonraki komutun pc'si (satır içi alınan bir `return`'ün hedefi)
         nxt = {orig[i].pc: (orig[i + 1].pc if i + 1 < n else orig[i].pc + 1) for i in range(n)}
         for i, ins in enumerate(orig):
             base = ins.pc * K
@@ -214,7 +214,7 @@ class Inliner:
             first_body = len(seq)
             for x in body:
                 seq.append(None)            # placeholder, filled below once pcs are known
-            # pcs: sequential after the call's own scaled pc
+            # pc'ler: çağrının kendi ölçeklenmiş pc'sinden sonra sıralı
             pcs = [base + j for j in range(len(seq))]
             for j in range(first_body):
                 seq[j] = replace(seq[j], pc=pcs[j])
@@ -239,8 +239,8 @@ class Inliner:
             self.stats["sites"] += 1
         if not changed:
             return orig
-        # branch targets of the untouched instructions were scaled in _scale; instructions inlined above carry their
-        # own remapped targets. The caller's code attribute follows the new numbering.
+        # dokunulmayan komutların dal hedefleri _scale içinde ölçeklendi; yukarıda satır içine alınan komutlar kendi
+        # yeniden eşlenmiş hedeflerini taşır. Çağıranın code niteliği yeni numaralandırmayı izler.
         new_code = replace(code, handlers=[replace(h, start_pc=h.start_pc * K, end_pc=h.end_pc * K, handler_pc=h.handler_pc * K) for h in code.handlers],
                            line_numbers=[(pc * K, ln) for pc, ln in code.line_numbers], max_locals=next_local + 2)
         m.insns = out

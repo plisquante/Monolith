@@ -68,7 +68,7 @@ class Patch:
     fn: str
     orig: bool = False
     verify: bool = True   # False for methods with side effects: MONO_PATCH_VERIFY runs original and patch, so a patch that
-                          # changes state would be applied twice
+                          # durumu değiştiren bir metot iki kez uygulanırdı
     fingerprint: str = ""  # optional: fingerprint() of the method the patch was written against; a mismatch stops the build
     replace: bool = False  # the original body is neither analysed (RTA) nor translated: what only it reached leaves the build
 
@@ -122,7 +122,7 @@ class PatchSet:
     def __bool__(self) -> bool:
         return bool(self.patches)
 
-    # ------------------------------------------------------------------ validation
+    # ------------------------------------------------------------------ doğrulama
     def validate(self, world) -> None:
         """Every patch must name a method that exists. A patch whose class is not on the class path at all is
         skipped (patch sets are shared between programs); a class that exists without the method is an error:
@@ -163,7 +163,7 @@ class PatchSet:
         """Virtual and interface methods the bindings dispatch: every implementation must be kept."""
         return [_split_call(spec) for f in self.files.values() for spec in f.vcalls.values()]
 
-    # ------------------------------------------------------------------ code generation
+    # ------------------------------------------------------------------ kod üretimi
     def module_for(self, g, patch: Patch) -> tuple[str, str]:
         """(module name, module source or '' when this shard class already has it)."""
         pf = self.files[patch.file]
@@ -180,7 +180,7 @@ class PatchSet:
         w = g.world
         out = ["#[allow(unused, non_snake_case, non_upper_case_globals, clippy::all)]",
                f"mod {mod} {{", "    use super::*;", "    use mono_rt::patch::*;", ""]
-        # instance fields -> byte offsets
+        # örnek alanları -> bayt ofsetleri
         for name, spec in sorted(pf.fields.items()):
             owner, fname_ = spec.rsplit(".", 1)
             ci = g.need_class(owner)
@@ -190,7 +190,7 @@ class PatchSet:
             o, f = hit[-1]  # the most derived declaration
             out.append(f"    /// {owner}.{fname_} : {f.desc}")
             out.append(f"    pub const F_{name}: usize = std::mem::offset_of!({g.struct_name(ci)}, f_{mang(o)}_{mang(f.name)});")
-        # static fields
+        # statik alanlar
         for name, spec in sorted(pf.statics.items()):
             owner, fname_ = spec.rsplit(".", 1)
             ci = g.need_class(owner)
@@ -207,7 +207,7 @@ class PatchSet:
             ty = RT[kind_of(f.desc)] if f.desc[0] not in "ZBCS" else {"Z": "i8", "B": "i8", "C": "u16", "S": "i16"}[f.desc[0]]
             out.append(f"    /// {owner}.{fname_} : {f.desc}")
             out.append(f"    pub fn s_{name}() -> *mut {ty} {{ unsafe {{ &raw mut {sn} }} }}")
-        # classes
+        # sınıflar
         for name, owner in sorted(pf.classes.items()):
             ci = g.need_class(owner)
             out.append(f"    pub fn class_{name}() -> &'static rt::Class {{ unsafe {{ &{g.class_name(ci)} }} }}")
@@ -215,7 +215,7 @@ class PatchSet:
             out.append(f"    #[inline(always)] pub fn is_{name}(o: rt::Ref) -> bool {{ !o.is_null() && unsafe {{ class_ptr(o) }} == class_{name}() as *const rt::Class }}")
             if g.needs_init(ci):
                 out.append(f"    pub fn init_{name}() -> rt::Res<()> {{ unsafe {{ {g.init_name(ci)}() }}.res() }}")
-        # calls (direct, non-virtual)
+        # çağrılar (doğrudan, sanal olmayan)
         for name, spec in sorted(pf.calls.items()):
             owner, mname, desc = _split_call(spec)
             try:
@@ -238,7 +238,7 @@ class PatchSet:
                 init = f"unsafe {{ {g.init_name(dc)}() }}.res()?; "
             out.append(f"    /// {owner}.{mname}{desc}")
             out.append(f"    pub fn c_{name}({', '.join(params)}) -> rt::Res<{rret}> {{ {init}unsafe {{ {fname(dc.name, m.name, m.desc)}({', '.join(call)}) }}.res() }}")
-        # virtual / interface calls: the same dispatch the translated code uses
+        # sanal / arayüz çağrıları: çevrilmiş kodun kullandığı aynı dağıtım
         for name, spec in sorted(pf.vcalls.items()):
             owner, mname, desc = _split_call(spec)
             oci = g.need_class(owner)
@@ -273,7 +273,7 @@ class PatchSet:
                         f"(*(*o).class).vtable[{slot}].0) }}; f({call_args}).res()")
             out.append(f"    /// virtual: {owner}.{mname}{desc}")
             out.append(f"    pub fn v_{name}({', '.join(params)}) -> rt::Res<{rret}> {{ {body} }}")
-        # constructors: allocate, initialize the class, run <init>
+        # kurucular: tahsis et, sınıfı başlat, <init>'i çalıştır
         for name, spec in sorted(pf.news.items()):
             owner, mname, desc = _split_call(spec)
             if mname != "<init>":
@@ -290,7 +290,7 @@ class PatchSet:
             out.append(f"    /// new {owner}{desc}")
             out.append(f"    pub fn n_{name}({', '.join(params)}) -> rt::Res<rt::Ref> {{ {init}let o = rt::alloc(unsafe {{ &{g.class_name(ci)} }}); "
                        f"unsafe {{ {fname(ci.name, '<init>', desc)}({call}) }}.res()?; Ok(o) }}")
-        # interned Java strings
+        # kullanım havuzundaki (interned) Java dizeleri
         for name, text in sorted(pf.strings.items()):
             out.append(f"    /// the interned String {text!r}")
             out.append(f"    pub fn str_{name}() -> rt::Ref {{ static C: std::sync::OnceLock<usize> = std::sync::OnceLock::new(); "

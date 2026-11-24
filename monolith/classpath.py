@@ -127,8 +127,8 @@ class ClassPath:
                 self.sources.append(ZipSource(e, release=rel))
         self._cache: dict[str, Optional[ClassFile]] = {}
         self.origin: dict[str, str] = {}
-        # entries[boot_start:] are the JDK (class library overlay + JDK modules): their classes
-        # belong to the boot loader; everything before is application code
+        # entries[boot_start:] JDK'dır (sınıf kütüphanesi kaplaması + JDK modülleri): sınıfları
+        # önyükleme yükleyicisine aittir; öncesindeki her şey uygulama kodudur
         self.boot_start = len(self.sources) if boot_start is None else boot_start
         self.boot: set[str] = set()
 
@@ -229,7 +229,7 @@ class ClassPath:
                 for _ in range(n):
                     to = struct.unpack_from(">H", raw, p + 4)[0]
                     p += 6 + 2 * to
-            # uses
+            # kullanımları
             p = _skip_uses(raw, p)
             n = struct.unpack_from(">H", raw, p)[0]
             p += 2
@@ -261,7 +261,7 @@ def jdk_home() -> str:
     Minecraft 26.x requires Java 25."""
     import glob as _glob
     cands = [os.environ.get("MONO_JDK_HOME"), os.environ.get("JAVA_HOME")]
-    # tools/mcbuild_common.py installs Temurin under ~/.cache/monolith/temurin-<major>/jdk-*/ — look there first
+    # tools/mcbuild_common.py, Temurin'i ~/.cache/monolith/temurin-<major>/jdk-*/ altına kurar — önce orada bak
     cache = os.path.join(os.path.expanduser("~"), ".cache", "monolith")
     homes = [os.path.dirname(os.path.dirname(p)) for pat in ("javac", "javac.exe") for p in
              _glob.glob(os.path.join(cache, "temurin-25", "**", "bin", pat), recursive=True)]
@@ -286,8 +286,8 @@ def jdk_tool(name: str) -> str:
     return exe if os.path.isfile(exe) else os.path.join(home, "bin", name)
 
 
-# JDK modules made available to applications (java.base first). Desktop/AWT is not needed by
-# the supported targets; add modules here if an application requires them.
+# Uygulamalara sunulan JDK modülleri (önce java.base). Desteklenen hedefler Desktop/AWT'ye
+# ihtiyaç duymaz; bir uygulama gerektiriyorsa buraya modül ekleyin.
 JDK_MODULES = ["java.base", "java.logging", "java.management", "java.net.http", "java.sql",
                "java.naming", "java.desktop", "java.scripting", "java.xml", "java.prefs",
                "java.compiler", "java.instrument", "jdk.unsupported", "jdk.jfr", "jdk.management",
@@ -320,7 +320,7 @@ def jdk_jmods() -> list[str]:
     return [os.path.join(cache, m) for m in JDK_MODULES if os.path.isdir(os.path.join(cache, m))]
 
 
-# ---------------------------------------------------------------------- builtin bridge
+# ---------------------------------------------------------------------- yerleşik köprü
 _ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNTIME_JAVA = os.path.join(_ROOT_DIR, "runtime", "java")
 RUNTIME_JAVA_NOLWJGL = os.path.join(_ROOT_DIR, "runtime", "java_nolwjgl")

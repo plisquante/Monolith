@@ -24,8 +24,8 @@ def kind(v) -> str:
 class MirMethodGen(MethodGen):
     def __init__(self, gen, ci, m):
         super().__init__(gen, ci, m)
-        # for-each iterators handed back where the loop ends (MethodGen does it at the exit block with the slot variable;
-        # here every edge into the exit recycles the Value its slot holds)
+        # for-each yineleyicileri döngünün bittiği yerde geri verilir (MethodGen bunu çıkış bloğunda yuva değişkeniyle yapar;
+        # burada çıkışa giren her kenar, yuvasının tuttuğu Value'yu geri dönüştürür)
         self.iter_scopes = find_iterator_scopes(self.insns)
         self.fn = mir.build(ci, m, self.insns, self.iter_scopes)
         mir.verify(self.fn)
@@ -39,7 +39,7 @@ class MirMethodGen(MethodGen):
         self.line_vals = [l for _p, l in ln]
         self.handler_blocks = {h.handler_pc for h in m.code.handlers}
 
-    # ---- naming
+    # ---- adlandırma
     def vref(self, v) -> str:
         n = f"v{v.id}{_KIND.get(v.ty, 'A').lower()}"
         self.used_locals[n] = kind(v)
@@ -56,7 +56,7 @@ class MirMethodGen(MethodGen):
         i = bisect.bisect_right(self.line_pcs, pc) - 1
         return self.line_vals[i] if i >= 0 else None
 
-    # ---- assignments
+    # ---- atamalar
     @staticmethod
     def _assign(pairs) -> str:
         pairs = [(d, s) for d, s in pairs if d != s]
@@ -77,7 +77,7 @@ class MirMethodGen(MethodGen):
             if st:
                 lines.append(st)
 
-    # ---- blocks
+    # ---- bloklar
     def build_blocks(self):
         handlers = self.m.code.handlers
         blocks: dict = {}

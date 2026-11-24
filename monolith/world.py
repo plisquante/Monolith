@@ -86,7 +86,7 @@ class ClassInfo:
     interfaces: list["ClassInfo"]
     instantiated: bool = False
     initialized: bool = False
-    # computed lazily
+    # tembel olarak hesaplanır
     _all_ifaces: Optional[list["ClassInfo"]] = None
     _all_iface_set: Optional[set[str]] = None
     _super_set: Optional[set[str]] = None
@@ -118,7 +118,7 @@ class World:
         self.synthetic = synthetic if synthetic is not None else {}
         self.missing: set[str] = set()
 
-    # ---------------------------------------------------------------- loading
+    # ---------------------------------------------------------------- yükleme
     def get(self, name: str) -> Optional[ClassInfo]:
         if name in self.classes:
             return self.classes[name]
@@ -157,7 +157,7 @@ class World:
         self.synthetic[cf.name] = cf
         return self.req(cf.name)
 
-    # ---------------------------------------------------------------- subtyping
+    # ---------------------------------------------------------------- alt tür ilişkisi
     def all_interfaces(self, c: ClassInfo) -> list[ClassInfo]:
         if c._all_ifaces is None:
             seen: dict[str, ClassInfo] = {}
@@ -187,7 +187,7 @@ class World:
             c._super_set = ss
         return of.name in ss
 
-    # ---------------------------------------------------------------- fields
+    # ---------------------------------------------------------------- alanlar
     def resolve_field(self, owner: str, name: str, desc: str) -> tuple[ClassInfo, FieldInfo]:
         """JVMS 5.4.3.2: the class itself, then superinterfaces, then superclass."""
         c = self.req(owner)
@@ -213,18 +213,18 @@ class World:
         if c._fields is None:
             base = self.instance_fields(c.super) if c.super else []
             own = [(c.name, f) for f in c.cf.fields if not f.is_static]
-            # order by descending size for compact layout within the class's own segment
+            # sınıfın kendi bölümü içinde sıkı yerleşim için boyuta göre azalan sırala
             sz = {"J": 8, "D": 8, "I": 4, "F": 4, "C": 2, "S": 2, "B": 1, "Z": 1}
             own.sort(key=lambda t: -sz.get(t[1].desc[0], 8))
             c._fields = base + own
         return c._fields
 
-    # ---------------------------------------------------------------- methods
+    # ---------------------------------------------------------------- metotlar
     def resolve_method(self, owner: str, name: str, desc: str, interface: bool = False
                        ) -> tuple[ClassInfo, MethodInfo]:
         """JVMS 5.4.3.3 / 5.4.3.4 method resolution."""
         c = self.req(owner)
-        # 1. class and superclasses
+        # 1. sınıf ve üst sınıflar
         if not c.is_interface:
             for x in c.supers():
                 m = x.cf.method(name, desc)
@@ -238,7 +238,7 @@ class World:
             m = obj.cf.method(name, desc)
             if m and not m.is_static and (m.access & 0x0001):
                 return obj, m
-        # 2. maximally-specific superinterface methods (prefer non-abstract)
+        # 2. en belirgin üst arayüz metotları (soyut olmayanı tercih et)
         cands = self._max_specific(c, name, desc)
         nonabs = [x for x in cands if not x[1].is_abstract]
         if nonabs:
@@ -253,7 +253,7 @@ class World:
             m = i.cf.method(name, desc)
             if m and not m.is_static and not m.is_private:
                 found.append((i, m))
-        # drop those whose declaring interface is a superinterface of another candidate
+        # bildiren arayüzü başka bir adayın üst arayüzü olanları ele
         res = []
         for i, m in found:
             if not any(j is not i and self.is_subclass(j, i) for j, _ in found):
@@ -271,7 +271,7 @@ class World:
             return cands[0]
         return None
 
-    # ---------------------------------------------------------------- vtables
+    # ---------------------------------------------------------------- vtable'lar
     def vtable(self, c: ClassInfo) -> list[VSlot]:
         if c._vtable is not None:
             return c._vtable
@@ -288,7 +288,7 @@ class World:
             else:
                 index[k] = len(slots)
                 slots.append(VSlot(m.name, m.desc, impl))
-        # miranda / default methods from superinterfaces
+        # üst arayüzlerden miranda / default metotlar
         for i in self.all_interfaces(c):
             for m in i.cf.methods:
                 if m.is_static or m.is_private or m.name == "<clinit>":
@@ -297,7 +297,7 @@ class World:
                 if k not in index:
                     index[k] = len(slots)
                     slots.append(VSlot(m.name, m.desc, None))
-        # fill unimplemented slots with default methods
+        # gerçekleştirilmemiş yuvaları default metotlarla doldur
         for s in slots:
             if s.impl is None or s.impl[1].is_abstract:
                 sel = self.select(c, s.name, s.desc)
