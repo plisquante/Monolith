@@ -95,7 +95,8 @@ jobs:
           EOF
           "$MONO_JDK_HOME/bin/javac" -source 17 -target 17 --add-exports java.base/jdk.internal.misc=ALL-UNNAMED -cp runtime/java_nolwjgl:runtime/java -sourcepath runtime/java_nolwjgl:runtime/java -d build/ci_nolwjgl/classes build/ci_nolwjgl/CiNoLwjgl.java
           "$MONO_JDK_HOME/bin/jar" cf build/ci_nolwjgl/CiNoLwjgl.jar -C build/ci_nolwjgl/classes CiNoLwjgl.class
-          python3 -m monolith build-lib --cp build/ci_nolwjgl/CiNoLwjgl.jar --main CiNoLwjgl --no-lwjgl --shards 4 -dynamic --target aarch64-linux-android.26 --name libminecraft_mono.so -o build/ci_nolwjgl/out
+          # `python -m monolith build-lib` was removed with the Zig backend (it exits 2); the Rust path is rustgen --android
+          python3 -m monolith.rustgen --cp build/ci_nolwjgl/CiNoLwjgl.jar --main CiNoLwjgl --no-lwjgl --shards 4 --android -o build/ci_nolwjgl/out
           readelf -h build/ci_nolwjgl/out/libminecraft_mono.so | grep -q "AArch64"
           nm -D build/ci_nolwjgl/out/libminecraft_mono.so | grep -q "mono_android_entry"
 

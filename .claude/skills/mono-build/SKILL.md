@@ -6,14 +6,14 @@ description: Build, test, and run monolith. Use when running tests, transpiling,
 # monolith-build
 
 ## Environment
-- JDK 25 required: `export MONO_JDK_HOME=$HOME/.cache/monolith/temurin-25/jdk-25.0.5+8`. JAVA_HOME may be 21 and silently give wrong output.
+- JDK 25 required: `export MONO_JDK_HOME=$(ls -d $HOME/.cache/monolith/temurin-25/jdk-*/ | head -1)` (the directory name carries the build number and changes with the JDK update). JAVA_HOME may be 21 and silently give wrong output.
 - Memory: the Minecraft Rust build (`tools/mcbuild_rust.py`, 32 shards, 2 jobs) peaked near 12 GB. Never run it with the test suite. One heavy job at a time (`.claude/hooks/guard.py` enforces it).
 - Low RAM floors: `MONO_MIN_AVAIL_GIB`, `MONO_TEST_MIN_AVAIL_GIB`. Per-task needs: `docs/HARDWARE.md`.
 
 ## Commands
 - Tests (differential vs JVM): `python3 tests/run_tests.py [Name...]`
-- Transpile only: `python3 -m monolith build --cp ... --main ... -o out --no-compile`
-- Full Minecraft: `./build.sh <client.jar> --out <dir> -O Debug --graphics opengl --skip-assets`
+- Transpile only: `python3 -m monolith.rustgen --cp ... --main ... -o out --shards 4` (no `--compile`; `MONO_VERBOSE=1` lists link errors, then `python3 tools/check_link_errors.py <stderr file>`)
+- Full Minecraft: `./build.sh <client.jar> -o <dir> --opt 1 --shards 16 --shard-jobs 1` (`python3 tools/fetch_client_jar.py --version 26.3 --out client.jar` gets the jar)
 - Rust compile alone: `python3 -m monolith.rustgen --cp <classes> --main <Main> -o <out> --shards 4 --shard-jobs 4 --opt 1 --compile`
 - Run: `MC_GRAPHICS=opengl LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./run.sh`
 - Missing natives: `<out>/report.json` key `issues.missing-native`
