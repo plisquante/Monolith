@@ -50,6 +50,8 @@ def main() -> int:
     ap.add_argument("--api", type=int, default=24)
     ap.add_argument("--ndk", default="")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--reuse-objs", action="store_true",
+                    help="reuse cached shard objects whose generated source is unchanged, even when the runtime changed (only for internals-only runtime changes such as comments; see docs/IMPL_SPEC.md section 7)")
     ap.add_argument("--target", default="",
                     help="Rust target triple (default: the host): x86_64-pc-windows-msvc, ...")
     ap.add_argument("--linker", default="", help="linker for a cross build (passed to rustc as -C linker=...)")
@@ -93,7 +95,7 @@ def main() -> int:
                    (["--escape"] if a.escape else []) + (["--inline"] if a.inline else []))
         if subprocess.run(gen, cwd=ROOT).returncode:
             return 1
-    comp = common + ["--cp", "-", "--main", "-", "--resume"] + ([] if a.android else ["--compile"])
+    comp = common + ["--cp", "-", "--main", "-", "--resume"] + ([] if a.android else ["--compile"]) + (["--reuse-objs"] if a.reuse_objs else [])
     if subprocess.run(comp, cwd=ROOT).returncode:
         return 1
     if a.android:

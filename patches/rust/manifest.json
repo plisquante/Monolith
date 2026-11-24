@@ -117,6 +117,16 @@
         "memory_pool_unavailable": "com/mojang/jtracy/MemoryPool.UNAVAILABLE",
         "gpu_context_unavailable": "com/mojang/jtracy/GpuContext.UNAVAILABLE",
         "section_category_unavailable": "com/mojang/jtracy/SectionCategory.UNAVAILABLE"
+      },
+      "classes": {
+        "Section": "com/mojang/jtracy/Section",
+        "Zone": "com/mojang/jtracy/Zone",
+        "Plot": "com/mojang/jtracy/Plot",
+        "DiscontinuousFrame": "com/mojang/jtracy/DiscontinuousFrame",
+        "ContinuousFrame": "com/mojang/jtracy/ContinuousFrame",
+        "MemoryPool": "com/mojang/jtracy/MemoryPool",
+        "GpuContext": "com/mojang/jtracy/GpuContext",
+        "SectionCategory": "com/mojang/jtracy/SectionCategory"
       }
     }
   },
