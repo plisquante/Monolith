@@ -1,4 +1,4 @@
-# monolith — Java bytecode → Zig transpiler: architecture
+# monolith — Java bytecode → Rust transpiler: architecture
 
 ```
  app.jar + libs ─┐
@@ -8,9 +8,9 @@
                      Program: decode + invokedynamic desugaring + RTA
                                      │  (reachable methods, instantiated classes)
                                      ▼
-                     ZigGen: one Zig module per class + classes.zig + main.zig
+                     RustGen: one Rust module per shard + main.rs
                                      │
- runtime/*.zig (GC-free pool, RHI, world culling, instancing, threads) ┴─► zig build-exe ─► native executable (no JVM)
+ monolith/rt/*.rs (runtime; GC being replaced) ┴─► rustc ─► native executable (no JVM)
 ```
 
 ## Front end (`monolith/`)
@@ -23,7 +23,7 @@
 | `world.py` | closed-world class hierarchy: JVMS §5.4.3 field/method resolution, §5.4.6 selection, maximally-specific default methods, vtable layout (with miranda/default slots), itable contents, prefix-compatible instance layouts |
 | `indy.py` | **invokedynamic desugaring** into synthetic bytecode classes: `LambdaMetafactory.metafactory/altMetafactory` (captures, bridges, marker interfaces, boxing/unboxing/widening adaptation), `StringConcatFactory` (recipes, constants), `ObjectMethods.bootstrap` (record `toString/hashCode/equals` with the JDK's exact formulas and comparison order), `SwitchBootstraps.typeSwitch/enumSwitch`. Unknown bootstraps are reported and throw `BootstrapMethodError` like a JVM. |
 | `program.py` | instruction preparation (indy rewrite, folding of disabled `assert`s) and **Rapid Type Analysis** with a `why`-chain for every reachable method |
-| `zigen.py` | Zig code generation (below) |
+| `rustgen.py` | Rust code generation (below) |
 | `analyze.py` | JAR statistics: versions, opcode histogram, indy bootstraps, reflection/Unsafe/VarHandle use, natives |
 
 ## Code generation scheme
@@ -58,7 +58,7 @@
 * **VarHandle**: `findVarHandle/findStaticVarHandle/arrayElementVarHandle` produce
   (kind, offset) descriptors; signature-polymorphic calls (`get`, `set*`, `compareAndSet`,
   `compareAndExchange*`, `getAndSet*`, `getAndAdd*`, `getAndBitwise*`) are lowered to atomic
-  memory operations in `runtime/varhandle.zig` using the call-site descriptor.
+  memory operations in `monolith/rt/vh.rs` using the call-site descriptor.
 * **Line numbers**: `F.line` is updated before instructions that can throw, so stack traces
   carry `File.java:NN` like the JVM.
 
@@ -80,7 +80,7 @@
 * `natives.zig` — native methods of the class library (Object, Class, System, Runtime,
   Thread, Throwable backtraces, Float/Double bits, reflect.Array, `MethodHandleNatives`,
   `NativeImageBuffer`, and `jdk.internal.misc.Unsafe` memory/CAS/park API).
-* `varhandle.zig` — VarHandle access modes (field, static, array element, `byteArrayViewVarHandle`,
+* `vh.rs` — VarHandle access modes (field, static, array element, `byteArrayViewVarHandle`,
   and JDK 25 Foreign `MemorySegment` views).
 * `io.zig` — `java.io` file streams, `RandomAccessFile`, `UnixFileSystem`, and
   `java.util.zip` (`CRC32`, `Adler32`, `Inflater`, `Deflater`) on top of the system zlib,
