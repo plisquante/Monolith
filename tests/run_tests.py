@@ -27,8 +27,9 @@ JAVA_DIR = os.path.join(HERE, "java")
 # Programs that need something this harness cannot provide (a display, network access, a JNI library).
 SKIP = {
     "ClientCoreE2E": "needs the Zig-era Client Core harness; the Rust core is tested by cargo test",
+    "Jni": "application JNI libraries are not supported by design (goal: no JNI at run time, docs/MASTER_PLAN_TR.md WS2); the native "
+           "program stops with 'native method not implemented' (exit 70), checked 2026-11-24 with a Jni.c library",
     "HttpFetch": "its HttpURLConnection/JSSE closure needs more than 8 GiB to compile (killed at 8 GiB on 2026-11-24); try with MONO_TEST_NO_SKIP=1 on a bigger machine",
-    "Jni": "needs the native JNI library built by the Jni.c harness",
 }
 
 
