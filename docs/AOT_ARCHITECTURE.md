@@ -1,5 +1,7 @@
 # AOT mimarisi: her şey derleme aşamasında
 
+> **Not (2026-11-24):** hedef mimari artik `docs/mimari/00_ANA_MIMARI.md`; celisen bolumler orada listelenir (bolum 8).
+
 Durum: tasarım belgesi, kod yok. Amaç: çalışma zamanında yapılan her işi (bellek kararı, başlatma, kaynak
 ayrıştırma, shader derleme, sanal çağrı çözümü) derleme aşamasına taşımak. Bu belge hedefleri, kuralları, eksikleri,
 riskleri ve sırayı tek yerde toplar. Ölçülmemiş her şey "TAHMİN" veya "ÖLÇÜLMEDİ" diye işaretlidir.

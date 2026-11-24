@@ -1,5 +1,7 @@
 # Uygulama şartnamesi (kodu yazacak olan için)
 
+> **Not (2026-11-24):** hedef mimari artik `docs/mimari/00_ANA_MIMARI.md`; celisen bolumler orada listelenir (bolum 8).
+
 Bu dosya `MASTER_PLAN_TR.md` ve `GC_PLAN.md` planlarının uygulanabilir halidir. Her görev: dosyalar, arayüz, kabul testi, boyut.
 Plan ile bu dosya çelişirse bu dosya geçerlidir. Bir görevde bu dosyada yazmayan bir karar gerekirse: dur, kararı bu dosyaya ekle (gerekçesiyle), sonra kodla.
 

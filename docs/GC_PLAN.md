@@ -1,5 +1,7 @@
 # Memory architecture plan: from stop-the-world GC to an idle collector, then to no collector
 
+> **Not (2026-11-24):** hedef mimari artik `docs/mimari/00_ANA_MIMARI.md`; celisen bolumler orada listelenir (bolum 8).
+
 Goal (owner's words): GC at zero, zero leaks, never a visible drop. Route: make the collector invisible first
 (always-on, small, paced), shrink what it has to do (less garbage, owned data), then switch it off only when a
 measured leak budget says it is safe. Nothing below is implemented yet unless it says "done".

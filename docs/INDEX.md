@@ -11,6 +11,7 @@
 
 ## Task-Specific Topics (Load As Needed)
 
+- [`mimari/00_ANA_MIMARI.md`](mimari/00_ANA_MIMARI.md) — **Bağlayıcı hedef mimari** (00-06): derleyici/MIR, bellek katmanları V F R O I S, çalışma zamanı, kütüphane/yama, doğrulama, yol haritası. Çelişkide bu geçerli
 - [`MASTER_PLAN_TR.md`](MASTER_PLAN_TR.md) — **Güncel ana plan**: mimari, iş akışları, sürüm yolu, 1.0 onay listesi
 - [`IMPL_SPEC.md`](IMPL_SPEC.md) — **Uygulama şartnamesi**: kapalı kararlar, arayüzler, görev listesi, kabul testleri
 - [`GC_PLAN.md`](GC_PLAN.md) — Bellek mimarisi planı (katmanlar, rölanti toplayıcı, kaçak bütçesi)
