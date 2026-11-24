@@ -9,7 +9,6 @@ docs/archive/**
 
 # User-facing docs (not needed during dev sessions — devs have CLAUDE.md)
 CHANGELOG.md
-README.md
 CONTRIBUTING.md
 GEMINI.md
 AGENTS.md

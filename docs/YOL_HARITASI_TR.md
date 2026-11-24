@@ -64,4 +64,4 @@ Bu doküman, repodaki güncel kod tabanı ve doğrulanmış ölçümler esas al�
 
 * [`docs/STATUS.md`](STATUS.md): Kronolojik eklemelerle büyüdüğü için güncel referans **§18–§20**'dir; önceki bölümler eski kilometre taşlarını kaydeder.
 * [`docs/HARDWARE.md`](HARDWARE.md): Küçük RAM'li cihazlarda nelerin derlenemeyeceğini açıklar.
-* [`README.md`](../README.md), [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) ve [`docs/INDEX.md`](INDEX.md) içindeki bazı erken dönem ifadeleri eski sürümlerden kalmadır.
+* [`PROJE_OZETI.md`](PROJE_OZETI.md), [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) ve [`docs/INDEX.md`](INDEX.md) içindeki bazı erken dönem ifadeleri eski sürümlerden kalmadır.

@@ -3,7 +3,7 @@
 Last updated: 2026-11-15. Toolchain: rustc (stable), OpenJDK 25 (Temurin 25.0.5) class library (JDK 21 also supported).
 
 > **Kronolojik kayıt.** Bu dosyadaki "Zig" ifadeleri, Zig arka ucunun kaldırılmasından önceki durumu anlatır (arka uç
-> kaldırıldı; güncel durum `README.md` ve `.claude/ARCHITECTURE_MAP.md`'de). Güncel plan: `MASTER_PLAN_TR.md`.
+> kaldırıldı; güncel durum `docs/PROJE_OZETI.md` ve `.claude/ARCHITECTURE_MAP.md`'de). Güncel plan: `MASTER_PLAN_TR.md`.
 
 ## 1. Differential test results
 

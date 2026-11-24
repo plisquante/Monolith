@@ -1,6 +1,6 @@
 # Kullanıcı rehberi (Linux x86_64)
 
-Bu rehber yalnızca bu depoda doğrulanan davranışı anlatır. Durum tablosu için `README.md`, sürüm kapıları için `docs/RELEASE.md`.
+Bu rehber yalnızca bu depoda doğrulanan davranışı anlatır. Durum tablosu için `docs/PROJE_OZETI.md`, sürüm kapıları için `docs/RELEASE.md`.
 Proje henüz bitmiş bir ürün değildir; bilinen sınırlar aşağıda.
 
 ## 1. Gereksinimler
@@ -70,7 +70,7 @@ kullanmadığı isteğe bağlı yollardadır (log4j eklentileri, macOS köprüs�
 **Ses yok.** Linux'ta `libasound` çalışma zamanında yüklenir; yoksa sessiz çıkışa düşer. Zorla sessiz: `MONO_AUDIO_SILENT=1`.
 Aygıt seçmek için `MONO_AUDIO_DEVICE`.
 
-**Bellek büyüyor.** Durma duraklaması 500 MB canlı bellekte yaklaşık 1 sn'ye çıkabilir (`README.md`). Eşiği `MONO_GC_MB` ile
+**Bellek büyüyor.** Durma duraklaması 500 MB canlı bellekte yaklaşık 1 sn'ye çıkabilir (`docs/PROJE_OZETI.md`). Eşiği `MONO_GC_MB` ile
 ayarla; ölçüm için `MONO_GC_PHASES=1` ve `MONO_ALLOC_PROFILE`.
 
 **Ekransız sunucuda.** `LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" build/minecraft-26.3/run.sh`
@@ -78,7 +78,7 @@ ayarla; ölçüm için `MONO_GC_PHASES=1` ve `MONO_ALLOC_PROFILE`.
 
 ## 5. Bilinen sınırlar
 
-- Windows ve Android'de gerçek donanımda test yok (`README.md`).
+- Windows ve Android'de gerçek donanımda test yok (`docs/PROJE_OZETI.md`).
 - Çevrimiçi sunucuya katılma, Realms ve uzun oyun doğrulanmadı; TLS (WS5) tamamlanmadı.
 - Java sınıf kütüphanesi kaplamaları ve JNA/Netty taklidi hâlâ kullanılıyor (`docs/JNI_ENVANTER_TR.md`, `docs/WS7_ENVANTER_TR.md`).
 - Minecraft içeriği bu depoda ve paketlerde dağıtılmaz; yasal karar (WS13) verilmemiştir, sürümler özel test sürümüdür.

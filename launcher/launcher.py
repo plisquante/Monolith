@@ -9,7 +9,7 @@ Zero dependencies (Python >= 3.10 standard library only).
 
 A "build" is a directory produced by tools/mcbuild_rust.py (contains run.sh / run.bat).
 Searched in: ./build/minecraft-*, $MC_BUILD_DIR, and any --build path.
-Android: use android/touchcore (APK) instead, see README.
+Android: use android/touchcore (APK) instead, see docs/PROJE_OZETI.md.
 """
 import argparse, json, os, platform, secrets, subprocess, sys, threading, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
