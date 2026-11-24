@@ -176,7 +176,7 @@ HotSpot karşılaştırması: aynı dünya, aynı makine; ilk menüye süre, dü
 |---|---|---|
 | Gerçek GPU'da görüntü/uyumluluk hatası (yalnız llvmpipe denendi) | yüksek | WS3'te erken gerçek GPU testi (kullanıcı cihazları dahil) |
 | macOS GL 4.1 sınırı | orta/yüksek | probe + karar (WS3) |
-| Derleme maliyeti (65 dk, 12 GB) | hız | iki hat, toplu değişiklik, önbellek, güçlü CI makinesi |
+| Derleme maliyeti (65 dk, 12 GB) | hız | iki hat, toplu değişiklik, önbellek, güçlü CI makinesi. Ölçüm: küçük programda 4 shard/4 iş 3,1x hızlı (`docs/BUILD_PERF.md`); Minecraft ölçülmedi |
 | Eksik bariyer / yanlış sahiplik → bellek bozulması | yüksek | tek saklama API'si, verify modu, zehirleme modu, soak |
 | TLS'nin JDK yerine Rust'a taşınması | orta | sınıf seviyesi yama, gerçek sunucu testi |
 | Android bellek ve ısınma | yüksek | cihaz testi, ölçülen sınırlar, ayarlanabilir kalite |
