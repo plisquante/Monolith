@@ -100,3 +100,4 @@ Aşamalar kısmen paralel yürür (D ve E bağımsız).
 | C2 | sürüyor | `monolith/mir_emit.py`, `MONO_MIR=1`: Collections1 MIR yolundan (geri düşme 0), satır içi ile ve olmadan çıktı JVM ile aynı; fark süiti MIR yolunda henüz koşmadı |
 | C4 | başladı | `monolith/mir_opt.py` `inline_leaf`: Collections1'de 1682 çağrı satır içi; devirt artık yalnızca RTA'nın örneklediği sınıfları sayar (yükleme sırasına bağlı değil) |
 | N1 | kod bitti, oyunda ölçülmedi | `patches/rust/narrator.rs`: JNA `Native.register` yerine dlopen kontrolü. `monolith/narrator_tests.py` PASS: HotSpot ile aynı anlatıcı (`NarratorLinux active=true`), JNI/JNA taklidine 2 çağrı (yalnızca flite'ın kendisi; JNA 0). Oyun içi `MONO_COUNT_NATIVES` ölçümü bir sonraki Minecraft derlemesinde |
+| N4 | başladı | `patches/rust/netty.rs` + yama türü `"replace": true` (orijinal RTA'ya ve çeviriye girmez): `EventLoopGroupHolder.remote` her zaman NIO. Kapanış native sayımı ve fark testi sürüyor |
