@@ -107,6 +107,18 @@
       "vcalls": {
         "set_detail": "net/minecraft/SystemReport.setDetail(Ljava/lang/String;Ljava/lang/String;)V"
       }
+    },
+    "tracy.rs": {
+      "statics": {
+        "section_unavailable": "com/mojang/jtracy/Section.UNAVAILABLE",
+        "zone_unavailable": "com/mojang/jtracy/Zone.UNAVAILABLE",
+        "plot_unavailable": "com/mojang/jtracy/Plot.UNAVAILABLE",
+        "discontinuous_frame_unavailable": "com/mojang/jtracy/DiscontinuousFrame.UNAVAILABLE",
+        "continuous_frame_unavailable": "com/mojang/jtracy/ContinuousFrame.UNAVAILABLE",
+        "memory_pool_unavailable": "com/mojang/jtracy/MemoryPool.UNAVAILABLE",
+        "gpu_context_unavailable": "com/mojang/jtracy/GpuContext.UNAVAILABLE",
+        "section_category_unavailable": "com/mojang/jtracy/SectionCategory.UNAVAILABLE"
+      }
     }
   },
   "patches": [
@@ -330,6 +342,336 @@
       "replace": true,
       "verify": false,
       "fingerprint": "3a3a748f08e6729d"
+    },
+    {
+      "class": "com/mojang/jtracy/ContinuousFrame",
+      "method": "mark",
+      "desc": "()V",
+      "file": "tracy.rs",
+      "fn": "continuous_frame_mark_0",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "fad9df74db4d475b"
+    },
+    {
+      "class": "com/mojang/jtracy/DiscontinuousFrame",
+      "method": "start",
+      "desc": "()V",
+      "file": "tracy.rs",
+      "fn": "discontinuous_frame_start_1",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "dc9ded1d965e30b6"
+    },
+    {
+      "class": "com/mojang/jtracy/DiscontinuousFrame",
+      "method": "end",
+      "desc": "()V",
+      "file": "tracy.rs",
+      "fn": "discontinuous_frame_end_2",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "cab74bbe93d1a8ba"
+    },
+    {
+      "class": "com/mojang/jtracy/GpuContext",
+      "method": "setName",
+      "desc": "(Ljava/lang/String;)Lcom/mojang/jtracy/GpuContext;",
+      "file": "tracy.rs",
+      "fn": "gpu_context_set_name_3",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "9d4777506e7b495e"
+    },
+    {
+      "class": "com/mojang/jtracy/GpuContext",
+      "method": "beginZone",
+      "desc": "(ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V",
+      "file": "tracy.rs",
+      "fn": "gpu_context_begin_zone_4",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "938b95dced032c20"
+    },
+    {
+      "class": "com/mojang/jtracy/GpuContext",
+      "method": "endZone",
+      "desc": "(I)V",
+      "file": "tracy.rs",
+      "fn": "gpu_context_end_zone_5",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "104b3f39f7163d88"
+    },
+    {
+      "class": "com/mojang/jtracy/GpuContext",
+      "method": "submitQueryTimestamp",
+      "desc": "(IJ)V",
+      "file": "tracy.rs",
+      "fn": "gpu_context_submit_query_timestamp_6",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "e69e0c28828a3069"
+    },
+    {
+      "class": "com/mojang/jtracy/MemoryPool",
+      "method": "malloc",
+      "desc": "(JI)V",
+      "file": "tracy.rs",
+      "fn": "memory_pool_malloc_7",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "0c66e498566ee047"
+    },
+    {
+      "class": "com/mojang/jtracy/MemoryPool",
+      "method": "free",
+      "desc": "(J)V",
+      "file": "tracy.rs",
+      "fn": "memory_pool_free_8",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "65c311140f4b55ac"
+    },
+    {
+      "class": "com/mojang/jtracy/Plot",
+      "method": "setValue",
+      "desc": "(D)V",
+      "file": "tracy.rs",
+      "fn": "plot_set_value_9",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "18732fd4c38151c4"
+    },
+    {
+      "class": "com/mojang/jtracy/Section",
+      "method": "close",
+      "desc": "()V",
+      "file": "tracy.rs",
+      "fn": "section_close_10",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "63e677ed331ce6af"
+    },
+    {
+      "class": "com/mojang/jtracy/SectionCategory",
+      "method": "enterSection",
+      "desc": "(Ljava/lang/String;)Lcom/mojang/jtracy/Section;",
+      "file": "tracy.rs",
+      "fn": "section_category_enter_section_11",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "2cde8aa5192390e8"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "load",
+      "desc": "()V",
+      "file": "tracy.rs",
+      "fn": "tracy_client_load_12",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "660a261557654b92"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "markFrame",
+      "desc": "()V",
+      "file": "tracy.rs",
+      "fn": "tracy_client_mark_frame_13",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "7d404274c96af8fb"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "frameImage",
+      "desc": "(Ljava/nio/ByteBuffer;IIIZ)V",
+      "file": "tracy.rs",
+      "fn": "tracy_client_frame_image_14",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "7cadd484551077e5"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "beginZone",
+      "desc": "(Ljava/lang/String;Z)Lcom/mojang/jtracy/Zone;",
+      "file": "tracy.rs",
+      "fn": "tracy_client_begin_zone_15",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "5167f28881881122"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "beginZone",
+      "desc": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)Lcom/mojang/jtracy/Zone;",
+      "file": "tracy.rs",
+      "fn": "tracy_client_begin_zone_16",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "db14b01daf02c076"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "setThreadName",
+      "desc": "(Ljava/lang/String;I)V",
+      "file": "tracy.rs",
+      "fn": "tracy_client_set_thread_name_17",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "5b45312b47e8ee20"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "createPlot",
+      "desc": "(Ljava/lang/String;)Lcom/mojang/jtracy/Plot;",
+      "file": "tracy.rs",
+      "fn": "tracy_client_create_plot_18",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "7d20422fd67f324b"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "createDiscontinuousFrame",
+      "desc": "(Ljava/lang/String;)Lcom/mojang/jtracy/DiscontinuousFrame;",
+      "file": "tracy.rs",
+      "fn": "tracy_client_create_discontinuous_frame_19",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "300cb377402ccf2b"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "createContinuousFrame",
+      "desc": "(Ljava/lang/String;)Lcom/mojang/jtracy/ContinuousFrame;",
+      "file": "tracy.rs",
+      "fn": "tracy_client_create_continuous_frame_20",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "b62f4bdc80e41a20"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "createMemoryPool",
+      "desc": "(Ljava/lang/String;)Lcom/mojang/jtracy/MemoryPool;",
+      "file": "tracy.rs",
+      "fn": "tracy_client_create_memory_pool_21",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "47ba78e45075132a"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "reportAppInfo",
+      "desc": "(Ljava/lang/String;)V",
+      "file": "tracy.rs",
+      "fn": "tracy_client_report_app_info_22",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "bbf479a2220e6c5d"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "message",
+      "desc": "(Ljava/lang/String;)V",
+      "file": "tracy.rs",
+      "fn": "tracy_client_message_23",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "13c8c90a090a2dc1"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "message",
+      "desc": "(Ljava/lang/String;I)V",
+      "file": "tracy.rs",
+      "fn": "tracy_client_message_24",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "e4b451f41f74f282"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "message",
+      "desc": "(Ljava/util/function/Supplier;)V",
+      "file": "tracy.rs",
+      "fn": "tracy_client_message_25",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "7d28069d2e0e9419"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "message",
+      "desc": "(Ljava/util/function/Supplier;I)V",
+      "file": "tracy.rs",
+      "fn": "tracy_client_message_26",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "e6b1e62a3ef8adb7"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "createGpuContext",
+      "desc": "(Lcom/mojang/jtracy/GpuApi;JF)Lcom/mojang/jtracy/GpuContext;",
+      "file": "tracy.rs",
+      "fn": "tracy_client_create_gpu_context_27",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "5384e7783a9ae946"
+    },
+    {
+      "class": "com/mojang/jtracy/TracyClient",
+      "method": "createSectionCategory",
+      "desc": "(Ljava/lang/String;)Lcom/mojang/jtracy/SectionCategory;",
+      "file": "tracy.rs",
+      "fn": "tracy_client_create_section_category_28",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "19f0f95da5a64540"
+    },
+    {
+      "class": "com/mojang/jtracy/Zone",
+      "method": "addText",
+      "desc": "(Ljava/lang/String;)Lcom/mojang/jtracy/Zone;",
+      "file": "tracy.rs",
+      "fn": "zone_add_text_29",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "0f915d000057e9b7"
+    },
+    {
+      "class": "com/mojang/jtracy/Zone",
+      "method": "setColor",
+      "desc": "(I)Lcom/mojang/jtracy/Zone;",
+      "file": "tracy.rs",
+      "fn": "zone_set_color_30",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "3a7f6040e754023f"
+    },
+    {
+      "class": "com/mojang/jtracy/Zone",
+      "method": "addValue",
+      "desc": "(J)Lcom/mojang/jtracy/Zone;",
+      "file": "tracy.rs",
+      "fn": "zone_add_value_31",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "5581f8b95bf203c4"
+    },
+    {
+      "class": "com/mojang/jtracy/Zone",
+      "method": "close",
+      "desc": "()V",
+      "file": "tracy.rs",
+      "fn": "zone_close_32",
+      "replace": true,
+      "verify": false,
+      "fingerprint": "b411489c608680e2"
     }
   ]
 }
