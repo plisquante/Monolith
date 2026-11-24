@@ -103,10 +103,10 @@ def cret_wrap(ret: str) -> str:
     return "cvoid" if ret == "V" else "cres"
 
 
-# Iterator classes whose instances are always created fresh (`return new C(..)` from iterator()/listIterator()) and
-# that hand nothing of themselves to the elements: a for-each loop owns its iterator, so the end of the loop can
-# give it back (see gc.rs, "recycling of scope-bound objects"). Each class is still verified against its own creation
-# sites when the program is generated (`Gen.recycle_slot`).
+# Örnekleri her zaman taze oluşturulan (iterator()/listIterator() içinde `return new C(..)`) ve elemanlara
+# kendinden hiçbir şey vermeyen yineleyici sınıfları: bir for-each döngüsü yineleyicisinin sahibidir, bu yüzden döngünün sonu
+# onu geri verebilir (bkz. gc.rs, "kapsama bağlı nesnelerin geri dönüşümü"). Her sınıf, program üretilirken yine de kendi oluşturma
+# noktalarına karşı doğrulanır (`Gen.recycle_slot`).
 RECYCLABLE_ITERATORS = (
     "java/util/ArrayList$Itr", "java/util/ArrayList$ListItr", "java/util/AbstractList$Itr", "java/util/AbstractList$ListItr",
     "java/util/ImmutableCollections$ListItr", "java/util/RegularEnumSet$EnumSetIterator", "java/util/HashMap$KeyIterator",
@@ -197,7 +197,7 @@ class MethodGen:
         self.has_arena = False
         self.stack_slots: dict[int, tuple] = {}   # `new` sites kept in this function's frame: pc -> (variable, struct)
 
-    # ---------------------------------------------------------------- helpers
+    # ---------------------------------------------------------------- yardımcılar
     def err(self, msg: str):
         raise RustGenError(f"{self.where}: {msg}")
 
@@ -362,7 +362,7 @@ class MethodGen:
             return f"{v} as {FT[desc[0]]}"
         return v
 
-    # ---------------------------------------------------------------- one instruction
+    # ---------------------------------------------------------------- tek bir komut
     def gen_insn(self, ins, stk: list, out: list, leaders: set):
         """Emits code for `ins`, mutates `stk` (list of kinds). Returns the successor pcs or None for fall-through."""
         op, a = ins.op, ins.arg
@@ -526,7 +526,7 @@ class MethodGen:
             self.init_class(dc, e)
             v = pop()
             if f.desc[0] in "L[":
-                # reference store: SATB write barrier (rt::satb_store), a no-op while no marking is active
+                # referans yazımı: SATB yazma bariyeri (rt::satb_store); işaretleme etkin değilken işlem yapmaz
                 e(f"unsafe {{ rt::satb_store(&raw mut {self.g.static_name(dc, f)}, {v}); }}")
             else:
                 e(f"unsafe {{ {self.g.static_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
@@ -550,7 +550,7 @@ class MethodGen:
             v = pop()
             o = pop()
             if f.desc[0] in "L[":
-                # reference store: SATB write barrier (rt::satb_store), a no-op while no marking is active
+                # referans yazımı: SATB yazma bariyeri (rt::satb_store); işaretleme etkin değilken işlem yapmaz
                 e(f"unsafe {{ rt::satb_store(&raw mut (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)}, {v}); }}")
             else:
                 e(f"unsafe {{ (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
@@ -564,7 +564,7 @@ class MethodGen:
             self.init_class(ci2, e)
             rslot = self.g.recycle_slot(a.name)
             if ins.pc in self.noescape:
-                # the object cannot outlive this call (or this loop iteration): a slot in this function's frame
+                # nesne bu çağrıdan (ya da bu döngü turundan) uzun yaşayamaz: bu fonksiyonun çerçevesinde bir yuva
                 var = f"stk{ins.pc}"
                 self.stack_slots[ins.pc] = (var, self.g.struct_name(ci2))
                 push("A", f"unsafe {{ rt::stack_obj(&raw mut {var} as *mut u8, {cr}) }}")
@@ -799,13 +799,13 @@ class MethodGen:
             self.err(f"opcode {op}")
         return None
 
-    # ---------------------------------------------------------------- whole method
+    # ---------------------------------------------------------------- tüm metot
     def generate(self) -> str:
         if self.m.code is None:
             self.err("native/abstract methods are not in this slice")
         pe = self.g.patches.by_key.get((self.ci.name, self.m.name, self.m.desc))
         if pe is not None and pe.replace:
-            # the patch replaces the method: the original is not translated (nothing calls it; RTA did not follow it)
+            # yama metodu değiştirir: orijinal çevrilmez (hiçbir şey onu çağırmaz; RTA onu izlemedi)
             return self.assemble({0: [f"return rt::unsupported_code({rstr('replaced by ' + pe.fn)});"]}, False)
         blocks, has_sp = self.build_blocks()
         return self.assemble(blocks, has_sp)
@@ -842,7 +842,7 @@ class MethodGen:
                 if handlers:
                     lines.append(f"pc = {ins.pc};")
                 if ins.pc in line_at:
-                    # the source line of this statement: stack traces read it for every frame that calls out
+                    # bu ifadenin kaynak satırı: yığın izleri, dışarıya çağrı yapan her çerçeve için bunu okur
                     lines.append(f"rt::set_line({line_at[ins.pc]});")
                 if ins.targets and any(t <= ins.pc for t in ins.targets):
                     has_sp = True
@@ -853,7 +853,7 @@ class MethodGen:
                     break
                 if ins.op in ("ireturn", "lreturn", "freturn", "dreturn", "areturn", "return"):
                     break
-                # conditional branch targets become successors too
+                # koşullu dal hedefleri de ardıl olur
                 if ins.targets:
                     succs.extend(ins.targets)
                 i += 1
@@ -1073,8 +1073,8 @@ def _try_structure_cfg(blocks: dict[int, list[str]]) -> list[str] | None:
                 if s in can_reach and s not in fwd:
                     fwd.add(s)
                     fstk.append(s)
-        # Require flat loop body: no internal non-header block has >1 predecessor inside fwd,
-        # and no nested loop header inside fwd.
+        # Düz döngü gövdesi iste: fwd içinde, 1'den fazla öncülü olan başlık dışı iç blok olmasın,
+        # ve fwd içinde iç içe döngü başlığı olmasın.
         for u in fwd:
             if u != h and (u in loop_headers or len(preds[u]) > 1):
                 return None
@@ -1083,8 +1083,8 @@ def _try_structure_cfg(blocks: dict[int, list[str]]) -> list[str] | None:
             return None
         loop_exit[h] = next(iter(exits)) if exits else -1
 
-    # For acyclic nodes (outside loop headers), forbid arbitrary DAG diamond sharing
-    # unless a cond node's two arms both terminate or directly share a single immediate merge.
+    # Döngü başlıkları dışındaki döngüsüz düğümler için: bir koşul düğümünün iki kolu da sonlanmadıkça ya da
+    # doğrudan tek bir anlık birleşimi paylaşmadıkça, keyfi DAG elmas paylaşımını yasakla.
     budget = [len(blocks) * 2 + 8]
 
     def emit(bpc: int, stop_pc: int, hdr: int, ex: int, out: list[str]) -> bool:
@@ -1137,7 +1137,7 @@ def _try_structure_cfg(blocks: dict[int, list[str]]) -> list[str] | None:
         if f_pc == hdr:
             out.append(f"if !({cond}) {{ continue 'L_{hdr}; }}")
             return emit(t_pc, stop_pc, hdr, ex, out)
-        # Only allow cond diamond if both branches terminate or meet at the exact same immediate target
+        # Koşul elmasına yalnızca iki dal da sonlanıyorsa ya da tam olarak aynı anlık hedefte buluşuyorsa izin ver
         merge = -1
         if parsed[t_pc][0] == "goto" and parsed[f_pc][0] == "goto" and parsed[t_pc][2] == parsed[f_pc][2]:
             merge = parsed[t_pc][2]
@@ -1210,7 +1210,7 @@ PRINTLN = {"(I)V": "println_i", "(J)V": "println_j", "(Ljava/lang/String;)V": "p
 
 
 ARR_KINDS = "ZBCSIJFDA"
-# classes the runtime throws itself (null access, bounds, arithmetic, casts, ...); each needs <init>(String)
+# çalışma zamanının kendisinin fırlattığı sınıflar (null erişimi, sınırlar, aritmetik, cast'ler, ...); her biri <init>(String) gerektirir
 RUNTIME_THROWN = [
     "java/lang/ArithmeticException", "java/lang/NullPointerException", "java/lang/ArrayIndexOutOfBoundsException",
     "java/lang/NegativeArraySizeException", "java/lang/ClassCastException", "java/lang/ArrayStoreException",
@@ -1320,7 +1320,7 @@ class Gen:
             for ins in insns:
                 if ins.op in self._NO_THROW_OPS:
                     continue
-                # a self-call is not exempt: unbounded recursion ends in StackOverflowError, which is a throw
+                # kendine çağrı muaf değildir: sınırsız özyineleme StackOverflowError ile biter, bu da bir fırlatmadır
                 ok = False
                 break
         self._nothrow_cache[k] = ok
@@ -1350,8 +1350,8 @@ class Gen:
                         for iface in self.world.all_interfaces(c):
                             m_map.setdefault(iface.name, []).append(c)
                 self._iface_impls = m_map
-            # only classes the RTA saw instantiated can be receivers (the closure is complete before code generation;
-            # counting every loaded class made the answer depend on the order classes happened to be loaded)
+            # yalnızca RTA'nın örneklenmiş gördüğü sınıflar alıcı olabilir (kod üretiminden önce kapanış tamamdır;
+            # yüklenmiş her sınıfı saymak, cevabı sınıfların yüklenme sırasına bağımlı kılıyordu)
             concs = [c for c in self._iface_impls.get(owner_ci.name, ()) if c.name in self.prog.instantiated]
             if 1 <= len(concs) <= 8:
                 by_cls = []
@@ -2231,7 +2231,7 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
             chunks.append(class_code[cn])
             chunks.extend(class_methods.get(cn, ()))
         body = "\n".join(chunks)
-        # Every symbol defined in this shard (CLS_, O_, S_, init_, m_) has its definition here:
+        # Bu shard'da tanımlanan her sembolün (CLS_, O_, S_, init_, m_) tanımı burada bulunur:
         for cn in cnames:
             ci = world.get(cn)
             owned.add(g.class_name(ci))
@@ -2549,9 +2549,9 @@ def build_runtime_rlib(target: str, dest: str, opt: str = "3") -> None:
     resolves the runtime's dependencies itself, and the shared target directory (rt_deps/target) makes it reuse the
     same crc32fast and cfg-if artifacts that rt_deps_flags passes to rustc (E0460 cannot arise)."""
     tgt = ["--target", target] if target else []
-    # cwd is rt_deps: cargo reads the vendored-source configuration (rt_deps/.cargo) from the working directory
-    # the runtime must have the optimisation level of the generated code: with share-generics (opt-level 0/1) the
-    # shards reference generic instances that only an rlib built at the same level exports
+    # çalışma dizini rt_deps: cargo, gömülü kaynak yapılandırmasını (rt_deps/.cargo) çalışma dizininden okur
+    # çalışma zamanı, üretilen kodla aynı optimizasyon düzeyine sahip olmalı: share-generics ile (opt-level 0/1)
+    # shard'lar yalnızca aynı düzeyde derlenmiş bir rlib'in dışa aktardığı jenerik örneklere başvurur
     r = subprocess.run(["cargo", "rustc", "--release", "--offline", "--lib", "--manifest-path", "check/Cargo.toml",
                         "--target-dir", "target", "--message-format=json", *tgt, "--", "-C", f"opt-level={opt}"],
                        cwd=RT_DEPS, capture_output=True, text=True)
@@ -2575,7 +2575,7 @@ def _host_build(a, files, rt_dir) -> int:
     """rustc pipeline for the host: mono_rt.rlib + shard objects + main.rs -> executable `prog`."""
     rlib = os.path.join(a.output, "libmono_rt.rlib")
     target = getattr(a, "target", "") or ""
-    # --target and --linker go to every rustc call of this build (runtime, shards, main)
+    # --target ve --linker bu derlemenin her rustc çağrısına gider (çalışma zamanı, shard'lar, main)
     TGT = ["--target", target] if target else []
     LNK = ["-C", f"linker={a.linker}"] if getattr(a, "linker", "") else []
     is_windows = ("windows" in target) if target else sys.platform == "win32"
@@ -2597,8 +2597,8 @@ def _host_build(a, files, rt_dir) -> int:
     else:
         build_runtime_rlib(target, rlib, str(a.opt))
         shutil.copy(rlib, cached_rlib)
-    # Probe the runtime rlib before the shards: a crate that rustc cannot load is reported here with the rlib's
-    # facts, not as an E0463 on every shard.
+    # Shard'lardan önce çalışma zamanı rlib'ini yokla: rustc'nin yükleyemediği bir crate, her shard'da bir E0463 olarak değil,
+    # rlib'in bilgileriyle birlikte burada bildirilir.
     rlib = os.path.abspath(rlib)
     probe_dir = tempfile.mkdtemp(prefix="mono_probe_")
     with open(os.path.join(probe_dir, "probe.rs"), "w", encoding="utf-8") as fh:
@@ -2645,7 +2645,7 @@ def _host_build(a, files, rt_dir) -> int:
     exe = os.path.join(a.output, "prog.exe" if is_windows else "prog")
     main_opt = 0 if len(shard_files) >= 16 else a.opt
     cgu_args = ["-C", "codegen-units=1"] if len(shard_files) >= 16 else []
-    # ld.lld only on a Linux host (Mach-O and PE are linked by the platform's own linker)
+    # ld.lld yalnızca Linux ana makinesinde (Mach-O ve PE, platformun kendi bağlayıcısıyla bağlanır)
     lld_args = ["-C", "link-arg=-fuse-ld=lld"] if (not target and sys.platform.startswith("linux") and shutil.which("ld.lld")) else []
     r = subprocess.run(["rustc", *TGT, *LNK, "-C", f"opt-level={main_opt}", *cgu_args, "--edition", "2021", "-C", "panic=abort",
                         *DEPS, "--extern", f"mono_rt={rlib}", *lld_args, *link_args,

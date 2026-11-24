@@ -18,7 +18,7 @@ from .classfile import CONSTANT_Methodref, ClassConst, MemberRef, MethodInfo, Dy
 from .indy import IndyDesugarer
 from .world import ClassInfo, LinkError, World, parse_method_desc
 
-# Throwables the runtime itself raises (the runtime's exception enum order must match).
+# Çalışma zamanının kendisinin fırlattığı Throwable'lar (çalışma zamanındaki istisna enum sırasıyla eşleşmek zorunda).
 RT_EXCEPTIONS = [
     ("NPE", "java/lang/NullPointerException"),
     ("Arithmetic", "java/lang/ArithmeticException"),
@@ -47,10 +47,10 @@ RT_EXCEPTIONS = [
     ("OutOfMemoryNative", "java/lang/OutOfMemoryError"),
 ]
 
-# Java methods the runtime calls directly (must survive RTA).
+# Çalışma zamanının doğrudan çağırdığı Java metotları (RTA'dan sağ çıkmak zorunda).
 RT_STATIC_ROOTS = [
     ("java/nio/DirectByteBuffer", "<init>", "(JJ)V"),  # JNI NewDirectByteBuffer
-    # boxing used by reflective invocation (monolith/rt/natives_reflect.rs)
+    # yansıtmalı çağrıların kullandığı kutulama (monolith/rt/natives_reflect.rs)
     ("java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"), ("java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;"),
     ("java/lang/Character", "valueOf", "(C)Ljava/lang/Character;"), ("java/lang/Short", "valueOf", "(S)Ljava/lang/Short;"),
     ("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"), ("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;"),
@@ -73,7 +73,7 @@ RT_INSTANTIATED = ["java/lang/Object", "java/lang/String", "java/lang/Class",
 RT_LOADED = ["java/lang/Cloneable", "java/io/Serializable", "java/lang/Enum"]
 
 
-# Natives that create objects of these classes (RTA cannot see inside native code).
+# Bu sınıflardan nesne oluşturan yerel metotlar (RTA yerel kodun içini göremez).
 NATIVE_INSTANTIATES = {
     ("java/lang/Class", "newField0(Ljava/lang/String;)Ljava/lang/reflect/Field;"): ["java/lang/reflect/Field"],
     ("java/lang/Class", "fields0()[Ljava/lang/Object;"): ["java/lang/reflect/Field"],
@@ -83,25 +83,25 @@ NATIVE_INSTANTIATES = {
 }
 
 
-# JDK services whose module-info providers are linked in when the service interface is reachable
-# (every provider of every service would pull in most of the JDK).
+# module-info sağlayıcıları, servis arayüzüne erişilebildiğinde bağlanan JDK servisleri
+# (her servisin her sağlayıcısı JDK'nın çoğunu içeri çekerdi).
 JDK_SERVICES = {"java/nio/file/spi/FileSystemProvider"}
 
-# JDK classes that the JDK itself instantiates by name at run time (locale providers, resource
-# bundles, security providers, charsets): kept when their entry point is reachable.
+# JDK'nın çalışma zamanında adıyla kendisinin örneklediği JDK sınıfları (yerel ayar sağlayıcıları, kaynak
+# paketleri, güvenlik sağlayıcıları, karakter kümeleri): giriş noktalarına erişilebildiğinde tutulur.
 JDK_REFLECT_RULES = [
     {"trigger": "sun/util/locale/provider/LocaleProviderAdapter",
      "classes": ["sun/util/locale/provider/JRELocaleProviderAdapter",
                  "sun/util/locale/provider/FallbackLocaleProviderAdapter",
                  "sun/text/resources/FormatData", "sun/text/resources/FormatData_en",
                  "sun/util/resources/CalendarData", "sun/util/resources/CalendarData_en",
-                 # CLDR, the default provider: its adapter and the java.base bundles it loads by name
-                 # (java.time localized date formats in the world list failed without them)
+                 # CLDR, varsayılan sağlayıcı: bağdaştırıcısı ve adıyla yüklediği java.base paketleri
+                 # (dünya listesindeki yerelleştirilmiş java.time tarih biçimleri bunlar olmadan başarısız oluyordu)
                  "sun/util/cldr/CLDRLocaleProviderAdapter", "sun/util/cldr/CLDRBaseLocaleDataMetaInfo",
                  "sun/text/resources/cldr/FormatData", "sun/util/resources/cldr/CalendarData",
                  "sun/util/resources/cldr/CurrencyNames", "sun/util/resources/cldr/LocaleNames",
                  "sun/util/resources/cldr/TimeZoneNames"]},
-    # URL.DefaultFactory loads http/https stream handlers by name (Class.forName)
+    # URL.DefaultFactory, http/https akış işleyicilerini adıyla yükler (Class.forName)
     {"trigger": "java/net/HttpURLConnection",
      "classes": ["sun/net/www/protocol/http/Handler", "sun/net/www/protocol/https/Handler"]},
     {"trigger": "sun/nio/cs/StandardCharsets",
@@ -110,15 +110,15 @@ JDK_REFLECT_RULES = [
                  "sun/nio/cs/UTF_32", "sun/nio/cs/UTF_32BE", "sun/nio/cs/UTF_32LE",
                  "sun/nio/cs/CESU_8", "sun/nio/cs/UnicodeBig", "sun/nio/cs/UnicodeLittle"]},
 ]
-# classes whose string constants name provider implementations (Provider.putService registries)
+# dize sabitleri sağlayıcı uygulamalarını adlandıran sınıflar (Provider.putService kayıtları)
 JDK_STRING_REGISTRIES = [
     "sun/security/provider/SunEntries", "sun/security/rsa/SunRsaSignEntries", "com/sun/crypto/provider/SunJCE",
     "sun/security/ssl/SunJSSE", "sun/security/ec/SunEC", "sun/security/provider/certpath/CertPathProvider",
     "sun/security/jca/ProviderConfig",
 ]
 
-# Natives of these classes (sockets, name resolution, interfaces) build Java objects and throw
-# the JDK's socket exceptions from native code: keep those classes and helper methods.
+# Bu sınıfların yerel metotları (soketler, ad çözümleme, arayüzler) Java nesneleri kurar ve JDK'nın soket
+# istisnalarını yerel koddan fırlatır: bu sınıfları ve yardımcı metotları tut.
 NET_NATIVE_PREFIXES = ("sun/nio/ch/", "java/net/", "sun/nio/fs/LinuxWatchService")
 NET_CLASSES = [
     "java/net/ConnectException", "java/net/BindException", "java/net/NoRouteToHostException",
@@ -132,18 +132,18 @@ NET_METHODS = [
     ("java/net/InetAddress", "getByAddress", "(Ljava/lang/String;[B)Ljava/net/InetAddress;"),
     ("java/net/Inet6Address", "getByAddress", "(Ljava/lang/String;[BI)Ljava/net/Inet6Address;"),
     ("java/net/InetSocketAddress", "<init>", "(Ljava/net/InetAddress;I)V"),
-    # DatagramSocketAdaptor.joinGroup (Minecraft LAN detection on the multiplayer screen) builds the "any" interface
-    # through a method handle on this constructor
+    # DatagramSocketAdaptor.joinGroup (çok oyunculu ekrandaki Minecraft LAN algılaması) "herhangi" arayüzü
+    # bu kurucu üzerindeki bir method handle ile kurar
     ("java/net/NetworkInterface", "<init>", "(Ljava/lang/String;I[Ljava/net/InetAddress;)V"),
 ]
 
 
-# Java code that natives of a class call back into: class -> [(class, method, desc)].
+# Bir sınıfın yerel metotlarının geri çağırdığı Java kodu: sınıf -> [(sınıf, metot, tanımlayıcı)].
 NATIVE_CALLBACKS = {
     "sun/nio/fs/UnixNativeDispatcher": [("sun/nio/fs/UnixException", "<init>", "(I)V")],
 }
 
-# Roots that only exist when the application uses a given library (called from native code).
+# Yalnızca uygulama belirli bir kütüphaneyi kullandığında var olan kökler (yerel koddan çağrılır).
 OPTIONAL_VIRTUAL_ROOTS = [
     ("org/lwjgl/system/CallbackI", "callback", "(JJ)V"),   # LWJGL upcalls (libffi closures)
 ]
@@ -172,12 +172,12 @@ class Program:
         self.work: collections.deque = collections.deque()
         self.natives: set[tuple[str, str]] = set()
         self.enum_classes: set[str] = set()
-        # reflection policy: class-name prefixes whose methods/constructors are all kept
+        # yansıma politikası: tüm metot/kurucuları tutulan sınıf adı önekleri
         self.reflect_prefixes: list[str] = []
         self._reflected: set[str] = set()
         self.proxies: set[str] = set()
-        # reflective lookups by constant name on a receiver class that is not a constant
-        # (Class<T> passed as a parameter): resolved against every class named by an `X.class`
+        # sabit adla, sabit olmayan bir alıcı sınıf üzerinde yansıtmalı aramalar
+        # (parametre olarak geçirilen Class<T>): bir `X.class` ile adlandırılan her sınıfa karşı çözülür
         self.dyn_names: set[str] = set()
         self.ldc_classes: set[str] = set()
         self._dyn_done: set[tuple[str, str]] = set()
@@ -190,7 +190,7 @@ class Program:
         self.why: dict[tuple[str, str], tuple[str, str]] = {}
         self._cur: tuple[str, str] = ("<root>", "")
 
-    # ------------------------------------------------------------- instructions
+    # ------------------------------------------------------------- komutlar
     def insns(self, ci: ClassInfo, m: MethodInfo) -> list[Insn]:
         k = (ci.name, m.key)
         r = self._insns.get(k)
@@ -209,9 +209,9 @@ class Program:
                         try:
                             self.w.add_synthetic(ncf)
                         except LinkError as e:
-                            # e.g. a lambda implementing an interface of an optional dependency
-                            # that is not on the class path: the call site fails at run time
-                            # (NoClassDefFoundError), exactly where the JVM would fail.
+                            # örn. sınıf yolunda olmayan isteğe bağlı bir bağımlılığın arayüzünü uygulayan bir lambda:
+                            # çağrı noktası çalışma zamanında başarısız olur
+                            # (NoClassDefFoundError), JVM'in başarısız olacağı yerde tam olarak.
                             self.report("link-error", f"{ci.name}.{m.name}{m.desc}: {e}")
                 elif ins.op == "invokevirtual" and ins.arg.owner == "java/lang/invoke/MethodHandle" \
                         and ins.arg.name in ("invoke", "invokeExact", "invokeBasic"):
@@ -220,9 +220,9 @@ class Program:
                     self.report("unsupported-insn", f"{ci.name}.{m.name}{m.desc}@{ins.pc}: {ins.op}")
                 elif ins.op == "ldc" and isinstance(ins.arg, DynamicConst):
                     self.report("unsupported-condy", f"{ci.name}.{m.name}{m.desc}@{ins.pc}")
-        # Assertions are disabled (Class.desiredAssertionStatus() == false, the JVM default), so
-        # `getstatic $assertionsDisabled; ifne L` always jumps: fold it so RTA does not pull in
-        # assertion-message code paths.
+        # Assertion'lar kapalıdır (Class.desiredAssertionStatus() == false, JVM varsayılanı), bu yüzden
+        # `getstatic $assertionsDisabled; ifne L` her zaman atlar: RTA assertion mesajı kod yollarını içeri
+        # çekmesin diye bunu katla.
         for i in range(len(r) - 1):
             a, b = r[i], r[i + 1]
             if a.op == "getstatic" and a.arg.name == "$assertionsDisabled" and a.arg.desc == "Z" \
@@ -232,7 +232,7 @@ class Program:
         self._insns[k] = r
         return r
 
-    # ------------------------------------------------------------- RTA
+    # ------------------------------------------------------------- RTA (hızlı tür analizi)
     def load(self, name: str) -> Optional[ClassInfo]:
         while name.startswith("["):
             name = name[1:]
@@ -254,7 +254,7 @@ class Program:
                 self.load(s.name)
             for i in ci.interfaces:
                 self.load(i.name)
-            # field types are referenced by layouts
+            # alan türlerine yerleşimler tarafından başvurulur
         return ci
 
     def init_class(self, name: str):
@@ -265,8 +265,8 @@ class Program:
             return
         self.initialized.add(name)
         if ci.super and ci.super.name == "java/lang/Enum" and name not in self.enum_classes:
-            # enum classes with constant-specific bodies are never instantiated themselves,
-            # but Enum.valueOf / getEnumConstants need their values()
+            # sabite özgü gövdeli enum sınıfları kendileri hiç örneklenmez,
+            # ama Enum.valueOf / getEnumConstants onların values() metoduna ihtiyaç duyar
             self.enum_classes.add(name)
             vm = ci.cf.method("values", f"()[L{name};")
             if vm is not None:
@@ -325,7 +325,7 @@ class Program:
             return
         self.instantiated.add(name)
         self.init_class(name)
-        # JNI ThrowNew may construct any instantiated Throwable from native code
+        # JNI ThrowNew, yerel koddan örneklenmiş herhangi bir Throwable'ı kurabilir
         thr = self.w.classes.get("java/lang/Throwable")
         if thr is not None and self.w.is_subclass(ci, thr):
             sm = ci.cf.method("<init>", "(Ljava/lang/String;)V")
@@ -358,7 +358,7 @@ class Program:
         oc = self.w.classes.get(owner)
         if oc is None:
             return
-        # walk the loaded subtype graph
+        # yüklenmiş alt tür grafiğinde gez
         seen = set()
         stack = [oc]
         while stack:
@@ -415,7 +415,7 @@ class Program:
                 continue
             if self.load(o):
                 self.vcall(o, n, d)
-        # ServiceLoader providers declared in META-INF/services of the application
+        # uygulamanın META-INF/services dosyalarında bildirilen ServiceLoader sağlayıcıları
         self.services: dict[str, list[str]] = {}
         for svc, provs in self.w.cp.services().items():
             if self.w.get(svc) is None:
@@ -495,7 +495,7 @@ class Program:
             for n in todo:
                 self._reflected.add(n)
                 self.reflect_all(n)
-            # annotation interfaces in the closed world get proxy classes (AnnotationParser)
+            # kapalı dünyadaki açıklama (annotation) arayüzleri vekil sınıflar alır (AnnotationParser)
             anns = [n for n in list(self.loaded) if n not in self._annotations_seen
                     and self.w.classes[n].cf.access & 0x2000]
             for n in anns:
@@ -628,7 +628,7 @@ class Program:
         self.init_class(name)
         for m in cf.methods:
             self.mark(ci, m)
-        # InvocationHandler.invokeDefault reaches default methods non-virtually
+        # InvocationHandler.invokeDefault, default metotlara sanal olmayan biçimde ulaşır
         for i in interfaces:
             ic = self.w.classes[i]
             for c in [ic] + self.w.all_interfaces(ic):
@@ -665,8 +665,8 @@ class Program:
             self._cur = saved
 
     def _fold_jna_proxy(self, insns, idx):
-        # JNA Native.load([name, ]Interface.class[, options]): synthesize build-time proxy for constant Class<T> literals.
-        # Scan deep enough to bypass trailing options maps / converters and local Class<T> stores.
+        # JNA Native.load([ad, ]Interface.class[, seçenekler]): sabit Class<T> literalleri için derleme zamanı vekili sentezle.
+        # Sondaki seçenek haritalarını / dönüştürücüleri ve yerel Class<T> depolarını aşacak kadar derin tara.
         jna_lib = self.w.get("com/sun/jna/Library")
         candidates: list[str] = []
         for j in range(idx - 1, max(-1, idx - 49), -1):
@@ -710,7 +710,7 @@ class Program:
             if m.name == "<clinit>" or (only is not None and m.name != only):
                 continue
             if m.is_abstract:
-                # reflective calls of an abstract method dispatch to the receiver's implementation
+                # soyut bir metodun yansıtmalı çağrıları alıcının uygulamasına gider
                 self.vcall(name, m.name, m.desc)
                 continue
             if m.name == "<init>":
@@ -738,7 +738,7 @@ class Program:
         ins = insns[idx]
         what = self.REFLECT_LOOKUPS[ins.arg.name]
         local_cls: dict[int, set[str]] = {}
-        # classes named by Class.forName("constant") in this method (receiver held in a local/field)
+        # bu metotta Class.forName("sabit") ile adlandırılan sınıflar (alıcı bir yerel değişkende/alanda tutulur)
         forname: set[str] = set()
         for i in range(1, len(insns)):
             x = insns[i]
@@ -752,12 +752,12 @@ class Program:
                 local_cls.setdefault(insns[i].arg, set()).add(insns[i - 1].arg.name)
         classes: set[str] = set(n for n in forname if self.w.cp.find(n) is not None)
         names: set[str] = set()
-        # The receiver is pushed first: class constants before the first name string / argument
-        # array are receivers; later ones are parameter types.
+        # Alıcı ilk itilir: ilk ad dizesinden / argümandan önceki sınıf sabitleri
+        # dizisi alıcılardır; sonrakiler parametre türleridir.
         seen_arg = False
-        # Exact receiver for the varargs forms (`X.class.getMethod("n", T.class, ...)`): the receiver is the
-        # push right before the optional name string and the `iconst n; anewarray` of the parameter array.
-        # This keeps string/class constants of the preceding statements out of the window.
+        # Değişken argüman biçimleri için kesin alıcı (`X.class.getMethod("n", T.class, ...)`): alıcı,
+        # isteğe bağlı ad dizesinden ve parametre dizisinin `iconst n; anewarray` komutundan hemen önceki itmedir.
+        # Bu, önceki ifadelerin dize/sınıf sabitlerini pencerenin dışında tutar.
         exact: Optional[int] = None
         lo = max(0, idx - 24)
         for j in range(idx - 1, lo, -1):
@@ -791,8 +791,8 @@ class Program:
             elif back.op == "aload" and back.arg in local_cls:
                 classes |= local_cls[back.arg]
         if names and what != "<init>":
-            # names no receiver class declares: the receiver is not a constant here, resolve them
-            # against every class constant of the program
+            # hiçbir sınıfın bildirmediği adlar: alıcı burada bir sabit değildir, bunları
+            # programın her sınıf sabitine karşı çöz
             for n in names:
                 if not any(n in self._method_names(self.w.classes[c]) for c in classes if c in self.w.classes):
                     self.dyn_names.add(n)
@@ -827,8 +827,8 @@ class Program:
                 self.load(h.catch_type)
         insns = self.insns(ci, m)
         for idx, ins in enumerate(insns):
-            # Class.forName("constant") is a static reference in a closed world (GraalVM does
-            # the same folding): load and initialize the named class.
+            # Class.forName("sabit") kapalı dünyada statik bir referanstır (GraalVM de aynı
+            # katlamayı yapar): adlandırılan sınıfı yükle ve başlat.
             if ins.op == "invokestatic" and ins.arg.owner == "java/lang/Class" and ins.arg.name == "forName":
                 for back in insns[max(0, idx - 4):idx]:
                     if back.op == "ldc" and isinstance(back.arg, tuple) and back.arg[0] == "string":
@@ -852,9 +852,9 @@ class Program:
                 saved = self._cur
                 self._fold_reflection(insns, idx)
                 self._cur = saved
-        # Class.forName(<computed name>): every string constant of the method that names a class
-        # on the class path is a candidate (closed-world over-approximation).
-        # `class$(String)` is javac's pre-1.5 class-literal helper (JOML's MemUtil still uses it): a forName in disguise
+        # Class.forName(<hesaplanmış ad>): metodun, sınıf yolundaki bir sınıfı adlandıran her dize sabiti
+        # bir adaydır (kapalı dünya aşırı yaklaşımı).
+        # `class$(String)`, javac'ın 1.5 öncesi sınıf literali yardımcısıdır (JOML'un MemUtil'i hâlâ kullanır): kılık değiştirmiş bir forName
         if any(i.op == "invokestatic" and ((i.arg.owner == "java/lang/Class" and i.arg.name == "forName")
                                            or (i.arg.name.startswith("class$")
                                                and i.arg.desc == "(Ljava/lang/String;)Ljava/lang/Class;"))
@@ -881,8 +881,8 @@ class Program:
             elif op == "ldc" and isinstance(a, ClassConst):
                 if not a.name.startswith("["):
                     self.ldc_classes.add(a.name)
-                # A Class object can be initialized reflectively (Class.forName,
-                # Lookup.ensureInitialized, Unsafe.ensureClassInitialized): keep <clinit>.
+                # Bir Class nesnesi yansıtmalı olarak başlatılabilir (Class.forName,
+                # Lookup.ensureInitialized, Unsafe.ensureClassInitialized): <clinit>'i tut.
                 if not a.name.startswith("["):
                     self.init_class(a.name)
                 else:
@@ -913,7 +913,7 @@ class Program:
                     self.mark(*r)
             elif op == "invokevirtual" and a.owner == "java/lang/invoke/VarHandle" \
                     and a.name not in ("toString", "hashCode", "equals", "varType", "type", "getClass",
-                                       # ordinary methods of the VarHandle overlay, not access modes
+                                       # VarHandle kaplamasının sıradan metotları, erişim modları değil
                                        "accessModeType", "coordinateTypes", "withInvokeExactBehavior",
                                        "withInvokeBehavior", "hasInvokeExactBehavior"):
                 self.load("java/lang/invoke/VarHandle")
@@ -1006,8 +1006,8 @@ class Program:
         if r is None:
             return None
         dc, m = r
-        # JVMS invokespecial: super call lookup starts from the direct superclass of the
-        # current class when the referenced class is a superclass (ACC_SUPER semantics).
+        # JVMS invokespecial: başvurulan sınıf bir üst sınıf olduğunda (ACC_SUPER anlambilimi),
+        # super çağrısı araması, mevcut sınıfın doğrudan üst sınıfından başlar.
         if m.name != "<init>" and not dc.is_interface and not m.is_private:
             oc = self.w.classes.get(a.owner)
             if oc is not None and not oc.is_interface and oc is not cur and cur.super is not None \
