@@ -1,9 +1,9 @@
-// DataFixerUpper warm-up. `DataFixers.optimize(Set)` pre-computes the rewrite rules of every fixer at start-up:
-// about 1.4 million rule objects per rule class (roughly 0.6 GiB that stays alive for the whole session) and the
-// allocation that builds them. The rules are only needed to upgrade data written by an older game version, and
-// DataFixerUpper computes them on first use when they were not optimized. A current world never needs them.
+// DataFixerUpper ısınması. `DataFixers.optimize(Set)`, açılışta her düzeltici için yeniden yazma kurallarını önceden hesaplar:
+// kural sınıfı başına yaklaşık 1,4 milyon kural nesnesi (tüm oturum boyunca canlı kalan yaklaşık 0,6 GiB) ve onları kuran
+// tahsisler. Kurallar yalnızca eski bir oyun sürümüyle yazılmış verileri yükseltmek için gerekir ve
+// DataFixerUpper, optimize edilmemişse bunları ilk kullanımda hesaplar. Güncel bir dünya onlara hiç ihtiyaç duymaz.
 //
-// The original runs when MONO_DATAFIX_OPTIMIZE=1 (e.g. to measure the first-load cost of old worlds).
+// MONO_DATAFIX_OPTIMIZE=1 olduğunda orijinal çalışır (örn. eski dünyaların ilk yükleme maliyetini ölçmek için).
 
 fn keep_original() -> bool {
     static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();

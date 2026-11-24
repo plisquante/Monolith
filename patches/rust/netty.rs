@@ -1,11 +1,11 @@
-// Netty native transports (epoll on Linux) are not part of this build.
+// Netty yerel taşıyıcıları (Linux'ta epoll) bu derlemenin parçası değildir.
 //
-// EventLoopGroupHolder.remote(useNativeTransport) picks KQUEUE or EPOLL when netty's native library loads, NIO otherwise.
-// The native transports reach netty's JNI library (about 150 natives, emulated in monolith/rt/natives_jni.rs). Here remote()
-// always returns NIO, exactly what the JVM returns when the native library is missing (`KQueue.isAvailable()` and
-// `Epoll.isAvailable()` false), so the game uses the java.nio transport on every platform. The holders EPOLL and KQUEUE
-// still exist (the class initializer creates them) but nothing hands them out, and their ioHandlerFactory() is replaced
-// too, so the epoll/kqueue handler classes and their natives leave the program ("replace": true, docs/mimari/04 §6).
+// EventLoopGroupHolder.remote(useNativeTransport), netty'nin yerel kütüphanesi yüklenirse KQUEUE ya da EPOLL, aksi hâlde NIO seçer.
+// Yerel taşıyıcılar netty'nin JNI kütüphanesine ulaşır (yaklaşık 150 yerel metot, monolith/rt/natives_jni.rs içinde öykünülür). Burada remote()
+// her zaman NIO döndürür; bu, yerel kütüphane yokken JVM'in döndürdüğüyle aynıdır (`KQueue.isAvailable()` ve
+// `Epoll.isAvailable()` false), yani oyun her platformda java.nio taşıyıcısını kullanır. EPOLL ve KQUEUE tutucuları
+// hâlâ vardır (sınıf başlatıcı onları oluşturur) ama hiçbir şey onları dağıtmaz ve ioHandlerFactory() metotları da
+// değiştirilir; böylece epoll/kqueue işleyici sınıfları ve yerel metotları programdan çıkar ("replace": true, docs/mimari/04 §6).
 
 pub fn remote_nio(_use_native_transport: i32) -> rt::Res<rt::Ref> {
     Ok(unsafe { *s_nio() })

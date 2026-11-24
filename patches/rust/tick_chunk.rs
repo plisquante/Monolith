@@ -1,15 +1,15 @@
-// ServerLevel.tickChunk: the random tick of a chunk, without the garbage.
+// ServerLevel.tickChunk: bir yongaya ait rastgele tick, çöp üretmeden.
 //
-// The translated method calls getBlockRandomPos for every random tick position of every ticking chunk section and
-// every game tick (a new BlockPos each time, about a fifth of everything the server allocates), reads three ints out of
-// it and drops it. Almost none of those blocks tick randomly, so the object is almost never used. This version
-// computes the position as ints and allocates the BlockPos only for the block (or fluid) that really ticks.
+// Çevrilmiş metot, her tick atan yonga bölümünün her rastgele tick konumu için ve her oyun tick'inde getBlockRandomPos çağırır
+// (her seferinde yeni bir BlockPos; sunucunun ayırdığı her şeyin yaklaşık beşte biri), içinden üç tamsayı okur ve
+// onu bırakır. Bu blokların neredeyse hiçbiri rastgele tick atmaz, yani nesne neredeyse hiç kullanılmaz. Bu sürüm
+// konumu tamsayı olarak hesaplar ve BlockPos'u yalnızca gerçekten tick atan blok (ya da sıvı) için ayırır.
 //
-// Same behaviour as the Java method: same order of the random numbers (the level's `randValue` generator is advanced
-// exactly like Level.getBlockRandomPos does), same profiler sections, same exceptions (a null chunk or section is a
-// NullPointerException at the same call).
+// Java metoduyla aynı davranış: rastgele sayıların aynı sırası (seviyenin `randValue` üreteci, Level.getBlockRandomPos'un
+// yaptığı gibi tam olarak ilerletilir), aynı profilci bölümleri, aynı istisnalar (null yonga ya da bölüm, aynı çağrıda
+// NullPointerException'dır).
 
-/// Level.getBlockRandomPos without the object: advances `randValue` and returns the position's coordinates.
+/// Nesne olmadan Level.getBlockRandomPos: `randValue`'yu ilerletir ve konumun koordinatlarını döndürür.
 #[inline(always)]
 fn random_pos(this: rt::Ref, x: i32, y: i32, z: i32, mask: i32) -> (i32, i32, i32) {
     unsafe {

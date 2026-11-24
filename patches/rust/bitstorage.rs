@@ -1,7 +1,7 @@
-// Hand-written fast paths for net.minecraft.util.SimpleBitStorage, the packed block-state / biome / heightmap
-// storage that every chunk operation reads. Same observable behaviour as the Java methods: any argument the
-// Java code would reject (null, index out of range, value out of range) goes to the translated original, which
-// throws exactly the same exception.
+// net.minecraft.util.SimpleBitStorage için elle yazılmış hızlı yollar; bu, her yonga işleminin okuduğu paketlenmiş
+// blok durumu / biyom / yükseklik haritası depolamasıdır. Java metotlarıyla aynı gözlemlenebilir davranış: Java kodunun
+// reddedeceği her argüman (null, aralık dışı indeks, aralık dışı değer), çevrilmiş orijinale gider; orijinal
+// tam olarak aynı istisnayı fırlatır.
 
 #[inline(always)]
 fn cell_of(this: rt::Ref, i: i32) -> i32 {

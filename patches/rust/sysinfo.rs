@@ -1,16 +1,16 @@
-// System information without oshi (and therefore without JNA).
+// oshi olmadan (ve dolayısıyla JNA olmadan) sistem bilgisi.
 //
-// Minecraft reads hardware and process data through oshi in three places: the crash/system report (SystemReport, the
-// "hardware" and "software" groups), the F3 screen's CPU line (DebugEntrySystemSpecs.getCpuInfo) and the server metrics
-// profiler (ServerMetricsSamplersProvider$CpuStats). oshi reaches the OS through JNA: about 560 methods and the 55 JNA
-// natives emulated in monolith/rt/natives_jni.rs. These patches read the same facts directly (Linux: /proc; other
-// systems: what the Rust standard library knows) and the originals leave the program ("replace": true).
+// Minecraft donanım ve süreç verilerini oshi üzerinden üç yerde okur: çökme/sistem raporu (SystemReport,
+// "hardware" ve "software" grupları), F3 ekranının CPU satırı (DebugEntrySystemSpecs.getCpuInfo) ve sunucu metrikleri
+// profilcisi (ServerMetricsSamplersProvider$CpuStats). oshi işletim sistemine JNA üzerinden ulaşır: yaklaşık 560 metot ve
+// monolith/rt/natives_jni.rs içinde öykünülen 55 JNA yerel metodu. Bu yamalar aynı bilgileri doğrudan okur (Linux: /proc; diğer
+// sistemler: Rust standart kütüphanesinin bildiği) ve orijinaller programdan çıkar ("replace": true).
 //
-// Differences from oshi, all in report text only, none in game behaviour:
-// - Graphics cards and memory slots are not listed (oshi needs lshw/dmidecode for them on Linux and usually gets nothing
-//   without root either). The renderer's own GL/Vulkan report lines are unaffected.
-// - On Windows only the logical CPU count is known for now; the other values read "unknown".
-// - Process Loads is the process's CPU time over its run time, as oshi's cumulative load.
+// oshi'den farklar, hepsi yalnızca rapor metninde, hiçbiri oyun davranışında değil:
+// - Ekran kartları ve bellek yuvaları listelenmez (oshi, Linux'ta bunlar için lshw/dmidecode ister ve root olmadan genelde
+//   hiçbir şey alamaz). Çizicinin kendi GL/Vulkan rapor satırları etkilenmez.
+// - Windows'ta şimdilik yalnızca mantıksal CPU sayısı bilinir; diğer değerler "unknown" okunur.
+// - Process Loads, oshi'nin birikimli yükü gibi, sürecin CPU süresinin çalışma süresine oranıdır.
 
 use std::collections::HashSet;
 
@@ -18,7 +18,7 @@ fn read(path: &str) -> String {
     std::fs::read_to_string(path).unwrap_or_default()
 }
 
-/// /proc/cpuinfo fields of the first processor, the logical count, packages and physical cores.
+/// İlk işlemcinin /proc/cpuinfo alanları, mantıksal sayı, paketler ve fiziksel çekirdekler.
 struct Cpu {
     vendor: String,
     name: String,
@@ -72,7 +72,7 @@ fn identifier(c: &Cpu) -> String {
     format!("{fam} Family {} Model {} Stepping {}", c.family, c.model, c.stepping)
 }
 
-/// /proc/meminfo value in bytes (the file is in KiB).
+/// Bayt cinsinden /proc/meminfo değeri (dosya KiB cinsindedir).
 fn meminfo(key: &str) -> Option<u64> {
     read("/proc/meminfo").lines().find_map(|l| {
         let (k, v) = l.split_once(':')?;
@@ -93,7 +93,7 @@ fn detail(this: rt::Ref, key: &str, val: String) -> rt::Res<()> {
     v_set_detail(this, rt::new_str(key.to_string()), rt::new_str(val))
 }
 
-/// SystemReport::lambda$new$6, the "hardware" group (the original does `putHardware(new SystemInfo())`).
+/// SystemReport::lambda$new$6, "hardware" grubu (orijinal `putHardware(new SystemInfo())` yapar).
 pub fn hardware(this: rt::Ref) -> rt::Res<()> {
     let c = cpu();
     detail(this, "Processor Vendor", c.vendor.clone())?;
@@ -132,12 +132,12 @@ extern "C" {
     fn sysconf(name: i32) -> i64;
 }
 
-/// SystemReport::lambda$new$7, the "software" group (`putSoftware(new SystemInfo())`).
+/// SystemReport::lambda$new$7, "software" grubu (`putSoftware(new SystemInfo())`).
 pub fn software(this: rt::Ref) -> rt::Res<()> {
     detail(this, "Operating System Version", os_version())?;
     let elevated = cfg!(unix) && unsafe { geteuid() } == 0;
     detail(this, "Process Elevated", elevated.to_string())?;
-    // /proc/self/stat: utime 14, stime 15, starttime 22, vsize 23, rss 24 (1-based, after the command name)
+    // /proc/self/stat: utime 14, stime 15, starttime 22, vsize 23, rss 24 (1 tabanlı, komut adından sonra)
     let stat = read("/proc/self/stat");
     let fields: Vec<&str> = stat.rsplit_once(')').map(|(_, r)| r.split_whitespace().collect()).unwrap_or_default();
     let f = |i: usize| fields.get(i - 3).and_then(|v| v.parse::<u64>().ok());
@@ -157,7 +157,7 @@ pub fn software(this: rt::Ref) -> rt::Res<()> {
     Ok(())
 }
 
-/// DebugEntrySystemSpecs.getCpuInfo: "<logical>x <processor name>", whitespace runs collapsed, computed once.
+/// DebugEntrySystemSpecs.getCpuInfo: "<mantıksal>x <işlemci adı>", boşluk dizileri daraltılmış, bir kez hesaplanır.
 pub fn cpu_info() -> rt::Res<rt::Ref> {
     unsafe {
         let cur: rt::Ref = *s_cpu_info();
@@ -172,7 +172,7 @@ pub fn cpu_info() -> rt::Res<rt::Ref> {
     }
 }
 
-/// Per-CPU busy and total ticks from /proc/stat (oshi: busy = total - idle - iowait).
+/// /proc/stat'tan CPU başına meşgul ve toplam tick'ler (oshi: meşgul = toplam - boşta - iowait).
 fn cpu_ticks() -> Vec<(u64, u64)> {
     read("/proc/stat").lines().filter(|l| l.starts_with("cpu") && l.as_bytes().get(3).is_some_and(|b| b.is_ascii_digit()))
         .map(|l| {
@@ -194,7 +194,7 @@ fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
-/// ServerMetricsSamplersProvider$CpuStats.<init>: nrOfCpus and the first tick snapshot (loads start at 0).
+/// ServerMetricsSamplersProvider$CpuStats.<init>: nrOfCpus ve ilk tick anlık görüntüsü (yükler 0'dan başlar).
 pub fn cpu_stats_init(this: rt::Ref) -> rt::Res<()> {
     let ticks = cpu_ticks();
     let n = if ticks.is_empty() { std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) } else { ticks.len() };
@@ -203,7 +203,7 @@ pub fn cpu_stats_init(this: rt::Ref) -> rt::Res<()> {
     Ok(())
 }
 
-/// ServerMetricsSamplersProvider$CpuStats.loadForCpu: percent busy of one CPU, refreshed at most every 501 ms.
+/// ServerMetricsSamplersProvider$CpuStats.loadForCpu: bir CPU'nun yüzde meşguliyeti, en fazla her 501 ms'de bir yenilenir.
 pub fn cpu_stats_load(this: rt::Ref, cpu: i32) -> rt::Res<f64> {
     let now = now_ms();
     let mut map = states().lock().unwrap();
@@ -229,15 +229,15 @@ pub fn cpu_stats_load(this: rt::Ref, cpu: i32) -> rt::Res<f64> {
     }
 }
 
-/// NativeModuleLister.listModules: the list of loaded native modules for crash reports. The original returns an empty
-/// list everywhere but Windows, where it walks the modules through JNA (Kernel32). This build has no JNA, so the list is
-/// empty on every platform (crash reports on Windows lose the "Native Modules" lines).
+/// NativeModuleLister.listModules: çökme raporları için yüklü yerel modüllerin listesi. Orijinal, modülleri JNA (Kernel32)
+/// üzerinden gezdiği Windows dışında her yerde boş liste döndürür. Bu derlemede JNA yok, bu yüzden liste
+/// her platformda boştur (Windows'taki çökme raporları "Native Modules" satırlarını kaybeder).
 pub fn no_modules() -> rt::Res<rt::Ref> {
     c_empty_list()
 }
 
-/// NativeModuleLister.tryGetModuleVersion: a DLL's version resource for crash reports. Empty everywhere but Windows in the
-/// original, where it reads the resource through JNA (Version.dll). Empty on every platform here.
+/// NativeModuleLister.tryGetModuleVersion: çökme raporları için bir DLL'nin sürüm kaynağı. Orijinalde Windows dışında her yerde boş;
+/// Windows'ta kaynağı JNA (Version.dll) üzerinden okur. Burada her platformda boş.
 pub fn no_module_version(_name: rt::Ref) -> rt::Res<rt::Ref> {
     c_empty_optional()
 }

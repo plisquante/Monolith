@@ -1,11 +1,11 @@
-// Hand-written fast paths for the "world height" idiom that runs on every block access:
+// Her blok erişiminde çalışan "dünya yüksekliği" kalıbı için elle yazılmış hızlı yollar:
 //   ChunkAccess.getMinY -> LevelHeightAccessor.getMinY -> LevelReader.getMinY -> Level.dimensionType
 //   -> Holder.value -> DimensionType.minY
-// which is five calls (three of them virtual) in the translated code. Each patch handles only the common
-// receiver classes (a client or server level, a resolved holder) and passes everything else (other LevelReader
-// implementations such as WorldGenRegion, unbound holders, wrong types) to the translated original.
+// bu, çevrilmiş kodda beş çağrıdır (üçü sanal). Her yama yalnızca yaygın
+// alıcı sınıfları (bir istemci ya da sunucu seviyesi, çözülmüş bir tutucu) ele alır ve geri kalan her şeyi (WorldGenRegion gibi diğer LevelReader
+// uygulamaları, bağlanmamış tutucular, yanlış tipler) çevrilmiş orijinale geçirir.
 
-/// minY of the dimension type of `o` when `o` is exactly a client or server level with a bound holder.
+/// `o` tam olarak bağlı bir tutucuya sahip bir istemci ya da sunucu seviyesiyse, `o`'nun boyut tipinin minY değeri.
 #[inline(always)]
 fn level_min_y(o: rt::Ref) -> Option<i32> {
     if !is_ClientLevel(o) && !is_ServerLevel(o) {

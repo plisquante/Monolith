@@ -14,14 +14,14 @@
 // `news` bağlaması ile) ve her sınıf için oyun açılışı test edilmelidir. Bunun dışında bu dosyadaki `init_X()?` çağrıları
 // (UNAVAILABLE okumadan önce sınıfı başlatma) doğru bir düzeltmedir ve korunmalıdır.
 //
-// Tracy (the profiler) is not part of this build.
+// Tracy (profilci) bu derlemenin parçası değildir.
 //
-// jtracy only calls its natives when TracyClient.load() succeeded (`loaded`); every object it hands out otherwise is a
-// class's UNAVAILABLE instance, whose methods return at once. Here load() fails like the JVM does without the Tracy
-// library (UnsatisfiedLinkError), so `loaded` stays false and only UNAVAILABLE instances exist; every jtracy method that
-// would call a native is replaced by exactly what it does in that state (nothing, `this`, or X.UNAVAILABLE). The 21
-// TracyBindings natives and their emulation leave the program. Generated from the jtracy jar's bytecode; a jtracy update
-// that changes these methods stops the build through the fingerprints.
+// jtracy yerel metotlarını yalnızca TracyClient.load() başarılı olduğunda çağırır (`loaded`); aksi hâlde verdiği her nesne
+// bir sınıfın UNAVAILABLE örneğidir ve metotları hemen döner. Burada load(), Tracy kütüphanesi olmadan JVM'in yaptığı gibi
+// başarısız olur (UnsatisfiedLinkError), bu yüzden `loaded` false kalır ve yalnızca UNAVAILABLE örnekleri vardır; yerel metot
+// çağıracak her jtracy metodu, o durumda yaptığı şeyle (hiçbir şey, `this` ya da X.UNAVAILABLE) tam olarak değiştirilir.
+// 21 TracyBindings yerel metodu ve öykünmeleri programdan çıkar. jtracy jar'ının bytecode'undan üretildi; bu metotları
+// değiştiren bir jtracy güncellemesi, parmak izleri sayesinde derlemeyi durdurur.
 
 pub fn continuous_frame_mark_0(_this: rt::Ref) -> rt::Res<()> { Ok(()) }
 pub fn discontinuous_frame_start_1(_this: rt::Ref) -> rt::Res<()> { Ok(()) }
