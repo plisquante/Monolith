@@ -1357,19 +1357,13 @@ pub fn n_jdk_internal_misc_Unsafe__throwException(_this: Ref, t: Ref) -> Res<()>
 }
 
 pub fn n_jdk_internal_misc_Unsafe__allocateMemory0(_this: Ref, bytes: i64) -> Res<i64> {
-    let sz = bytes.max(1) as usize;
-    let layout = std::alloc::Layout::from_size_align(sz, 16)
-        .map_err(|_| rt::Thrown { obj: (rt::hooks().throw_new)("java/lang/OutOfMemoryError", rt::new_str("bad alloc size".to_string())) })?;
-    let p = unsafe { std::alloc::alloc(layout) };
-    if p.is_null() {
-        return rt::throw("java/lang/OutOfMemoryError", "Unable to allocate native memory".to_string());
-    }
-    // Store size right in malloc via C libc so realloc/free work uniformly across C FFI and Unsafe
-    unsafe { std::alloc::dealloc(p, layout) };
+    // libc malloc, so that realloc, free and C code that frees what Unsafe allocated work uniformly. A size that cannot be
+    // allocated (also one above isize::MAX) makes malloc return null: OutOfMemoryError, as on HotSpot. (An earlier version
+    // allocated and freed the block through Rust's allocator first, which doubled the system calls for large buffers.)
     extern "C" {
         fn malloc(size: usize) -> *mut c_void;
     }
-    let mp = unsafe { malloc(sz) };
+    let mp = unsafe { malloc(bytes.max(1) as usize) };
     if mp.is_null() {
         return rt::throw("java/lang/OutOfMemoryError", "Unable to allocate native memory".to_string());
     }

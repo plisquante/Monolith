@@ -45,7 +45,7 @@ every file). The game's own files (saves, options, logs, crash reports) are neve
   passes on CI runners; the game boots there in CI (`.github/workflows/game.yml`); no hardware run yet.
 - Java overlays (`classlib/`, `runtime/java_nolwjgl/`) and the JNA/Netty emulation are still in place.
 - Android device testing has not been done.
-- The leak gate passed in one run only.
+- The leak gate passed in two runs: the earlier one and 2026-11-24 (+0.180 MiB/min after a 30 minute warm-up, 60 minute soak, plain GC, `docs/STATUS.md` §22). Both are idle-world soaks; walking, other worlds and concurrent GC with the soak are not covered. The same profile has a mean stop-the-world pause of 1.1 s (longest 1.8 s), which stays a blocker for a good player experience.
 
 ## 5. Platforms
 
