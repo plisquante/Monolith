@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
  * SPIRV-Cross through libmonoshader.so (org.lwjgl.util.MonoShader), with the call signatures of LWJGL's binding.
  *
  * One deliberate adaptation: the no-LWJGL runtime draws through OpenGL ES (the host's EGL context, see
- * runtime/gl_shim.zig), but the OpenGL backend of the game asks for desktop GLSL 330. The GLSL version option is
+ * monolith/rt/natives_rhi.rs), but the OpenGL backend of the game asks for desktop GLSL 330. The GLSL version option is
  * therefore raised to the OpenGL ES version below and the GLSL_ES option is forced on, so that the generated source
  * compiles on the ES context.
  */
@@ -28,7 +28,7 @@ public final class Spvc {
      * 420pack extension, i.e. without binding qualifiers (it binds blocks and samplers through the API); 300 es is the
      * ES version with the same feature set, except that 3.20 has texture buffers in the core (the cloud shaders read
      * from one; 3.00 would need GL_EXT_texture_buffer, which drivers do not accept in vertex shaders).
-     * runtime/gl_shim.zig hands `#version ... es` sources to the driver as they are.
+     * monolith/rt/natives_rhi.rs (glShaderSource0) hands `#version ... es` sources to the driver as they are.
      */
     private static final int ES_GLSL_VERSION = 320;
 

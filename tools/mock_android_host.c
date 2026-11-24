@@ -1,7 +1,7 @@
 /*
  * Desktop stand-in for the TouchCore Android host (libtouchcore_mono.so).
  *
- * The engine (runtime/gl_shim.zig) finds its window, size, GL context and input through five functions of that
+ * The engine (monolith/rt/natives_rhi.rs) finds its window, size, GL context and input through five functions of that
  * library. This mock provides them on a Linux desktop with Mesa EGL (pbuffer surface, OpenGL ES 3), so the whole
  * Minecraft start-up, window creation and GLES rendering path can be exercised without a phone:
  *
