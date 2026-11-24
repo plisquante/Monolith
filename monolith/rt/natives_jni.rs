@@ -1128,6 +1128,10 @@ fn kal16_lib() -> *mut c_void {
         h as usize
     }) as *mut c_void
 }
+/// libflite / the kal16 voice can be opened (the narrator patch, patches/rust/narrator.rs, replaces JNA's
+/// `Native.register` with this check: the natives above are bound by name, JNA is not needed to load them).
+pub fn flite_available() -> bool { !flite_lib().is_null() }
+pub fn flite_kal16_available() -> bool { !kal16_lib().is_null() }
 fn jna_ptr(peer: usize) -> Res<Ref> {
     if peer == 0 { return Ok(Ref::NULL); }
     if let Some(c) = rt::find_class("com/sun/jna/Pointer") {

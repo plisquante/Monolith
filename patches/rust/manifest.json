@@ -68,7 +68,8 @@
         "tick_blocks": "tickBlocks",
         "random_tick": "randomTick"
       }
-    }
+    },
+    "narrator.rs": {}
   },
   "patches": [
     {
@@ -161,6 +162,26 @@
       "orig": true,
       "verify": false,
       "fingerprint": "5f2393195f1206e4"
+    },
+    {
+      "class": "com/mojang/text2speech/NarratorLinux$FliteLibrary",
+      "method": "loadNative",
+      "desc": "()V",
+      "file": "narrator.rs",
+      "fn": "load_flite",
+      "orig": true,
+      "verify": false,
+      "fingerprint": "24ef75bf55b16bae"
+    },
+    {
+      "class": "com/mojang/text2speech/NarratorLinux$FliteLibrary$CmuUsKal16",
+      "method": "loadNative",
+      "desc": "()V",
+      "file": "narrator.rs",
+      "fn": "load_kal16",
+      "orig": true,
+      "verify": false,
+      "fingerprint": "dde15b2f33507a16"
     }
   ]
 }
