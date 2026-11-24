@@ -98,10 +98,14 @@ The translator owns every reference store, so the barrier is emitted, not patche
 ## 6. Garbage reduction backlog (tiers 1-2), order from the profile
 
 1. Finish measuring the inline + escape + `tickChunk` build (in progress). Compare class by class with prof4.
-2. Value-like temporaries still heap-allocated: `Vec3`, `AABB`, `BlockPos` factories beyond `tickChunk`, `MutableBlockPos` copies, `VoxelShape` chains.
+   Idle profile on the current build (collector off, 10 min, `docs/VERIFICATION.md`): about 19 MB/s allocated, no
+   dominant class; the top items are the temporaries of item 2 and item 5 below.
+2. Value-like temporaries still heap-allocated: `Vec3`, `AABB`, `BlockPos` factories beyond `tickChunk`, `MutableBlockPos` copies, `VoxelShape` chains. Measured at idle: `Vec3` 3.0 %, `BlockPos` 2.8 % of the bytes allocated (`docs/VERIFICATION.md`).
 3. Strings: `StringBuilder`, `char[]`/`byte[]` growth (`Arrays.copyOf`), `String.format`/`concat`; replace hot paths by Rust patches that write into a reused region buffer.
 4. Lambdas and captured closures at hot call sites: allocate in the frame when non-escaping (analysis extension), reuse non-capturing instances.
-5. fastutil `clone`, collection resizing, stream pipelines on tick paths; DFU leftovers.
+5. fastutil `clone`, collection resizing, stream pipelines on tick paths; DFU leftovers. Measured at idle: `DataResult$Success`
+   2.5 %, `Optional` 2.3 %, `ArrayList$Itr` 3.0 %, `RegularEnumSet$EnumSetIterator` 2.3 %, `ImmutableCollections$ListItr` 2.5 %
+   (`docs/VERIFICATION.md`).
 6. After each item: new steady-state profile, update `docs/ALLOC_BASELINE.md`.
 
 ## 7. Verification and tooling (built before the collector)

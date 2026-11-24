@@ -65,4 +65,11 @@ Game run with `MONO_GC=off` (rebuilt binary, saved world, standing still): the p
 after about 10 minutes on this 16 GB machine. The run was stopped there to avoid an out-of-memory kill, so the 60 min
 gate was not completed. With the collector off the heap is not bounded, and the collector stays in the build for now.
 
+Where the 13 GB comes from (allocation profile of that run, `soak-prof.json`): 11.85 GB allocated in 624 s, about
+19 MB/s, 226 M objects. No class dominates: `char[]` 10.4 %, `Object[]` 5.8 %, `byte[]` 4.6 %, `long[]` 4.4 %,
+`Vec3` 3.0 %, `ArrayList$Itr` 3.0 %, `BlockPos` 2.8 %, `ImmutableCollections$ListItr` 2.5 %, `DataResult$Success`
+2.5 %, `Optional` 2.3 %, `RegularEnumSet$EnumSetIterator` 2.3 %. These are short-lived temporaries. The collector-on
+run had a flat live set after warm-up, so the growth is uncollected garbage, not a leak. The idle allocation rate is
+the target for tiers 1-3 of `GC_PLAN.md`.
+
 Not covered: multiplayer, Realms, audio output, a second session, long play, repeated boots, FPS and memory figures.

@@ -38,7 +38,8 @@ every file). The game's own files (saves, options, logs, crash reports) are neve
   mode can be the default. Until then concurrent mode stays off by default, and the release uses stop-the-world collection.
 - The stop-the-world pause reaches about 1.1 s with a 500 MB live heap (measured, plain mode).
 - The collector cannot be switched off yet: with `MONO_GC=off` the game reached 13.3 GB resident after 10 min standing
-  still on a 16 GB machine (measured, stopped). Tiers 1-3 of `GC_PLAN.md` have to shrink allocation first.
+  still on a 16 GB machine (measured, stopped). The profile shows about 19 MB/s of short-lived garbage at idle, not a
+  leak (`docs/VERIFICATION.md`). Tiers 1-3 of `GC_PLAN.md` have to shrink allocation first.
 - Android audio and window back ends are not tested on a device. Windows and macOS back ends exist and their smoke test
   passes on CI runners; the game boots there in CI (`.github/workflows/game.yml`); no hardware run yet.
 - Java overlays (`classlib/`, `runtime/java_nolwjgl/`) and the JNA/Netty emulation are still in place.
