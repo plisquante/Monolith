@@ -40,8 +40,8 @@ HEAVY_RE = re.compile(
     r"zig\s+(build-exe|build-obj)\b"
     r"|(^|\s|/)(tests/)?run_tests\.py\b"
     r"|(^|\s|/)(tests/)?run_client_core_e2e\.py\b"
-    r"|tools/mcbuild\.py\b|tools\\mcbuild\.py\b"
-    r"|(^|\s|/)mcbuild\.py\b"
+    r"|tools/mcbuild_rust\.py\b|tools\\mcbuild_rust\.py\b"
+    r"|(^|\s|/)mcbuild_rust\.py\b"
     r"|build\.sh\b"
 )
 def mem_total_gib() -> float:
@@ -209,7 +209,7 @@ def self_test() -> int:
     check("heavy: zig build-exe", is_heavy("zig build-exe src/main.zig -ODebug"))
     check("heavy: run_tests.py", is_heavy("python3 tests/run_tests.py Arith"))
     check("heavy: e2e", is_heavy("python3 tests/run_client_core_e2e.py -O Debug"))
-    check("heavy: mcbuild", is_heavy("python3 tools/mcbuild.py client.jar"))
+    check("heavy: mcbuild_rust", is_heavy("python3 tools/mcbuild_rust.py client.jar"))
     check("not heavy: zig ast-check", not is_heavy("zig ast-check runtime/rt.zig"))
     check("not heavy: git status", not is_heavy("git status --porcelain"))
     check("not heavy: ls", not is_heavy("ls -la"))

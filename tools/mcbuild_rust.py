@@ -15,7 +15,7 @@ import argparse, os, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
-import mcbuild as mb  # noqa: E402
+import mcbuild_common as mb  # noqa: E402
 
 RUN_BAT = """@echo off
 rem Starts Minecraft {vid} built by Monolith (Windows).

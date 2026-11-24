@@ -7,7 +7,7 @@ Zero dependencies (Python >= 3.10 standard library only).
     python3 launcher/launcher.py --cli      # list builds / start without UI
     python3 launcher/launcher.py --cli --play --username Steve --graphics vulkan
 
-A "build" is a directory produced by tools/mcbuild.py (contains run.sh / run.bat).
+A "build" is a directory produced by tools/mcbuild_rust.py (contains run.sh / run.bat).
 Searched in: ./build/minecraft-*, $MC_BUILD_DIR, and any --build path.
 Android: use android/touchcore (APK) instead, see README.
 """

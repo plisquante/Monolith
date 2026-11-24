@@ -261,7 +261,7 @@ def jdk_home() -> str:
     Minecraft 26.x requires Java 25."""
     import glob as _glob
     cands = [os.environ.get("MONO_JDK_HOME"), os.environ.get("JAVA_HOME")]
-    # mcbuild installs Temurin under ~/.cache/monolith/temurin-<major>/jdk-*/ — look there first
+    # tools/mcbuild_common.py installs Temurin under ~/.cache/monolith/temurin-<major>/jdk-*/ — look there first
     cache = os.path.join(os.path.expanduser("~"), ".cache", "monolith")
     homes = [os.path.dirname(os.path.dirname(p)) for pat in ("javac", "javac.exe") for p in
              _glob.glob(os.path.join(cache, "temurin-25", "**", "bin", pat), recursive=True)]
