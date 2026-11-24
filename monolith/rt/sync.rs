@@ -1,4 +1,4 @@
-//! Monitors (synchronized, wait/notify), threads, sleep, interrupt, park/unpark.
+//! Monitörler (synchronized, wait/notify), iş parçacıkları, uyku, kesme (interrupt), park/unpark.
 use crate::rt::{self, Obj, Ref, Res};
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -21,13 +21,13 @@ pub fn set_current(r: Ref) {
     CUR.with(|c| c.set(r))
 }
 
-/// MONO_TRACE_PARK=1 prints a backtrace at every blocking monitor enter, wait and park. Read once: these are hot paths.
+/// MONO_TRACE_PARK=1 her engellenen monitör girişinde, beklemede ve park'ta bir geri izleme yazdırır. Bir kez okunur: bunlar sıcak yollardır.
 fn trace_park() -> bool {
     static V: OnceLock<bool> = OnceLock::new();
     *V.get_or_init(|| std::env::var_os("MONO_TRACE_PARK").is_some())
 }
 
-// ------------------------------------------------------------------ monitors
+// ------------------------------------------------------------------ monitörler
 struct MonState {
     owner: u64,
     count: u32,
@@ -98,10 +98,10 @@ pub fn exit(r: Ref) -> Res<()> {
     }
     Ok(())
 }
-/// Called by the collector between marking and sweeping: drops the monitors of dead objects. Without it every object that was
-/// ever locked (synchronized, wait, notify) would keep a table entry for the life of the process, and a later object at the
-/// same address would find it. A monitor that is owned or still referenced by a thread (blocked in `enter`, waiting) stays;
-/// such an object is reachable anyway. `is_dead(address)` must be true only for heap objects that were not marked.
+/// Toplayıcı işaretleme ile süpürme arasında çağırır: ölü nesnelerin monitörlerini düşürür. Bu olmadan, bir kez kilitlenmiş
+/// (synchronized, wait, notify) her nesne süreç ömrü boyunca bir tablo girdisi tutardı ve aynı adreste sonraki bir nesne onu bulurdu.
+/// Bir iş parçacığı tarafından sahiplenilen ya da hâlâ referans verilen (enter'da engelli, beklemede) monitör kalır;
+/// böyle bir nesne zaten erişilebilirdir. `is_dead(address)` yalnızca işaretlenmemiş heap nesneleri için doğru olmalıdır.
 pub fn prune_dead_monitors(is_dead: impl Fn(usize) -> bool) -> usize {
     let mut dropped = 0;
     for shard in table() {
@@ -119,7 +119,7 @@ pub fn prune_dead_monitors(is_dead: impl Fn(usize) -> bool) -> usize {
     dropped
 }
 
-/// The monitor of `o` if one exists. Unlike `mon` it creates nothing: an object that was never locked has no owner.
+/// Varsa `o` nesnesinin monitörünü döndürür. `mon`'dan farklı olarak hiçbir şey oluşturmaz: hiç kilitlenmemiş bir nesnenin sahibi yoktur.
 fn peek(o: *mut Obj) -> Option<Arc<Mon>> {
     let a = o as usize;
     table()[(a >> 4) % SHARDS].lock().unwrap().get(&a).cloned()
@@ -143,7 +143,7 @@ pub fn notify(r: Ref, all: bool) -> Res<()> {
     if all { m.wait_cv.notify_all() } else { m.wait_cv.notify_one() }
     Ok(())
 }
-/// Object.wait: millis/nanos == 0 waits without a timeout.
+/// Object.wait: millis/nanos == 0 ise zaman aşımı olmadan bekler.
 pub fn wait(r: Ref, millis: i64, nanos: i32) -> Res<()> {
     let o = rt::nn(r)?;
     let m = mon(o);
@@ -165,8 +165,8 @@ pub fn wait(r: Ref, millis: i64, nanos: i32) -> Res<()> {
     st.count = 0;
     m.enter_cv.notify_one();
     *ts.waiting.lock().unwrap() = Some(m.clone());
-    // An interrupt that came after the check at the top but before `waiting` was set found nobody to wake. It stored the
-    // flag first, so the flag is visible here: do not start waiting, take the monitor back and report the interrupt.
+    // Başlangıçtaki denetimden sonra ama `waiting` ayarlanmadan önce gelen bir kesme, uyandıracak kimse bulamadı. Önce bayrağı
+    // yazdığı için bayrak burada görünür: beklemeye başlama, monitörü geri al ve kesmeyi bildir.
     if ts.interrupted.swap(false, Ordering::SeqCst) {
         *ts.waiting.lock().unwrap() = None;
         st.owner = me;
@@ -192,7 +192,7 @@ pub fn wait(r: Ref, millis: i64, nanos: i32) -> Res<()> {
     Ok(())
 }
 
-// ------------------------------------------------------------------ per-thread state
+// ------------------------------------------------------------------ iş parçacığı başına durum
 pub struct TState {
     pub interrupted: AtomicBool,
     permit: Mutex<bool>,
@@ -211,7 +211,7 @@ fn new_tstate() -> Arc<TState> {
         waiting: Mutex::new(None),
     })
 }
-/// Interrupt flag, park permit and wait state of each thread object, keyed by the object's address.
+/// Her iş parçacığı nesnesinin kesme bayrağı, park izni ve bekleme durumu; nesnenin adresine göre tutulur.
 fn tstates() -> &'static Mutex<HashMap<usize, Arc<TState>>> {
     static T: OnceLock<Mutex<HashMap<usize, Arc<TState>>>> = OnceLock::new();
     T.get_or_init(|| Mutex::new(HashMap::new()))
@@ -219,9 +219,9 @@ fn tstates() -> &'static Mutex<HashMap<usize, Arc<TState>>> {
 fn tstate(t: Ref) -> Arc<TState> {
     tstates().lock().unwrap().entry(t.0 as usize).or_insert_with(new_tstate).clone()
 }
-/// A thread object that is about to start gets fresh state. Objects are not moved, and the address of a dead Thread can be
-/// handed to a new one: without this a stale `interrupted` flag or park permit of the dead thread would fire on the new one.
-/// (An interrupt before `start` has no effect, as in the JDK.)
+/// Başlamak üzere olan bir Thread nesnesi taze durum alır. Nesneler taşınmaz ve ölü bir Thread'in adresi yeni bir Thread'e
+/// verilebilir: bu yapılmazsa ölü iş parçacığının bayat `interrupted` bayrağı ya da park izni yenisini tetiklerdi.
+/// (`start` öncesi kesmenin etkisi yoktur; JDK'da da böyledir.)
 fn reset_tstate(addr: usize) {
     tstates().lock().unwrap().insert(addr, new_tstate());
 }
@@ -239,8 +239,8 @@ pub fn interrupt(t: Ref) -> Res<()> {
         let _g = ts.sleep_m.lock().unwrap();
         ts.sleep_cv.notify_all();
     }
-    // The `waiting` guard must be gone before the monitor lock is taken: `wait` takes `st` first and `waiting` second, and
-    // a guard kept alive by an `if let` scrutinee would make this the opposite order (deadlock when a timed wait ends
+    // `waiting` korumasının, monitör kilidi alınmadan önce düşmesi gerekir: `wait` önce `st`'yi, sonra `waiting`'i alır.
+    // Bir `if let` içinde yaşayan bir koruma tersi sırayı yaratır (zaman aşımlı bekleme biterken iş parçacığı kesilirse kilitlenme).
     // while the thread is interrupted).
     let waiting = ts.waiting.lock().unwrap().clone();
     if let Some(m) = waiting {
@@ -306,7 +306,7 @@ pub fn unpark(t: Ref) {
     ts.park_cv.notify_all();
 }
 
-// ------------------------------------------------------------------ threads
+// ------------------------------------------------------------------ iş parçacıkları
 pub fn start(t: Ref, stack: i64) -> Res<()> {
     let addr = rt::nn_ref(t)?.0 as usize;
     let ss = if stack > 0 { (stack as usize).max(1 << 20) } else { 64 << 20 };

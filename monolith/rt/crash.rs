@@ -1,20 +1,20 @@
-//! Crash reporter. A Rust panic (the runtime is built with panic=abort, so every panic ends the process) and, on Linux,
-//! a fatal signal (SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT) write one report file, `mono-crash-<pid>.txt`, into
-//! `MONO_CRASH_DIR` (default: the working directory), and the process exits. The report names the kind of crash, the
-//! thread, the message or fault address and a native backtrace. Only the first crash of a process writes the file.
+//! Çökme raporlayıcı. Bir Rust panic'i (çalışma zamanı panic=abort ile derlenir, yani her panic süreci sonlandırır) ve Linux'ta
+//! öldürücü bir sinyal (SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT) tek bir rapor dosyası yazar: `mono-crash-<pid>.txt`.
+//! Dosya `MONO_CRASH_DIR` içine yazılır (varsayılan: çalışma dizini) ve süreç çıkar. Rapor çökme türünü, iş parçacığını,
+//! mesajı ya da hata adresini ve yerel bir geri izlemeyi adlandırır. Yalnızca bir süreçteki ilk çökme dosyayı yazar.
 //!
-//! The signal handler uses only async-signal-safe calls (`open`, `write`, `backtrace_symbols_fd`, `close`, `_exit`)
-//! and a path that was built before the handler could run. A thread needs an alternate signal stack (`sigaltstack` is
-//! per thread) for a stack overflow to be able to run the handler. Rust's std gives every thread it spawns one; `init_thread`
-//! adds one only to a thread that has none (the main thread of a process that did not start through std, foreign threads).
+//! Sinyal işleyici yalnızca sinyal-güvenli çağrılar kullanır (`open`, `write`, `backtrace_symbols_fd`, `close`, `_exit`)
+//! ve işleyici çalışmadan önce hazırlanmış bir yol kullanır. Yığın taşması durumunda işleyicinin çalışabilmesi için
+//! bir iş parçacığının alternatif sinyal yığınına (`sigaltstack`, iş parçacığı başınadır) ihtiyacı vardır. Rust std, başlattığı
+//! her iş parçacığına bunu verir; `init_thread` yalnızca hiç olmayan bir iş parçacığına ekler (std ile başlamayan sürecin ana iş parçacığı, yabancı iş parçacıkları).
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 
-/// Set by whoever writes the report first (panic hook or signal handler).
+/// Raporu ilk yazan taraf (panic kancası ya da sinyal işleyici) tarafından ayarlanır.
 static WRITTEN: AtomicBool = AtomicBool::new(false);
-/// NUL-terminated report path, leaked at `install`, read by the signal handler. Null before `install`.
+/// NUL ile biten rapor yolu; `install` sırasında sızdırılır ve sinyal işleyici okur. `install`'dan önce null.
 static PATH: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
 
-/// Path of the crash report file, once `install` ran.
+/// Çökme raporu dosyasının yolu; `install` çalıştıktan sonra.
 pub fn report_path() -> Option<String> {
     let p = PATH.load(Ordering::Acquire);
     if p.is_null() {
@@ -29,7 +29,7 @@ pub fn report_path() -> Option<String> {
     }
 }
 
-/// Installs the panic hook and, on Linux, the fatal-signal handlers for the calling (main) thread. Call once, early.
+/// Panic kancasını ve Linux'ta çağıran (ana) iş parçacığı için öldürücü sinyal işleyicilerini kurar. Erken, bir kez çağrılır.
 pub fn install() {
     if !PATH.load(Ordering::Acquire).is_null() {
         return;
@@ -66,8 +66,8 @@ pub fn install() {
     init_thread();
 }
 
-/// Gives the calling thread an alternate signal stack so a stack overflow can still run the signal handler.
-/// The stack is released when the thread ends. No-op where signals are not handled.
+/// Çağıran iş parçacığına alternatif bir sinyal yığını verir; böylece yığın taşması sinyal işleyicisini yine de çalıştırabilir.
+/// Yığın, iş parçacığı bitince serbest bırakılır. Sinyallerin işlenmediği yerlerde işlem yapmaz.
 pub fn init_thread() {
     #[cfg(target_os = "linux")]
     linux::init_thread();
@@ -85,7 +85,7 @@ mod linux {
         ss_flags: c_int,
         ss_size: usize,
     }
-    /// glibc `struct sigaction` on Linux x86_64 and aarch64.
+    /// Linux x86_64 ve aarch64 üzerinde glibc `struct sigaction`.
     #[repr(C)]
     struct SigAction {
         sa_handler: usize,
@@ -151,7 +151,7 @@ mod linux {
         put(fd, &buf[i..]);
     }
 
-    /// Writes the report body to `fd`: kind, fault address, native backtrace. Async-signal-safe.
+    /// Rapor gövdesini `fd`'ye yazar: tür, hata adresi, yerel geri izleme. Sinyal-güvenlidir.
     fn body(fd: c_int, sig: c_int, addr: usize) {
         put(fd, b"Monolith crash report\nkind: signal ");
         put(fd, name(sig));
@@ -168,7 +168,7 @@ mod linux {
     }
 
     extern "C" fn handler(sig: c_int, info: *const usize, _ctx: *const u8) {
-        // si_addr is the third machine word of siginfo_t on 64-bit Linux
+        // si_addr, 64 bit Linux'ta siginfo_t'nin üçüncü makine sözcüğüdür
         let addr = if info.is_null() { 0 } else { unsafe { *info.add(2) } };
         if !WRITTEN.swap(true, Ordering::AcqRel) {
             body(2, sig, addr);
@@ -195,7 +195,7 @@ mod linux {
         }
     }
 
-    /// Owner of this thread's alternate stack; disables and frees it when the thread ends.
+    /// Bu iş parçacığının alternatif yığınının sahibi; iş parçacığı bitince onu devre dışı bırakır ve serbest bırakır.
     struct AltStack(Option<Box<[u8]>>);
     impl Drop for AltStack {
         fn drop(&mut self) {

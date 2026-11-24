@@ -1,5 +1,6 @@
-//! File IO, UnixFileSystem, zlib compression/checksums, ServiceLoader, TimeZone,
-//! Atomics, Reflection Array/Executable helpers, System/Runtime IO, and remaining Unsafe ops.
+//! Dosya G/Ç, UnixFileSystem, zlib sıkıştırma ve sağlama toplamları, ServiceLoader, TimeZone,
+//! atomikler, yansıma (Array/Executable) yardımcıları, System/Runtime G/Ç ve kalan Unsafe işlemleri.
+//! Acemi notu: Bu dosyadaki her `natives_*` fonksiyonu, Java'nın yerel (native) bir metodunun Rust karşılığıdır.
 use crate::heap::ScopedBlock;
 use crate::rt::{self, Arr, Ref, Res};
 use std::ffi::{CStr, CString};
@@ -36,15 +37,15 @@ extern "C" {
     fn __p__environ() -> *mut *const *const c_char;
 }
 
-/// The process environment block: a NULL-terminated array of "K=V" strings.
+/// Süreç ortam bloğu: "K=V" dizgilerinden oluşan, NUL ile biten bir dizi.
 #[cfg(not(windows))]
-/// # Safety
-/// The returned pointer is invalidated by any environment mutation (`setenv`, `putenv`, `unsetenv`).
+/// # Güvenlik
+/// Dönen işaretçi, ortamda yapılan her değişiklikle (`setenv`, `putenv`, `unsetenv`) geçersiz olur.
 pub unsafe fn environ_ptr() -> *const *const c_char {
     environ
 }
 
-/// UCRT exposes the block through __p__environ() (it has no `_environ` data symbol to link against).
+/// UCRT bu bloğu __p__environ() üzerinden sunar; bağlanacak bir `_environ` veri sembolü yoktur.
 #[cfg(windows)]
 pub unsafe fn environ_ptr() -> *const *const c_char {
     *__p__environ()
@@ -156,7 +157,7 @@ pub fn register_lib_handle(handle: *mut c_void) {
 fn last_os_err() -> (i32, String) {
     let e = std::io::Error::last_os_error();
     let code = e.raw_os_error().unwrap_or(0);
-    // Rust appends " (os error N)"; the JDK messages carry only the strerror text
+    // Rust " (os error N)" ekler; JDK mesajları yalnızca strerror metnini taşır
     let text = e.to_string();
     let msg = match text.rfind(" (os error") {
         Some(i) => text[..i].to_string(),
@@ -190,7 +191,7 @@ fn check_bounds(arr: Ref, off: i32, len: i32) -> Res<usize> {
     Ok(alen as usize)
 }
 
-// ------------------------------------------------------------------ java.io.FileDescriptor & FileCleanable
+// ------------------------------------------------------------------ java.io.FileDescriptor ve FileCleanable
 pub fn n_java_io_FileDescriptor__initIDs() -> Res<()> {
     Ok(())
 }
@@ -710,8 +711,8 @@ pub fn n_java_io_UnixFileSystem__getNameMax0(_this: Ref, path: Ref) -> Res<i64> 
 }
 
 // ------------------------------------------------------------------ java.util.zip CRC32 / Adler32
-/// CRC-32 (IEEE 802.3, reflected polynomial 0xEDB88320), table driven. Continues from `crc` (the value Java's CRC32
-/// holds): same result as zlib's `crc32(crc, buf, len)`.
+/// CRC-32 (IEEE 802.3, yansıtılmış polinom 0xEDB88320), tablo tabanlı. Java'nın CRC32 içinde tuttuğu `crc` değerinden devam eder:
+/// sonuç zlib'in `crc32(crc, buf, len)` çağrısıyla aynıdır.
 fn crc32_continue(crc: u32, data: &[u8]) -> u32 {
     static TABLE: std::sync::OnceLock<[u32; 256]> = std::sync::OnceLock::new();
     let t = TABLE.get_or_init(|| {
@@ -1148,7 +1149,7 @@ pub fn n_java_util_TimeZone__getSystemGMTOffsetID() -> Res<Ref> {
     Ok(rt::new_str(format!("GMT{}{:02}:{:02}", sign, h, m)))
 }
 
-// ------------------------------------------------------------------ Atomics
+// ------------------------------------------------------------------ Atomikler
 pub fn n_java_util_concurrent_atomic_AtomicBoolean__cas(this: Ref, expected: i32, new_val: i32) -> Res<i32> {
     let o = rt::nn_ref(this)?;
     let c = unsafe { (*o.0).class };
@@ -1292,7 +1293,7 @@ pub fn n_java_lang_Runtime__load1(_this: Ref, path: Ref) -> Res<i32> {
     register_lib_handle(handle);
     let onload = unsafe { dlsym(handle, c"JNI_OnLoad".as_ptr()) };
     if !onload.is_null() {
-        // Defer full JavaVM InvokeInterface initialization if invoked by JNI libraries loaded later
+        // JNI kütüphaneleri daha sonra yüklenirse tam JavaVM InvokeInterface başlatmasını ertele
         let _ = onload;
     }
     Ok(1)
@@ -1329,7 +1330,7 @@ pub fn n_java_lang_Runtime__isPreloaded(_this: Ref, file: Ref) -> Res<i32> {
     Ok(0)
 }
 
-// ------------------------------------------------------------------ jdk.internal.misc.Unsafe remaining ops
+// ------------------------------------------------------------------ jdk.internal.misc.Unsafe kalan işlemler
 #[inline(always)]
 fn uptr(o: Ref, off: i64) -> *mut u8 {
     let base = if o.is_null() { 0usize } else { o.0 as usize };
@@ -1357,9 +1358,9 @@ pub fn n_jdk_internal_misc_Unsafe__throwException(_this: Ref, t: Ref) -> Res<()>
 }
 
 pub fn n_jdk_internal_misc_Unsafe__allocateMemory0(_this: Ref, bytes: i64) -> Res<i64> {
-    // libc malloc, so that realloc, free and C code that frees what Unsafe allocated work uniformly. A size that cannot be
-    // allocated (also one above isize::MAX) makes malloc return null: OutOfMemoryError, as on HotSpot. (An earlier version
-    // allocated and freed the block through Rust's allocator first, which doubled the system calls for large buffers.)
+    // libc malloc kullanılır; böylece realloc, free ve Unsafe'in ayırdığını serbest bırakan C kodu tutarlı çalışır. Ayrılamayacak
+    // bir boyut (isize::MAX'ın üstü dahil) malloc'u null döndürtür: HotSpot'taki gibi OutOfMemoryError. (Önceki sürüm bloğu önce
+    // Rust'ın ayırıcısıyla ayırıp serbest bırakıyordu; bu büyük tamponlarda sistem çağrılarını iki katına çıkarıyordu.)
     extern "C" {
         fn malloc(size: usize) -> *mut c_void;
     }

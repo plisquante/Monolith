@@ -1,11 +1,11 @@
-//! Audio output for the mixer in audio.rs, and the process-wide audio engine behind the OpenAL-compatible natives.
+//! `audio.rs` içindeki karıştırıcı için ses çıkışı ve OpenAL uyumlu yerel fonksiyonların arkasındaki süreç çapında ses motoru.
 //!
-//! Devices: ALSA on Linux (libasound.so.2 opened at run time with dlopen; nothing is linked or needed at build time),
-//! and a silent device that paces itself in real time when no output exists (no sound card, or a server without audio).
-//! Windows (WASAPI) and Android (AAudio) devices are separate work (docs/IMPL_SPEC.md, B3). macOS is not a target.
+//! Aygıtlar: Linux'ta ALSA (libasound.so.2 çalışma zamanında dlopen ile açılır; derleme zamanında hiçbir şey bağlanmaz ya da gerekmez),
+//! ve çıkış yoksa (ses kartı yoksa ya da sesi olmayan bir sunucuysa) gerçek zamanlı olarak kendi hızını ayarlayan sessiz bir aygıt.
+//! Windows (WASAPI) ve Android (AAudio) aygıtları ayrı işlerdir (docs/IMPL_SPEC.md, B3). macOS hedef değildir.
 //!
-//! The engine is one mixer thread that renders blocks from the shared `audio::Context` into the device. The game
-//! thread changes the context through the natives; a short lock per block is the only synchronisation.
+//! Motor tek bir karıştırıcı iş parçacığıdır; paylaşılan `audio::Context`'ten blokları üretip aygıta yazar. Oyun iş parçacığı
+//! bağlamı yerel fonksiyonlar üzerinden değiştirir; her blok için kısa bir kilit tek eşzamanlama noktasıdır.
 
 use crate::audio::{Context, Sink, MIX_RATE};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,7 +19,7 @@ mod alsa {
     use super::*;
     use std::ffi::{c_char, c_int, c_long, c_uint, c_void, CStr, CString};
 
-    // ----- ALSA (libasound.so.2), the few calls needed for interleaved S16 playback
+    // ----- ALSA (libasound.so.2): ara yüzlü S16 oynatma için gereken birkaç çağrı
     const SND_PCM_STREAM_PLAYBACK: c_int = 0;
     const SND_PCM_FORMAT_S16_LE: c_int = 2;
     const SND_PCM_ACCESS_RW_INTERLEAVED: c_int = 3;
@@ -68,7 +68,7 @@ mod alsa {
         pub device: String,
     }
 
-    // the handle is used by the mixer thread only
+    // bu tutamacı yalnızca karıştırıcı iş parçacığı kullanır
     unsafe impl Send for AlsaSink {}
 
     impl AlsaSink {
@@ -81,7 +81,7 @@ mod alsa {
                 if r < 0 {
                     return Err(format!("open {device}: {}", strerror(api, r)));
                 }
-                // soft resampling on, 50 ms latency
+                // yumuşak yeniden örnekleme açık, gecikme 50 ms
                 let r = (api.set_params)(pcm, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, 2, MIX_RATE, 1, 50_000);
                 if r < 0 {
                     (api.close)(pcm);
@@ -107,7 +107,7 @@ mod alsa {
             while done < total {
                 let n = unsafe { (self.api.writei)(self.pcm, pcm16[done * 2..].as_ptr() as *const c_void, (total - done) as c_long) };
                 if n < 0 {
-                    // underrun (-EPIPE) or suspend: recover and retry; anything else is dropped after one recover
+                    // yetersiz veri (-EPIPE) ya da askıya alma: kurtar ve yeniden dene; başka hatalar bir kurtarmadan sonra atılır
                     let r = unsafe { (self.api.recover)(self.pcm, n as c_int, 1) };
                     if r < 0 {
                         eprintln!("audio: write failed on {}: {}", self.device, strerror(self.api, r));
@@ -130,7 +130,7 @@ mod alsa {
 #[cfg(target_os = "linux")]
 use alsa::AlsaSink;
 
-/// Silent output that waits in real time, so the mixer thread keeps the same pace as a device.
+/// Gerçek zamanda bekleyen sessiz çıkış; böylece karıştırıcı iş parçacığı bir aygıtla aynı hızda ilerler.
 pub struct PacedSilence;
 
 impl Sink for PacedSilence {
@@ -140,8 +140,8 @@ impl Sink for PacedSilence {
     }
 }
 
-/// The device the engine opens: `MONO_AUDIO_DEVICE` (default "default") on ALSA, otherwise the silent device.
-/// Returns the sink and a line that says what is in use (printed once).
+/// Motorun açtığı aygıt: ALSA'da `MONO_AUDIO_DEVICE` (varsayılan "default"), değilse sessiz aygıt.
+/// Çıkışı ve hangisinin kullanıldığını söyleyen bir satırı döndürür (bir kez yazdırılır).
 pub fn open_device() -> (Box<dyn Sink + Send>, String) {
     let want = std::env::var("MONO_AUDIO_DEVICE").unwrap_or_else(|_| "default".to_string());
     if std::env::var_os("MONO_AUDIO_SILENT").is_some() {
@@ -172,7 +172,7 @@ pub fn open_device() -> (Box<dyn Sink + Send>, String) {
     }
 }
 
-// ----- the engine (one per process)
+// ----- motor (süreç başına bir tane)
 
 pub struct Engine {
     pub ctx: Arc<Mutex<Context>>,
@@ -182,12 +182,12 @@ pub struct Engine {
 static ENGINE: Mutex<Option<Engine>> = Mutex::new(None);
 static CONTEXT: OnceLock<Arc<Mutex<Context>>> = OnceLock::new();
 
-/// The shared OpenAL-compatible context (created on first use; the engine renders it once a device is open).
+/// Paylaşılan OpenAL uyumlu bağlam (ilk kullanımda oluşturulur; bir aygıt açıkken motor onu çizer).
 pub fn context() -> Arc<Mutex<Context>> {
     CONTEXT.get_or_init(|| Arc::new(Mutex::new(Context::new()))).clone()
 }
 
-/// Opens the output device and starts the mixer thread. Idempotent while open.
+/// Çıkış aygıtını açar ve karıştırıcı iş parçacığını başlatır. Açıkken tekrar çağrılması bir şey yapmaz (idempotent).
 pub fn start() {
     let mut e = ENGINE.lock().unwrap();
     if e.is_some() {
@@ -211,7 +211,7 @@ pub fn start() {
     *e = Some(Engine { ctx, stop });
 }
 
-/// Stops the mixer thread (the device is released when the thread ends).
+/// Karıştırıcı iş parçacığını durdurur (iş parçacığı bitince aygıt serbest bırakılır).
 pub fn stop() {
     if let Some(e) = ENGINE.lock().unwrap().take() {
         e.stop.store(true, Ordering::Release);
@@ -225,7 +225,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn alsa_null_device_accepts_frames() {
-        // the "null" PCM exists in every alsa-lib install; a missing libasound skips the test
+        // "null" PCM her alsa-lib kurulumunda vardır; libasound yoksa test atlanır
         if alsa::alsa().is_none() {
             return;
         }
