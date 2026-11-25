@@ -386,6 +386,8 @@ pub fn n_mono_rhi_NativeRhi__attachOsSurface0() -> Res<i32> {
     Ok(0)
 }
 pub fn n_mono_rhi_NativeRhi__swapOsSurface0() -> Res<()> {
+    // arabellek takası ekran tazelemesini (vsync) bekleyebilir; bu sırada GC bu iş parçacığını beklemesin (Java nesnesi kullanılmaz)
+    let _blk = crate::heap::ScopedBlock::enter();
     let h = [tc_lib()];
     if let Some(f) = sym_fn!(&h, "tc_android_swap_buffers", extern "C" fn()) {
         f();
@@ -1036,6 +1038,7 @@ pub fn n_mono_rhi_NativeRhi__glReadBuffer0(src: i32) -> Res<()> {
     Ok(())
 }
 pub fn n_mono_rhi_NativeRhi__glFinish0() -> Res<()> {
+    let _blk = crate::heap::ScopedBlock::enter(); // GPU bitene kadar bekler; Java nesnesi kullanılmaz
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glFinish", extern "C" fn()) { f(); }
     Ok(())
@@ -1162,6 +1165,7 @@ pub fn n_mono_rhi_NativeRhi__glDeleteSync0(sync: i64) -> Res<()> {
 }
 pub fn n_mono_rhi_NativeRhi__glClientWaitSync0(sync: i64, flags: i32, timeout_ns: i64) -> Res<i32> {
     if sync <= 1 { return Ok(0x911A); }
+    let _blk = crate::heap::ScopedBlock::enter(); // zaman aşımına kadar bekleyebilir; Java nesnesi kullanılmaz
     let libs = [gl_lib().0];
     Ok(sym_fn!(&libs, "glClientWaitSync", extern "C" fn(*mut c_void, u32, u64) -> u32)
         .map(|f| f(sync as usize as *mut c_void, flags as u32, timeout_ns as u64) as i32)

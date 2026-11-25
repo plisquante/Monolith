@@ -1277,6 +1277,7 @@ fn collect_impl(begin_only: bool) {
     // iş parçacığı `collect()` çağırırsa o da `finishing` açıkken gelir ve bağımsız bir toplamadır; döndürülmezse önceki
     // döngünün işaretli nesneleri "zaten işaretli" sayılır, çocukları taranmaz ve canlı nesneler süpürülür.
     let new_cycle = begin_only || !G.cycle.load(Ordering::Acquire);
+    let t_pre = std::time::Instant::now();
     if new_cycle {
         crate::region::cycle_begin(); // bölge parçaları "kanıtlanmamış" olur, iş parçacıkları parça bırakır
     }
@@ -1286,6 +1287,10 @@ fn collect_impl(begin_only: bool) {
         finish_lazy_sweep(&mut h);
         SENSE.fetch_xor(GC_MARK, Ordering::Relaxed);
         MARKED_BYTES.store(0, Ordering::Relaxed);
+    }
+    if new_cycle && std::env::var_os("MONO_GC_PHASES").is_some() {
+        // döngü başındaki işler (kalan tembel süpürme, boş dilim bırakma, bölge hazırlığı) kök taramadan önce, duraklamanın içindedir
+        eprintln!("[mono:gc_phases] pre gc={} finish_sweep_etc={}us", h.gc_count, t_pre.elapsed().as_micros());
     }
     h.slabs.sort_unstable();
     let slabs_snap = &h.slabs;
@@ -1671,6 +1676,8 @@ fn collect_impl(begin_only: bool) {
 
     // 6. Büyük nesneleri süpür
     let mut dead_large = Vec::new();
+    // büyük nesnelerin gerçek `free` çağrıları (munmap) duraklama içinde değil, dünya yeniden başladıktan sonra yapılır
+    let mut late_free: Vec<(usize, usize)> = Vec::new();
     for (&addr, &sz) in &h.large {
         unsafe {
             let o = addr as *mut Obj;
@@ -1689,7 +1696,7 @@ fn collect_impl(begin_only: bool) {
     for (addr, sz) in dead_large {
         h.large.remove(&addr);
         h.heap_bytes = h.heap_bytes.saturating_sub(sz);
-        unsafe { dealloc(addr as *mut u8, Layout::from_size_align(sz, 16).unwrap()) };
+        late_free.push((addr, sz));
     }
 
     if phases_on {
@@ -1721,6 +1728,10 @@ fn collect_impl(begin_only: bool) {
     h.collecting = false;
     G.gc_stopping.store(0, Ordering::Release);
     cv.notify_all();
+    drop(h);
+    for (addr, sz) in late_free {
+        unsafe { dealloc(addr as *mut u8, Layout::from_size_align(sz, 16).unwrap()) };
+    }
     std::hint::black_box(&_regs);
 }
 

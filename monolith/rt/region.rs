@@ -315,9 +315,8 @@ pub fn cycle_end() {
             if *flag(i) == 1 {
                 *flag(i) = 0;
                 freed.push(i);
-                // işletim sistemine geri ver: sıfırlanmış sayfalar yeniden dokunulana kadar bellek yemez
-                #[cfg(target_os = "linux")]
-                madvise((LO.load(Ordering::Relaxed) + i * CHUNK) as *mut u8, CHUNK, 4); // MADV_DONTNEED
+                // not: parçalar işletim sistemine burada geri verilmez (parça başına bir madvise, binlerce parçada duraklamayı
+                // uzatır); yeniden kullanımda `new_chunk` sıfırlar. Bölgenin tepe kaplamı (birkaç yüz MB) RSS'te kalır.
             }
         }
     }

@@ -236,3 +236,29 @@ Başlarken yapılacaklar, sırayla:
 4. APK: `tools/build_touchcore_apk.py`, imzalama ve `apksigner verify`.
 5. Dosyalar kullanıcıya teslim edilir. Cihaz testi kullanıcıdadır; bu ortamda cihaz yok. Hatalar için `logcat` etiketi `MonolithEngine`.
 6. Android'de açık risk: Rust arka ucuyla tam derleme ve APK daha önce doğrulanmadı; ilk denemede hata çıkabilir.
+
+## 22. Bölge tahsisi ve duraklama ölçümleri (25 Kasım 2026)
+
+**A: bölge tahsisi (Vec3, AABB, Optional, Pair, DataResult$Success), tam oyun.** Derleme: `MONO_REGION_CLASSES=net/minecraft/world/phys/Vec3,net/minecraft/world/phys/AABB,java/util/Optional,com/mojang/datafixers/util/Pair,com/mojang/serialization/DataResult$Success`, çıktı `build/minecraft-26.3-region`. Oyun koşuları (`MONO_GC_LAZY=1 MONO_GC_CONCURRENT=1 MONO_ARENA_CHECK=abort`): çökme yok, arena ihlali yok, temiz kapanış, dünya kaydedildi.
+
+| Ölçü (tahsis profili, yazılım GL) | Başlangıç | Palet yaması | Palet + bölge |
+|---|---|---|---|
+| Yığın tahsis oranı (bölge ve çerçeve hariç) | 46,2 MiB/sn | 36,6 | **28,5** |
+| `DataResult$Success` | 506 MiB | 397 | 5 |
+| `Optional` | 478 | 363 | listede yok |
+| `Pair` | 126 | 127 | listede yok |
+| `Vec3` | 278 | 405 | 152 |
+| `AABB` | 233 | 327 | 141 |
+
+Bölge sayaçları (son koşu): 35,6 milyon bölge tahsisi, 8,8 milyonu (%24,7) yığına kopyalandı. Koşu süreleri farklı (242, 288, 369 sn), oranlar yön gösterir, birebir kıyas değildir.
+
+**I: duraklama sıçramalarının nedeni (60 dk soak günlüğü, 84 toplama, tembel+eşzamanlı):** ortalama 25,7 ms = wait 10,5 + roots 4,6 + mark 3,2 + sweep 7,1. En uzun 277,7 ms tek bir toplamada süpürme fazındaydı (252 ms, açılışta, büyük nesnelerin `free` çağrıları); 50-82 ms'lik diğerleri `wait` fazından geldi (RHI çağrıları `ScopedBlock` dışındaydı). Düzeltmeler: RHI'nin bloklayan üç çağrısı (`swapOsSurface0`, `glFinish0`, `glClientWaitSync0`) `ScopedBlock` içine alındı; büyük nesnelerin `free` çağrıları duraklama dışına taşındı; bölge parçalarının `madvise` çağrısı kaldırıldı (RSS'te bölge tepe kaplamı kalır, birkaç yüz MB); `MONO_GC_PHASES` artık döngü başı işlerini (`pre`) de yazar.
+
+| Faz (240 sn, bölgeli) | Düzeltme öncesi ort / en uzun | Sonrası |
+|---|---|---|
+| wait | 9,1 / 63,2 ms | 6,6 / 47,0 |
+| sweep | 5,2 / 31,8 | 2,3 / 5,8 |
+| toplam | 24,6 / 89,3 | **17,8 / 66,0** (p95 58,2 den 32,4) |
+| pre (yeni) | | ort 1,5 / en uzun 21,8 |
+
+Bölgeli ve düzeltmeli koşuda 60 dk soak yapılmadı; sayılar 240 sn koşulardandır. `pre` toplam sütununa dahil değildir (kök taramadan önce, ayrı bir durdur-dünya).
