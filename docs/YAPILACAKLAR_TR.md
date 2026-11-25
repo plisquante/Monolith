@@ -36,7 +36,7 @@ Durum: `bitti` / `sürüyor` / `bekliyor` / `ertelendi` / `yapılmayacak`.
 | # | iş | anahtar | durum |
 |---|---|---|---|
 | C1 | Ucuz gölge çerçeve (işaretçi + satır, kilitsiz) | `MONO_FRAMES=fast` | bitti (anahtarlı); oyunda ölçülecek |
-| C1a | Çerçeveyi daha da inceltmek: yığın taşması korumalı sayfa + sinyal, sabit dairesel tampon, satır yalnızca çağrı/hata noktalarında | - | sürüyor |
+| C1a | Çerçeveyi daha da inceltmek (dairesel tampon, derinlik denetimi) | - | yapılmayacak: ölçümde yalnızca ~%20 (fib(35) yükte 112 -> ~88 ms); dairesel tampon 16K'dan derin özyinelemeden sonra yığın izini bozar. Asıl yol C9 |
 | C2 | Yığın denetimi çerçeveyle birleşik | `MONO_FRAMES=fast` | bitti (anahtarlı) |
 | C3 | Arayüz çağrısı çağrı yeri önbelleği | `MONO_ICACHE=1` | bitti (anahtarlı) |
 | C4 | `checkcast`/`instanceof` önbellek + tam sınıf hızlı yolu | `MONO_ICACHE=1` | bitti (anahtarlı) |
@@ -44,7 +44,7 @@ Durum: `bitti` / `sürüyor` / `bekliyor` / `ertelendi` / `yapılmayacak`.
 | C6 | Gereksiz sınıf başlatma denetimlerini kaldırmak | `MONO_INIT_ELIDE=1` | bitti (anahtarlı) |
 | C7 | Hafif kilit (`synchronized`) | - | bekliyor: önce oyundaki sıklığı ölçülecek |
 | C8 | Ayırma hızlı yolunu satır içine almak | - | yapılmayacak: kod şişer, kazanç küçük; asıl iş GC'de düz ayırma tamponu |
-| C9 | Satır numarasını hata anında tablodan bulmak | - | bekliyor |
+| C9 | Defteri tamamen kaldırmak: yığın izi yalnızca hata anında, makine yığınından (çerçeve işaretçileri) + satır içine alınmış çağrı bilgisi (DWARF) + üretilen `.rs` satırı -> Java sınıf/metot/satır tablosuyla. HotSpot da böyle yapar. Ölçüm: defter yokken fib(40) opt 3 265 ms (HotSpot 401) | - | bekliyor: büyük iş, en büyük hız kalemi |
 | C10 | Paket bazlı parçalama + aynı parçada sınıflar arası doğrudan çağrı | `MONO_SHARD=pkg` | bitti (anahtarlı); test sürüyor |
 | C11 | Hedef işlemci ayarı (taban seviye ya da çalışma anında seçim) | - | bekliyor |
 | C12 | `--opt 3` + HotSpot ile yan yana hız ölçümü | - | bekliyor |
