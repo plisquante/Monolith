@@ -135,3 +135,9 @@ Hedef: kalan yaklaşık 110 ms süpürme duraklamasını durdur-dünya dışına
 - RSS: 4,5 GB (15. dk) ve 5,1 GB (30. dk), zehir dolgusu belleği şişirdiği için önceki soak ile doğrudan karşılaştırılamaz.
 - Dünya kaydı yine betikte doğrulanamadı (bilinen betik sorunu); kayıt yolu bu koşuda kapsanmadı.
 - Karar: tembel+eşzamanlı kip varsayılan yapılmadı. Önce kök taramayı (yaklaşık 7 ms) ve duraklamayı 1 ms altına indirme işi ile bariyer maliyeti ölçümü yapılmalı.
+
+## 13. Kök tarama ölçümü (25 Kasım 2026)
+
+- `MONO_GC_PHASES=1` artık `[mono:gc_roots]` satırı da yazıyor. Ölçüm (60.630 sınıf, 34 bin statik yuva, 28 bin sabitlenmiş referans, 22-24 iş parçacığı): iş parçacığı yığınları yaklaşık 0,3 ms; sınıf aynası ve statik döngüsü yaklaşık 6 ms (seri); geri kalan statik yuvalar ve sabitlenmiş referanslar yaklaşık 2,7 ms.
+- Sınıf döngüsü 4 iş parçacığına bölündü (`gc.rs`, dünya durmuşken salt okunur). Ortalama sınıf döngüsü yaklaşık 2,6 ms; kök toplamı yaklaşık 5,7 ms'den yaklaşık 4-5 ms'ye indi. `GcStress`, `MonitorChurn`, `Threads` geçti; 90 sn tembel+eşzamanlı oyun çökmeden çalıştı.
+- Kalan seri kısım (`static_slots`, `pinned_refs`, yaklaşık 62 bin giriş) benzer şekilde bölünebilir; ama 4 çekirdekli bu ortamda kök taramasını 1 ms altına indirmek için bu yetmez. 1 ms hedefi, kökleri durdur-dünya dışında (örneğin statikleri yazma bariyeriyle izleyerek) taramayı gerektirir.

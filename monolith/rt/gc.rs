@@ -1333,16 +1333,50 @@ fn collect_impl(begin_only: bool) {
         }
     }
 
+    let t_stacks = t_start.elapsed();
     // 2. Sınıf aynaları (Class nesneleri) ve statik referans alanları
     let hooks = rt::hooks();
-    for &c in hooks.all_classes {
-        let mptr = c.mirror.0.load(Ordering::Relaxed);
-        if !mptr.is_null() {
-            try_push(mptr as usize, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut work);
-        }
-        for sp in c.static_refs {
-            let r = unsafe { *(sp.0 as *const Ref) };
-            push_ref!(r);
+    // 60 bin sınıfın aynası ve statikleri kök taramasının baskın kısmıdır (ölçüm: yığınlar ~0,2 ms, bu döngü ~6 ms). Dünya
+    // durmuştur, okunanlar değişmez; bu yüzden sınıflar dilimlere bölünüp paralel taranır. İki iş parçacığı aynı nesneyi
+    // işaretlerse iş yığınına iki kez girer, bu zararsızdır (işaretleme eş etkilidir).
+    {
+        let classes = hooks.all_classes;
+        let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).min(8);
+        if workers > 1 && classes.len() >= 1024 {
+            let chunk = classes.len().div_ceil(workers);
+            let parts: Vec<Vec<usize>> = std::thread::scope(|sc| {
+                let joins: Vec<_> = classes.chunks(chunk).map(|part| {
+                    sc.spawn(move || {
+                        let mut w: Vec<*mut Obj> = Vec::new();
+                        for &c in part {
+                            let mptr = c.mirror.0.load(Ordering::Relaxed);
+                            if !mptr.is_null() {
+                                try_push(mptr as usize, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut w);
+                            }
+                            for sp in c.static_refs {
+                                let r = unsafe { *(sp.0 as *const Ref) };
+                                try_push(r.0 as usize, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut w);
+                            }
+                        }
+                        w.into_iter().map(|o| o as usize).collect::<Vec<usize>>()
+                    })
+                }).collect();
+                joins.into_iter().map(|j| j.join().unwrap()).collect()
+            });
+            for v in parts {
+                work.extend(v.into_iter().map(|a| a as *mut Obj));
+            }
+        } else {
+            for &c in classes {
+                let mptr = c.mirror.0.load(Ordering::Relaxed);
+                if !mptr.is_null() {
+                    try_push(mptr as usize, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut work);
+                }
+                for sp in c.static_refs {
+                    let r = unsafe { *(sp.0 as *const Ref) };
+                    push_ref!(r);
+                }
+            }
         }
     }
     for &c in &hooks.arrays {
@@ -1351,6 +1385,7 @@ fn collect_impl(begin_only: bool) {
             try_push(mptr as usize, slabs_snap, slab_min, slab_max, large_map, large_min, large_max, &mut work);
         }
     }
+    let t_classes = t_start.elapsed();
     for &c in &[
         &rt::CLS_P_BOOLEAN, &rt::CLS_P_BYTE, &rt::CLS_P_CHAR, &rt::CLS_P_SHORT,
         &rt::CLS_P_INT, &rt::CLS_P_LONG, &rt::CLS_P_FLOAT, &rt::CLS_P_DOUBLE, &rt::CLS_P_VOID,
@@ -1378,6 +1413,9 @@ fn collect_impl(begin_only: bool) {
     }
 
     let t_roots = t_start.elapsed();
+    if phases_on {
+        eprintln!("[mono:gc_roots] stacks={}us statics_etc={}us classes_loop={}us classes={} static_slots={} pinned={} threads={}", t_stacks.as_micros(), (t_roots - t_stacks).as_micros(), (t_classes - t_stacks).as_micros(), hooks.all_classes.len(), h.static_slots.len(), h.pinned_refs.len(), h.threads.len());
+    }
     if begin_only {
         // Eşzamanlı döngünün başlangıcı: kökler anlık görüntüdür. İşaretleyici devralır, program devam eder.
         let mut slabs = h.slabs.clone();
