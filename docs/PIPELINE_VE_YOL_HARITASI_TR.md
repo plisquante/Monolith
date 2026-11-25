@@ -40,7 +40,7 @@ Bilmen gerekenler:
 | Link hatası kapısı | Geçti: 444 hata, açıklanmamış 0 |
 | `MONO_PATCH_VERIFY=1` ile oyun (60 sn) | Çökme yok, "patch mismatch" yok. Doğrulama modu yavaş olduğu için betiğin tıklamaları geç kaldı, dünya kaydı doğrulanamadı; bu koşu yalnızca "uyuşmazlık yok" kanıtıdır. Not: bu mod yalnızca ilkel değer döndüren yamaları denetler, sysinfo/narrator/netty bunun dışındadır. |
 | Tracy yamaları (33 yama) | Çıkarıldı: oyunu açılışta çökertiyordu. Yeniden eklemek için `patches/rust/tracy.rs` başındaki nota bak. |
-| Sızıntı soak'ı (60 dk) | Yapılmadı |
+| Sızıntı soak'ı (60 dk, GC açık) | Oyun 3600 sn çökmeden çalıştı. RSS: 10. dakikada 4,4 GB, 30. dakikada 4,9 GB, 60. dakikada 5,0 GB. 15. dakikadan sonra eğim yaklaşık 6,6 MB/dk: bütçe (1 MiB/dk altı) AŞILDI, yavaş büyüme sürüyor. Çıkışta dünya kaydı doğrulanamadı (betik zamanlaması). Neden araştırılacak. |
 | Windows, Android, gerçek GPU | Bu ortamda denenemez |
 
 ## 3. Yol haritası
