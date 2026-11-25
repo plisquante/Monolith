@@ -188,14 +188,33 @@ class IndyDesugarer:
         methods.append(make_method("<init>", init_desc, ACC_PUBLIC, a, slot))
         # statik fabrika
         a = Asm()
-        a.op("new", ClassConst(name))
-        a.op("dup")
-        slot = 0
-        for t in caps:
-            a.load(t, slot)
-            slot += slots_of(t)
-        a.op("invokespecial", mref(name, "<init>", init_desc))
-        a.op("areturn")
+        if not caps:
+            # Yakalama yapmayan lambda: çağrı yeri başına tek nesne (HotSpot da sabit bir örnek döndürür). Her çağrıda yeni
+            # nesne açmak saf çöptü. İki iş parçacığı aynı anda ilk kez gelirse iki örnek oluşabilir; ikisi de geçerlidir,
+            # HotSpot'un kimlik garantisi de yoktur.
+            self_t = f"L{name};"
+            fields.append(FieldInfo(ACC_STATIC, "INSTANCE", self_t))
+            a.op("getstatic", fref(name, "INSTANCE", self_t))
+            a.op("dup")
+            a.jump("ifnonnull", "D")
+            a.op("pop")
+            a.op("new", ClassConst(name))
+            a.op("dup")
+            a.op("invokespecial", mref(name, "<init>", init_desc))
+            a.op("dup")
+            a.op("putstatic", fref(name, "INSTANCE", self_t))
+            a.label("D")
+            a.op("areturn")
+            slot = 0
+        else:
+            a.op("new", ClassConst(name))
+            a.op("dup")
+            slot = 0
+            for t in caps:
+                a.load(t, slot)
+                slot += slots_of(t)
+            a.op("invokespecial", mref(name, "<init>", init_desc))
+            a.op("areturn")
         methods.append(make_method("create", d.desc, ACC_PUBLIC | ACC_STATIC, a, slot))
         # SAM uygulaması (+ köprüler)
         for sam_desc in [sam_t.desc] + [b for b in bridges if b != sam_t.desc]:

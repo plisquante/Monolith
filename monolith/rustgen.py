@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import tempfile
 import argparse
+import fnmatch
 import hashlib
 import os
 import shutil
@@ -573,7 +574,7 @@ class MethodGen:
                 var = f"stk{ins.pc}"
                 self.stack_slots[ins.pc] = (var, self.g.struct_name(ci2))
                 push("A", f"unsafe {{ rt::stack_obj(&raw mut {var} as *mut u8, {cr}) }}")
-            elif a.name in self.g.region_classes:
+            elif self.g.is_region_class(a.name):
                 push("A", f"rt::alloc_region({cr})")
             elif rslot is not None:
                 push("A", f"rt::alloc_recyclable({cr}, {rslot})")
@@ -1251,6 +1252,10 @@ class Gen:
         # bölüm 18). Boşsa üretilen kod değişmez. Sınıflar değişmez olmalı ve kurucuları `this`'i kaçırmamalı
         # (tools/region_eligible.py denetler).
         self.region_classes = frozenset(x.strip().replace(".", "/") for x in os.environ.get("MONO_REGION_CLASSES", "").split(",") if x.strip())
+        # `*` içeren girdiler desendir (fnmatch); ör. `*$$Lambda$*` yakalama yapan tüm lambda sınıfları (alanları final,
+        # kurucu yalnızca alanları doldurur: monolith/indy.py)
+        self._region_exact = frozenset(x for x in self.region_classes if "*" not in x)
+        self._region_globs = tuple(x for x in self.region_classes if "*" in x)
         from .patches import PatchSet
         self.patches = patches if patches is not None else PatchSet({}, [])
         import collections as _c
@@ -1405,6 +1410,11 @@ class Gen:
                 res = ("single", next(iter(distinct.values())))
         self._devirt_cache[key] = res
         return res
+
+    def is_region_class(self, cn: str) -> bool:
+        if cn in self._region_exact:
+            return True
+        return any(fnmatch.fnmatchcase(cn, g) for g in self._region_globs)
 
     def noescape_sites(self, cn: str, key: str):
         return self.esc.noescape_sites(cn, key) if self.esc is not None else frozenset()
