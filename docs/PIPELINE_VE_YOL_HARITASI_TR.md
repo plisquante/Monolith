@@ -38,6 +38,7 @@ Bilmen gerekenler:
 | Tam Minecraft 26.3 derlemesi | Geçti (5 koşu, hepsi çıkış 0) |
 | Oyun testi (60 sn, temiz kapanış, dünya kaydı) | Geçti |
 | Link hatası kapısı | Geçti: 444 hata, açıklanmamış 0 |
+| `MONO_PATCH_VERIFY=1` ile oyun (60 sn) | Çökme yok, "patch mismatch" yok. Doğrulama modu yavaş olduğu için betiğin tıklamaları geç kaldı, dünya kaydı doğrulanamadı; bu koşu yalnızca "uyuşmazlık yok" kanıtıdır. Not: bu mod yalnızca ilkel değer döndüren yamaları denetler, sysinfo/narrator/netty bunun dışındadır. |
 | Tracy yamaları (33 yama) | Çıkarıldı: oyunu açılışta çökertiyordu. Yeniden eklemek için `patches/rust/tracy.rs` başındaki nota bak. |
 | Sızıntı soak'ı (60 dk) | Yapılmadı |
 | Windows, Android, gerçek GPU | Bu ortamda denenemez |
