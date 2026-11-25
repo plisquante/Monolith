@@ -111,3 +111,19 @@ Hedef: kalan yaklaşık 110 ms süpürme duraklamasını durdur-dünya dışına
 4. Sonraki döngünün başında, kutup dönmeden önce, kalan süpürülmemiş dilimler paralel süpürülür (en kötü durum bugünkü duraklama).
 5. Açık sorular: `live_bytes` ve `gc_threshold` bir döngü gecikmeli hesaplanır; boş dilimlerin işletim sistemine geri verilmesi (şu an `to_dealloc`) ertelenmiş süpürmede ayrıca ele alınmalı; büyük nesneler (`h.large`) için aynı kutup kuralı.
 6. Doğrulama: `GcStress`, `MONO_GC_POISON=1`, `MONO_GC_CONCURRENT=1` ile 30 dk oyun, duraklama ölçümü.
+
+## 11. Tembel süpürme uygulandı (25 Kasım 2026, `MONO_GC_LAZY=1`, varsayılan kapalı)
+
+- `monolith/rt/gc.rs`: işaret biti kutbu her döngüde döner (`SENSE`), süpürme tahsis sırasında dilim dilim yapılır (`lazy_sweep_one`), yeni döngünün başında kalan dilimler paralel bitirilir (`finish_lazy_sweep`). Canlı boyut işaretleme sırasında sayılır (`MARKED_BYTES`).
+- Öğrenilen iki ders: (1) Kutup, `G.finishing` ile değil "yeni işaretleme başlıyor" (`begin_only || !G.cycle`) ile döndürülmeli. (2) `Globals` yapısına alan eklemek `--reuse-objs` ile yeniden kullanılan shard nesnelerini bozar, çünkü satır içi yazma bariyerleri `Globals` düzenini gömer. Yeni durum ayrı statiklerde tutulur. Bu ilk denemede oyunu çökertti, düzeltildi.
+- Ölçüm (120 sn oyun, aynı derleme, yazılım GL):
+
+| kip | toplama | ort. süpürme | ort. toplam duraklama | en uzun |
+|---|---:|---:|---:|---:|
+| varsayılan (durdur-süpür) | 29 | 34 ms | 473 ms | 1243 ms |
+| `MONO_GC_CONCURRENT=1` | 23 | 47 ms | 64 ms | 170 ms |
+| `MONO_GC_LAZY=1` | 29 | 3 ms | 470 ms | 1198 ms |
+| `MONO_GC_LAZY=1 MONO_GC_CONCURRENT=1` | 26 | 4 ms | 16 ms | 35 ms |
+
+- Hedef 1 ms altı hâlâ geçilmedi (kök tarama yaklaşık 7 ms). `GcStress`, `MonitorChurn`, `Threads` testleri `MONO_GC_MB=1` ile tembel+eşzamanlı+zehirli kipte geçti.
+- Varsayılan yapılması için `GC_PLAN.md` faz 3 ölçütü gerekir: doğrulama modunda 30 dk temiz koşu ve bariyer maliyeti ölçümü. Henüz yapılmadı.

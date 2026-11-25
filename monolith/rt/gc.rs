@@ -46,6 +46,15 @@ impl Globals {
 
 static G: Globals = Globals::new();
 
+// Tembel süpürme durumu `Globals` içinde DEĞİL, ayrı statiklerde tutulur: `Globals` düzeni satır içi (`inline(always)`) yazma
+// bariyerleri aracılığıyla shard nesnelerine gömülüdür; düzeni değiştirmek `--reuse-objs` ile yeniden kullanılan eski
+// nesneleri sessizce bozar.
+/// İşaret bitinin "işaretli" anlamına gelen değeri (0 ya da GC_MARK). Tembel süpürmede (MONO_GC_LAZY) her döngüde döner;
+/// böylece süpürme biti silmek zorunda kalmaz. Normal kipte sabit GC_MARK'tır (işaretli = bit set, süpürme bitleri siler).
+static SENSE: AtomicU32 = AtomicU32::new(GC_MARK);
+/// Bu döngüde işaretlenen nesnelerin bayt toplamı (tembel süpürmede canlı boyut tahmini).
+static MARKED_BYTES: AtomicUsize = AtomicUsize::new(0);
+
 const SLAB_SIZE: usize = 65536;
 const SLAB_MASK: usize = !(SLAB_SIZE - 1);
 const SLAB_HDR: usize = 1024;
@@ -261,7 +270,7 @@ fn clear_dead_referents() {
     for o in seen {
         unsafe {
             let obj = o as *mut Obj;
-            if (*obj).gc & GC_MARK == 0 {
+            if (*obj).gc & GC_MARK != cur_sense() {
                 continue; // the WeakReference itself is garbage
             }
             let slot = (obj as *mut u8).add(ro as usize) as *mut Ref;
@@ -270,7 +279,7 @@ fn clear_dead_referents() {
                 continue;
             }
             let rg = (*r.0).gc;
-            if rg & GC_HEAP != 0 && rg & GC_MARK == 0 {
+            if rg & GC_HEAP != 0 && rg & GC_MARK != cur_sense() {
                 *slot = Ref::NULL;
             }
         }
@@ -334,6 +343,8 @@ struct HeapState {
     slab_max: usize,
     partial: [Vec<*mut Slab>; NUM_CLASSES],
     empty: Vec<*mut Slab>,
+    /// Tembel süpürme: son döngüde işaretlenmiş ama henüz süpürülmemiş dilimler (sınıf başına). Bunlara tahsis yapılmaz.
+    unswept: [Vec<*mut Slab>; NUM_CLASSES],
     large: HashMap<usize, usize>,
     large_min: usize,
     large_max: usize,
@@ -357,6 +368,7 @@ impl HeapState {
             slab_max: 0,
             partial: Default::default(),
             empty: Vec::new(),
+            unswept: Default::default(),
             large: HashMap::new(),
             large_min: usize::MAX,
             large_max: 0,
@@ -658,6 +670,9 @@ fn alloc_small_slow(reg: *mut ThreadReg, sc: usize, class: &'static Class) -> *m
                 Some(s) if unsafe { (*s).has_free() } => break s,
                 Some(_) => continue,
                 None => {
+                    if let Some(u) = lazy_sweep_one(&mut h, sc) {
+                        break u;
+                    }
                     break if let Some(es) = h.empty.pop() {
                         unsafe {
                             Slab::init_at(es, sc);
@@ -665,12 +680,41 @@ fn alloc_small_slow(reg: *mut ThreadReg, sc: usize, class: &'static Class) -> *m
                         }
                         es
                     } else {
+                        // Yeni dilim istemeden önce başka sınıfların süpürülmemiş dilimlerinden boş olan var mı bak.
+                        let mut got: Option<*mut Slab> = None;
+                        'scan: for k in 1..NUM_CLASSES {
+                            let sc2 = (sc + k) % NUM_CLASSES;
+                            let mut tries = 0;
+                            while tries < 32 && !h.unswept[sc2].is_empty() {
+                                tries += 1;
+                                let u = h.unswept[sc2].pop().unwrap();
+                                unsafe {
+                                    sweep_slab_nocensus(u as usize);
+                                    if (*u).live_count == 0 {
+                                        (*u).in_use = false;
+                                        got = Some(u);
+                                        break 'scan;
+                                    }
+                                    if (*u).has_free() {
+                                        h.partial[sc2].push(u);
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(es) = got {
+                            unsafe {
+                                Slab::init_at(es, sc);
+                                std::ptr::write_bytes((es as *mut u8).add(SLAB_HDR), 0, SLAB_SIZE - SLAB_HDR);
+                            }
+                            es
+                        } else {
                         if G.bytes_since_gc.load(Ordering::Relaxed) >= h.gc_threshold {
                             need_gc = true;
                         }
                         let s = Slab::new(sc);
                         h.note_slab(s);
                         s
+                        }
                     };
                 }
             }
@@ -790,6 +834,8 @@ struct Knobs {
     /// MONO_GC_POISON=1: serbest bırakılan yuvalar 0xDD ile doldurulur; böylece serbest bırakılmış belleğe erişim hemen görünür.
     poison: bool,
     concurrent: bool,
+    /// MONO_GC_LAZY=1: tembel süpürme (dilimler tahsis sırasında süpürülür; durdur-dünya süpürmesi kalkar).
+    lazy: bool,
     recycle: bool,
     /// MONO_GC=off: otomatik toplama yok (toplayıcı kapalıyken yığının ne yaptığını ölçer).
     gc_off: bool,
@@ -806,6 +852,7 @@ fn knobs() -> &'static Knobs {
         },
         poison: std::env::var_os("MONO_GC_POISON").is_some_and(|v| !v.is_empty() && v != "0"),
         concurrent: std::env::var_os("MONO_GC_CONCURRENT").is_some(),
+        lazy: std::env::var_os("MONO_GC_LAZY").is_some_and(|v| !v.is_empty() && v != "0"),
         recycle: std::env::var("MONO_RECYCLE").map_or(true, |v| v != "0"),
         gc_off: std::env::var("MONO_GC").is_ok_and(|v| v == "off"),
     })
@@ -881,6 +928,16 @@ fn poison_enabled() -> bool {
     knobs().poison
 }
 
+#[inline(always)]
+fn lazy_enabled() -> bool {
+    knobs().lazy
+}
+
+#[inline(always)]
+fn cur_sense() -> u32 {
+    SENSE.load(Ordering::Relaxed)
+}
+
 fn concurrent_enabled() -> bool {
     knobs().concurrent
 }
@@ -888,7 +945,15 @@ fn concurrent_enabled() -> bool {
 /// Yeni ayrılmış bir nesnenin GC bitleri: döngü sırasında siyah (o döngünün süpürmesinden sağ çıkar).
 #[inline(always)]
 fn new_obj_bits() -> u32 {
-    if G.satb_on.load(Ordering::Relaxed) { GC_HEAP | GC_MARK } else { GC_HEAP }
+    if lazy_enabled() {
+        // Tembel kipte yeni nesne her zaman şu anki kutupla doğar: döngü sırasında siyah, döngüler arasında bir sonraki
+        // dönüşte kendiliğinden "işaretsiz" olur.
+        GC_HEAP | cur_sense()
+    } else if G.satb_on.load(Ordering::Relaxed) {
+        GC_HEAP | GC_MARK
+    } else {
+        GC_HEAP
+    }
 }
 
 pub fn collect() {
@@ -940,8 +1005,10 @@ fn try_push(
                 let s = &*(base as *const Slab);
                 if s.magic == SLAB_MAGIC && s.alloc_bit(off >> 4) {
                     let o = addr as *mut Obj;
-                    if ((*o).gc & (GC_HEAP | GC_MARK)) == GC_HEAP {
-                        (*o).gc |= GC_MARK;
+                    let g = (*o).gc;
+                    if g & GC_HEAP != 0 && g & GC_MARK != cur_sense() {
+                        (*o).gc = (g & !GC_MARK) | cur_sense();
+                        MARKED_BYTES.fetch_add(s.slot_size as usize, Ordering::Relaxed);
                         work.push(o);
                     }
                 }
@@ -949,12 +1016,16 @@ fn try_push(
             return;
         }
     }
-    if addr >= large_min && addr < large_max && large_map.contains_key(&addr) {
-        unsafe {
-            let o = addr as *mut Obj;
-            if ((*o).gc & (GC_HEAP | GC_MARK)) == GC_HEAP {
-                (*o).gc |= GC_MARK;
-                work.push(o);
+    if addr >= large_min && addr < large_max {
+        if let Some(&lsz) = large_map.get(&addr) {
+            unsafe {
+                let o = addr as *mut Obj;
+                let g = (*o).gc;
+                if g & GC_HEAP != 0 && g & GC_MARK != cur_sense() {
+                    (*o).gc = (g & !GC_MARK) | cur_sense();
+                    MARKED_BYTES.fetch_add(lsz, Ordering::Relaxed);
+                    work.push(o);
+                }
             }
         }
     }
@@ -1024,6 +1095,8 @@ unsafe fn sweep_slab_nocensus(base: usize) {
     let s = &mut *(base as *mut Slab);
     let n = s.next_bump;
     let sz = s.slot_size as usize;
+    let lazy = lazy_enabled();
+    let sense = cur_sense();
     s.free_head = -1;
     let mut live_c = 0u16;
     for idx in (0..n).rev() {
@@ -1035,8 +1108,10 @@ unsafe fn sweep_slab_nocensus(base: usize) {
             continue;
         }
         let o = (base + off) as *mut Obj;
-        if ((*o).gc & GC_MARK) != 0 {
-            (*o).gc &= !GC_MARK;
+        if ((*o).gc & GC_MARK) == sense {
+            if !lazy {
+                (*o).gc &= !GC_MARK;
+            }
             live_c += 1;
         } else {
             s.clear_bit(bit);
@@ -1048,6 +1123,76 @@ unsafe fn sweep_slab_nocensus(base: usize) {
         }
     }
     s.live_count = live_c;
+}
+
+/// Tembel süpürmeden kalan tüm dilimleri paralel süpürür ve sonuçlarını havuzlara dağıtır (boş: `empty`, yer var: `partial`).
+/// Yeni döngü başlamadan önce durdur-dünya içinde çağrılır. Fazla boş dilimler işletim sistemine geri verilir.
+fn finish_lazy_sweep(h: &mut HeapState) {
+    let mut all: Vec<usize> = Vec::new();
+    for sc in 0..NUM_CLASSES {
+        for s in h.unswept[sc].drain(..) {
+            all.push(s as usize);
+        }
+    }
+    if !all.is_empty() {
+        let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).min(8);
+        if workers > 1 && all.len() >= 64 {
+            let chunk = all.len().div_ceil(workers);
+            std::thread::scope(|sc| {
+                for part in all.chunks(chunk) {
+                    sc.spawn(move || {
+                        for &b in part {
+                            unsafe { sweep_slab_nocensus(b) };
+                        }
+                    });
+                }
+            });
+        } else {
+            for &b in &all {
+                unsafe { sweep_slab_nocensus(b) };
+            }
+        }
+        for &b in &all {
+            unsafe {
+                let s = &mut *(b as *mut Slab);
+                if s.live_count == 0 {
+                    s.in_use = false;
+                    h.empty.push(s as *mut Slab);
+                } else if s.has_free() {
+                    h.partial[s.sc as usize].push(s as *mut Slab);
+                }
+            }
+        }
+    }
+    // Boş dilim havuzu sınırlanır: fazlası geri verilir, dilim listesinden çıkarılır.
+    const KEEP_EMPTY: usize = 16;
+    if h.empty.len() > KEEP_EMPTY {
+        let extra: Vec<*mut Slab> = h.empty.split_off(KEEP_EMPTY);
+        let set: std::collections::HashSet<usize> = extra.iter().map(|&p| p as usize).collect();
+        h.slabs.retain(|b| !set.contains(b));
+        for p in extra {
+            h.heap_bytes = h.heap_bytes.saturating_sub(SLAB_SIZE);
+            unsafe { dealloc(p as *mut u8, Layout::from_size_align(SLAB_SIZE, SLAB_SIZE).unwrap()) };
+        }
+    }
+}
+
+/// Tahsis yolu için: süpürülmemiş bir dilimi süpürür. Yeri varsa dilimi döndürür; tamamen boşsa `empty` havuzuna koyar.
+fn lazy_sweep_one(h: &mut HeapState, sc: usize) -> Option<*mut Slab> {
+    while let Some(u) = h.unswept[sc].pop() {
+        unsafe {
+            sweep_slab_nocensus(u as usize);
+            if (*u).live_count == 0 {
+                (*u).in_use = false;
+                h.empty.push(u);
+                return None;
+            }
+            if (*u).has_free() {
+                return Some(u);
+            }
+        }
+    }
+    None
 }
 
 #[inline(never)]
@@ -1122,6 +1267,18 @@ fn collect_impl(begin_only: bool) {
         }
     }
 
+    // Yeni bir işaretleme başlıyorsa (eşzamanlı başlangıç ya da tek aşamalı toplama) kutup dönmelidir. Eşzamanlı döngünün
+    // bitiş toplaması (`G.cycle` açık) başlangıçta dönen kutbu sürdürür. `G.finishing` buna yetmez: bitiş sürerken başka bir
+    // iş parçacığı `collect()` çağırırsa o da `finishing` açıkken gelir ve bağımsız bir toplamadır; döndürülmezse önceki
+    // döngünün işaretli nesneleri "zaten işaretli" sayılır, çocukları taranmaz ve canlı nesneler süpürülür.
+    let new_cycle = begin_only || !G.cycle.load(Ordering::Acquire);
+    if lazy_enabled() && new_cycle {
+        // Yeni döngü: önceki döngüden kalan süpürülmemiş dilimler, kutup dönmeden önce bitirilir (aksi halde eski ve yeni
+        // işaretler karışırdı). Sonra kutup döner: tüm nesneler bir anda "işaretsiz" olur.
+        finish_lazy_sweep(&mut h);
+        SENSE.fetch_xor(GC_MARK, Ordering::Relaxed);
+        MARKED_BYTES.store(0, Ordering::Relaxed);
+    }
     h.slabs.sort_unstable();
     let slabs_snap = &h.slabs;
     let slab_min = h.slab_min;
@@ -1343,7 +1500,7 @@ fn collect_impl(begin_only: bool) {
     // Ölü nesnelerin monitörleri (bir kez kilitlenen nesne, ölene kadar tablo girdisini tutar)
     crate::sync::prune_dead_monitors(|a| unsafe {
         let g = (*(a as *mut Obj)).gc;
-        g & GC_HEAP != 0 && g & GC_MARK == 0
+        g & GC_HEAP != 0 && g & GC_MARK != cur_sense()
     });
     let t_mark = t_start.elapsed() - t_roots;
     // 5. Dilimleri süpür
@@ -1352,13 +1509,29 @@ fn collect_impl(begin_only: bool) {
     for sc in 0..NUM_CLASSES {
         h.partial[sc].clear();
     }
-    let slabs_old = std::mem::take(&mut h.slabs);
+    let lazy = lazy_enabled();
+    let sense = cur_sense();
+    let defer = lazy && census.is_none();
+    if defer {
+        // Tembel süpürme: dilimler burada süpürülmez; sınıf listelerine konur, tahsis sırasında süpürülür.
+        for sc in 0..NUM_CLASSES {
+            h.unswept[sc].clear();
+        }
+        let in_use: Vec<(usize, usize)> = h.slabs.iter().filter_map(|&b| unsafe {
+            let s = &*(b as *const Slab);
+            if s.in_use { Some((b, s.sc as usize)) } else { None }
+        }).collect();
+        for (b, sc) in in_use {
+            h.unswept[sc].push(b as *mut Slab);
+        }
+    }
+    let slabs_old = if defer { Vec::new() } else { std::mem::take(&mut h.slabs) };
     let mut new_live = 0usize;
     let mut new_slabs = Vec::with_capacity(slabs_old.len());
     let mut to_dealloc = Vec::new();
     // Sayım (profil) kapalıysa dilimlerin içi paralel süpürülür: her dilim bağımsızdır (kendi işaret bitleri, kendi serbest
     // listesi), dünya zaten durdurulmuştur. Sonuç `live_count` alanına yazılır; aşağıdaki sıralı döngü yalnızca hesap tutar.
-    let pre_swept = census.is_none();
+    let pre_swept = census.is_none() && !defer;
     if pre_swept {
         let in_use: Vec<usize> = slabs_old.iter().copied().filter(|&b| unsafe { (*(b as *mut Slab)).in_use }).collect();
         let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).min(8);
@@ -1405,8 +1578,10 @@ fn collect_impl(begin_only: bool) {
                     continue;
                 }
                 let o = (base + off) as *mut Obj;
-                if ((*o).gc & GC_MARK) != 0 {
-                    (*o).gc &= !GC_MARK;
+                if ((*o).gc & GC_MARK) == sense {
+                    if !lazy {
+                        (*o).gc &= !GC_MARK;
+                    }
                     if let Some(c) = census.as_mut() { c.live(o, sz); }
                     live_c += 1;
                     new_live += sz;
@@ -1441,7 +1616,9 @@ fn collect_impl(begin_only: bool) {
             }
         }
     }
-    h.slabs = new_slabs;
+    if !defer {
+        h.slabs = new_slabs;
+    }
     for base in to_dealloc {
         unsafe { dealloc(base as *mut u8, Layout::from_size_align(SLAB_SIZE, SLAB_SIZE).unwrap()) };
     }
@@ -1451,8 +1628,10 @@ fn collect_impl(begin_only: bool) {
     for (&addr, &sz) in &h.large {
         unsafe {
             let o = addr as *mut Obj;
-            if ((*o).gc & GC_MARK) != 0 {
-                (*o).gc &= !GC_MARK;
+            if ((*o).gc & GC_MARK) == sense {
+                if !lazy {
+                    (*o).gc &= !GC_MARK;
+                }
                 if let Some(c) = census.as_mut() { c.live(o, sz); }
                 new_live += sz;
             } else {
@@ -1473,6 +1652,10 @@ fn collect_impl(begin_only: bool) {
     }
     if let Some(c) = census.take() {
         c.finish(h.gc_count, new_live, h.heap_bytes, since_gc, stw_start);
+    }
+    if defer {
+        // Dilimler süpürülmediği için canlı boyut işaretleme sırasında sayılan baytlardır (siyah doğanlar hariç).
+        new_live = MARKED_BYTES.load(Ordering::Relaxed);
     }
     h.live_bytes = new_live;
     h.gc_threshold = (new_live * 2).max(16 * 1024 * 1024);
