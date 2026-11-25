@@ -398,6 +398,9 @@ MODDED_LABEL = " Rust\u00a76+"
 # dosyasından rastgele seçer; dosyada tek satır olunca hep bu yazı görünür. Yalnızca çıkarılmış kaynak kopyası
 # değişir, jar'a dokunulmaz. (Oyunun kendi koduna gömülü birkaç özel gün yazısı, ör. 24 Aralık, yine görünür.)
 SPLASH_TEXT = "işiniz rust gitsin :)"
+# Ana menünün sağ altındaki telif satırı (dil anahtarı `title.credits`; özgünü "Copyright Mojang AB. Do not distribute!").
+# Bütün dil dosyalarında bu metinle değiştirilir; jar'a dokunulmaz.
+CREDITS_TEXT = "mojang tarafından yapıldı cemo ve plisquante tarafından modlandı"
 
 
 def _patch_modded_label(path: str, src: str | None = None) -> bool:
@@ -410,6 +413,8 @@ def _patch_modded_label(path: str, src: str | None = None) -> bool:
     if "menu.modded" not in lang:
         return False
     lang["menu.modded"] = MODDED_LABEL
+    if "title.credits" in lang:
+        lang["title.credits"] = CREDITS_TEXT
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(lang, fh, ensure_ascii=False, indent=2)
