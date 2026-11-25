@@ -226,3 +226,13 @@ Bu yüzden yol 1 yalnızca bir analiz değil, dil anlamını değiştiren bir ka
 - Bu ortamda Android NDK, Android SDK ve `aarch64-linux-android` Rust hedefi kurulu değil.
 - GitHub Actions iş akışı mevcut: `.github/workflows/build-so.yml` (`workflow_dispatch`: sürüm, `opt-level` 3 ya da `s`, shard sayısı, paralel iş; zaman aşımı 180 dk) ARM64 `.so` üretir. Çalıştırmak kullanıcının GitHub hesabını gerektirir; bu oturumda çalıştırılmadı.
 - Bölge tahsisi (`MONO_REGION_CLASSES`) yalnızca Linux'ta etkindir (`target_os = "linux"`); Android'de kapalıdır.
+
+**Karar (25 Kasım 2026, kullanıcı):** günün sonunda, istenen işler (A ölçümü, I, sonraki tahsis işleri, eksik kapılar) bittikten sonra, bu ortamda **Samsung S26, Android 17** için Android derlemesine başlanır (yol B).
+
+Başlarken yapılacaklar, sırayla:
+1. Android NDK, SDK (platform ve build-tools), `aarch64-linux-android` Rust hedefi ve R8 kurulumu (`docs/STATUS.md` 18 Kasım notları ve `monolith-build` becerisi).
+2. Hedef sürümü doğrulamak: Android 17'nin API düzeyi ve APK `targetSdk` gereksinimi (yeni Android sürümleri eski `targetSdk` ile yüklemeyi engelleyebilir). Bu bilgiyi varsaymıyorum, kaynaktan doğrulayacağım.
+3. `libminecraft_mono.so`: Rust arka ucu, `--android`, ARM64, 16 KB sayfa hizası (belgede daha önce 16 KB hizalı çıktı doğrulanmıştı).
+4. APK: `tools/build_touchcore_apk.py`, imzalama ve `apksigner verify`.
+5. Dosyalar kullanıcıya teslim edilir. Cihaz testi kullanıcıdadır; bu ortamda cihaz yok. Hatalar için `logcat` etiketi `MonolithEngine`.
+6. Android'de açık risk: Rust arka ucuyla tam derleme ve APK daha önce doğrulanmadı; ilk denemede hata çıkabilir.
