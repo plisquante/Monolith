@@ -74,3 +74,10 @@ Sıra: önce güvenilirlik, sonra bellek, sonra platformlar.
 - En büyük tek nokta: `PalettedContainer.pack` (yonga kaydı/gönderimi) `int[]` ayırıyor, örneklerin %7,6'sı.
 - Kolay yol yok: çöpün çoğu Codec (`DataResult`, `Optional`, `Pair`) ve fizik (`Vec3`, `AABB`) kodundan geliyor, tek tek yama yerine derleyicinin kaçış analizi (`monolith/escape.py`, çerçeve ve arena katmanları) bu sınıfları kapsayacak şekilde genişletilmeli. Geri dönüştürülen yineleyiciler zaten %6,5'i yığın dışında karşılıyor.
 - Sonuç: GC şimdilik kapatılamaz. Kapatma kapısı (`MONO_GC=off` ile 60 dk, büyüme 1 MiB/dk altı) geçilmedi.
+
+## 6. Kaçış analizi ölçümü (25 Kasım 2026, `--escape --inline`, yalnızca analiz)
+
+- 243.594 tahsis noktasının yalnızca 17.608'i (%7,2) metottan dışarı kaçmıyor; döngü dışında kullanılabilir olan 16.153.
+- Kaçış nedenleri: başka metoda argüman olarak verilmiş 107.443, `areturn` 59.327, `via owner` 28.606, çözülemeyen çağrı 14.362, `putfield` 11.146.
+- `Vec3` ve `AABB` fabrikalarının hepsi "taze nesne döndürür" (`ret_fresh`) olarak işaretli, ama çağıranlar sonucu çoğunlukla başka bir metoda verir ya da alana yazar. Taze nesne alan 76.486 çağrının yalnızca 5.386'sında çağıran tarafta yığına alınabilir.
+- Sonuç: yalnızca derleyici kaçış analiziyle tahsisin küçük bir bölümü kalkar; `Vec3`, `AABB`, `Optional`, `DataResult$Success` çöpünün çoğu kısa ömürlü ama gerçekten metot dışına çıkıyor. Bunlar için kapsam (bölge) tabanlı tahsis ya da skaler değiştirme gerekir (`GC_PLAN.md` kademe 2-3). GC kapatma kapısı hâlâ açık.
