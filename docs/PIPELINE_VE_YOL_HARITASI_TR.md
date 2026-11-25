@@ -342,3 +342,14 @@ listesinde olmayan ya da kapsamı değişen kalemler, beklenen etkiye göre:
 
 Sonuç: en büyük iki kalem R1 (çağrı başına defter) ve R3 (GC tahsis yolu). R2, R5, R6 küçük ve güvenli. Bu oturumda uygulanmadı
 (kullanıcı kararı: "bu haliyle kalsın").
+
+### 23.1 Kapılar, ikinci tur (26 Kasım 2026, işler bittikten sonra)
+
+| Kapı | Sonuç |
+|---|---|
+| Q1 `pyflakes` (monolith, tools) | geçti, 0 uyarı |
+| Q2/Q3 fark testleri (varsayılan yol) | geçti: 28/28, 3 atlandı (ClientCoreE2E, HttpFetch, Jni; gerekçeler aynı) |
+| Q4 bağlantı hatası (`--transpile-only`, `MONO_VERBOSE=1`) | geçti: 444 hata, 0 açıklanmamış (log4j-core 293, netty-log4j 84, commons-compress 37, lambdaform 21, macos-objc 9) |
+| Q9 native sayacı (90 sn, hız anahtarlı derleme) | 2 çağrı, ikisi Flite; atlandı (kullanıcı kararı) |
+| Q10 envanter | değişmedi: K2 232 dosya (Java kuralı) |
+| Dünya kaydı (taze dünya) | ilk koşu: temiz çıkış, dünya kaydedildi. İkinci koşu (aynı dünyayı yükler): temiz çıkış (143) ama çıkışta yeni dosya yazılmadı. Bölge dosyaları yüklemeden 8-17 sn sonra yazılmış, kapanışa kadar değişmemiş: oyuncu yeni yongaya gitmediyse kaydedilecek değişiklik yoktur. Ölçüt yanılgısı olabilir, kesin doğrulanmadı |
