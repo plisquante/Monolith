@@ -142,3 +142,8 @@ Hedef: kalan yaklaşık 110 ms süpürme duraklamasını durdur-dünya dışına
 - Sınıf döngüsü 4 iş parçacığına bölündü (`gc.rs`, dünya durmuşken salt okunur). Ortalama sınıf döngüsü yaklaşık 2,6 ms; kök toplamı yaklaşık 5,7 ms'den yaklaşık 4-5 ms'ye indi. `GcStress`, `MonitorChurn`, `Threads` geçti; 90 sn tembel+eşzamanlı oyun çökmeden çalıştı.
 - Kalan seri kısım (`static_slots`, `pinned_refs`, yaklaşık 62 bin giriş) benzer şekilde bölünebilir; ama 4 çekirdekli bu ortamda kök taramasını 1 ms altına indirmek için bu yetmez. 1 ms hedefi, kökleri durdur-dünya dışında (örneğin statikleri yazma bariyeriyle izleyerek) taramayı gerektirir.
 - Deneme: `static_slots` ve `pinned_refs` döngüleri de paralelleştirildi; kalan seri kısım yalnızca yaklaşık 2,7 ms'den 2,1 ms'ye indi (kök toplamı yaklaşık 4,6 ms), kazanç gürültü düzeyinde olduğu için geri alındı. Kök taramasını 1 ms altına indirmenin yolu paralellik değil, taramayı durdur-dünya dışına almaktır.
+
+## 14. `MONO_GC=off` ölçümü, güncel derleme (25 Kasım 2026)
+
+- Betikli oyun, `MONO_GC=off`, yazılım GL, 16 GB makine. RSS: 11:24:04'te 1,1 GB, 11:24:44'te 3,5 GB, 11:25:34'te 6,3 GB, 11:26:54'te 11,3 GB. Güvenlik için 11 GB'ı geçince süreç öldürüldü (yaklaşık 3 dk). Büyüme yaklaşık 3,6 GB/dk, yani yaklaşık 60 MB/sn.
+- Sonuç: GC kapalıyken bellek tüketimi 60 dk soak bütçesinin (1 MiB/dk altı) yaklaşık 3.600 katı. Daha önceki ölçümle (10 dk'da 13,3 GB) ve tahsis profiliyle (saniyede 49,5 MiB) tutarlı. GC varsayılan olarak kapatılamaz; önce tahsis oranı yaklaşık 10 kat azalmalıdır (`GC_PLAN.md` faz 4-5).
