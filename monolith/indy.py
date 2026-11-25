@@ -15,6 +15,8 @@ BootstrapMethodError at run time, which is what a JVM does on bootstrap failure)
 """
 from __future__ import annotations
 
+import os
+
 from .asm import Asm, fref, make_class, make_method, mref
 from .bytecode import Insn
 from .classfile import (ACC_PUBLIC, ACC_STATIC, ACC_SYNTHETIC, ACC_FINAL, ClassConst, ClassFile,
@@ -290,6 +292,14 @@ class IndyDesugarer:
 
     # -------------------------------------------------------------- dize birleştirme
     def concat(self, cf: ClassFile, d: DynamicConst, recipe: str, consts):
+        # Hangi birleştirme yolu? Varsayılan: eski, StringBuilder'lı yol (concat_sb), hiç değişmedi.
+        # MONO_CONCAT=exact ile yeni, tam boy tek dizili yol (concat_exact) seçilir. Yeni yol ölçülüp
+        # onaylanana kadar varsayılan eski yoldur; sorun çıkarsa ortam değişkenini kaldırmak eski koda dönmek için yeter.
+        if os.environ.get("MONO_CONCAT") == "exact":
+            return self.concat_exact(cf, d, recipe, consts)
+        return self.concat_sb(cf, d, recipe, consts)
+
+    def concat_sb(self, cf: ClassFile, d: DynamicConst, recipe: str, consts):
         args, _ = parse_method_desc(d.desc)
         name = self._holder(cf, "Concat")
         SB = "java/lang/StringBuilder"
@@ -334,6 +344,194 @@ class IndyDesugarer:
         a.op("invokevirtual", mref(SB, "toString", "()Ljava/lang/String;"))
         a.op("areturn")
         return self._static_holder(cf, name, "concat", d.desc, a, slot)
+
+    def concat_exact(self, cf: ClassFile, d: DynamicConst, recipe: str, consts):
+        # Dizgi birleştirme ("a" + x + "b") burada StringBuilder OLMADAN, tam boyda tek bir char[] ile yapılır.
+        #
+        # Eski yol: new StringBuilder() (16 karakterlik dizi) -> her append'de dizi dolarsa iki katına büyütülüp kopyalanır
+        # -> sonunda toString() bütün karakterleri BİR KEZ DAHA yeni bir diziye kopyalar. Yani tek bir birleştirme için
+        # StringBuilder nesnesi + 2-4 ara char[] + son char[] + String = 4-6 tahsis; hepsi çöp olup GC'ye iş çıkarır.
+        #
+        # Yeni yol, üç adım:
+        #   1) Her parçayı yazılabilir hale getir: nesneler String.valueOf ile dizgiye çevrilir (soldan sağa, JVM'deki
+        #      sırayla; toString yan etkileri aynı sırada olur). int/long/char olduğu gibi kalır (dizgiye çevrilmeden
+        #      doğrudan diziye yazılabilirler, böylece onlar için hiç tahsis yapılmaz).
+        #   2) Toplam uzunluğu hesapla: sabit metin + her dizginin length() + sayıların basamak sayısı (stringSize).
+        #   3) TAM o boyda tek bir char[] ayır, parçaları sırayla içine kopyala ve String'i bu diziyi KOPYALAMADAN
+        #      sahiplenen paket-içi kurucu String(char[], boolean) ile oluştur.
+        # Sonuç: char[] + String = 2 tahsis, kopya yok. Bu kurucu ve Integer/Long.stringSize/getChars sınıf
+        # kütüphanesi kaplamasında (classlib/src/java/lang) bulunur; kaplama her derlemede JDK'dan önce gelir.
+        args, _ = parse_method_desc(d.desc)
+        name = self._holder(cf, "Concat")
+        STR = "java/lang/String"
+        a = Asm()
+
+        # ---- tarif (recipe) parçalara ayrılır: ("lit", metin) ya da ("arg", tip, yuva)
+        pieces = []
+        lit = []
+        ai = 0
+        ci = 0
+        slot = 0
+        for ch in recipe:
+            if ch == "\u0001":  # \1 = sıradaki argüman
+                if lit:
+                    pieces.append(("lit", "".join(lit)))
+                    lit = []
+                t = args[ai]
+                ai += 1
+                pieces.append(("arg", t, slot))
+                slot += slots_of(t)
+            elif ch == "\u0002":  # \2 = sıradaki sabit (bootstrap argümanı)
+                c = consts[ci]
+                ci += 1
+                if isinstance(c, tuple) and c[0] == "string":
+                    lit.append(c[1])
+                elif isinstance(c, tuple) and c[0] in ("int", "long"):
+                    lit.append(str(c[1]))
+                else:
+                    raise Unsupported(f"concat constant {c!r}")
+            else:  # düz metin karakteri
+                lit.append(ch)
+        if lit:
+            pieces.append(("lit", "".join(lit)))
+
+        nxt = slot  # argümanlardan sonraki ilk boş yerel değişken yuvası
+
+        # ---- 1) argümanları yazılabilir hale getir. Her parça ("str", yuva) / ("char", yuva) / ("int", yuva) /
+        #         ("long", yuva) / ("lit", metin) olur.
+        plan = []
+        for p in pieces:
+            if p[0] == "lit":
+                plan.append(p)
+                continue
+            _, t, s = p
+            if t == "C":
+                plan.append(("char", s))
+            elif t in ("I", "B", "S"):  # byte ve short da int gibi yazılır (JVM'de de öyle)
+                plan.append(("int", s))
+            elif t == "J":
+                plan.append(("long", s))
+            else:
+                a.load(t, s)
+                if t in ("Z", "F", "D"):
+                    # boolean/float/double: JVM'nin kendi biçimlendirmesi (Float.toString vb.) kullanılır
+                    a.op("invokestatic", mref(STR, "valueOf", f"({t})L{STR};"))
+                elif t == f"L{STR};":
+                    # null dizgi "null" yazılır; dizgi değilse kendisi döner (tahsis yok)
+                    a.op("invokestatic", mref(STR, "valueOf", f"(Ljava/lang/Object;)L{STR};"))
+                else:
+                    # Nesne: valueOf toString() çağırır. toString() null döndürürse JVM yine "null" yazar; ikinci
+                    # valueOf bu durumu yakalar (null -> "null", dizgi -> kendisi), ek tahsis yapmaz.
+                    a.op("invokestatic", mref(STR, "valueOf", f"(Ljava/lang/Object;)L{STR};"))
+                    a.op("invokestatic", mref(STR, "valueOf", f"(Ljava/lang/Object;)L{STR};"))
+                a.op("astore", nxt)
+                plan.append(("str", nxt))
+                nxt += 1
+
+        # ---- 2) toplam uzunluk (yığında tek bir int olarak birikir)
+        a.iconst(sum(len(p[1]) for p in plan if p[0] == "lit"))
+        for p in plan:
+            k, s = p
+            if k == "str":
+                a.op("aload", s)
+                a.op("invokevirtual", mref(STR, "length", "()I"))
+            elif k == "char":
+                a.iconst(1)
+            elif k == "int":
+                a.op("iload", s)
+                a.op("invokestatic", mref("java/lang/Integer", "stringSize", "(I)I"))
+            elif k == "long":
+                a.op("lload", s)
+                a.op("invokestatic", mref("java/lang/Long", "stringSize", "(J)I"))
+            else:
+                continue
+            a.op("iadd")
+        # Uzunluk int sınırını aşarsa (eksiye taşarsa) JVM gibi OutOfMemoryError fırlatılır.
+        # shortcut: yalnızca en sondaki işaret denetlenir; 2^32'yi aşan (iki kez taşan) toplam 4 milyardan uzun
+        # dizgiler gerektirir, böyle bir bellek zaten yok.
+        a.op("dup")
+        a.jump("ifge", "len_ok")
+        a.op("new", ClassConst("java/lang/OutOfMemoryError"))
+        a.op("dup")
+        a.sconst("Overflow: String length out of range")
+        a.op("invokespecial", mref("java/lang/OutOfMemoryError", "<init>", f"(L{STR};)V"))
+        a.op("athrow")
+        a.label("len_ok")
+
+        # ---- 3) tam boy dizi, sırayla doldurma. buf = yeni char[], pos = sıradaki boş konum
+        buf, pos = nxt, nxt + 1
+        a.op("newarray", "C")
+        a.op("astore", buf)
+        a.iconst(0)
+        a.op("istore", pos)
+
+        def advance_by_const(n):  # pos += n
+            a.op("iload", pos)
+            a.iconst(n)
+            a.op("iadd")
+            a.op("istore", pos)
+
+        for p in plan:
+            k, s = p
+            if k == "lit" and len(s) == 1:
+                # tek karakterlik sabit: doğrudan diziye yaz (getChars çağrısına gerek yok)
+                a.op("aload", buf)
+                a.op("iload", pos)
+                a.iconst(ord(s))
+                a.op("castore")
+                advance_by_const(1)
+            elif k == "lit":
+                # "metin".getChars(0, n, buf, pos)
+                a.sconst(s)
+                a.iconst(0)
+                a.iconst(len(s))
+                a.op("aload", buf)
+                a.op("iload", pos)
+                a.op("invokevirtual", mref(STR, "getChars", "(II[CI)V"))
+                advance_by_const(len(s))
+            elif k == "str":
+                # s.getChars(0, s.length(), buf, pos); pos += s.length()
+                a.op("aload", s)
+                a.iconst(0)
+                a.op("aload", s)
+                a.op("invokevirtual", mref(STR, "length", "()I"))
+                a.op("aload", buf)
+                a.op("iload", pos)
+                a.op("invokevirtual", mref(STR, "getChars", "(II[CI)V"))
+                a.op("iload", pos)
+                a.op("aload", s)
+                a.op("invokevirtual", mref(STR, "length", "()I"))
+                a.op("iadd")
+                a.op("istore", pos)
+            elif k == "char":
+                a.op("aload", buf)
+                a.op("iload", pos)
+                a.op("iload", s)
+                a.op("castore")
+                advance_by_const(1)
+            else:
+                # Sayı: getChars basamakları SONDAN geriye doğru yazar, bu yüzden önce bitiş konumu hesaplanır:
+                # pos += stringSize(x); Integer.getChars(x, pos, buf)
+                ld, own, td = ("iload", "java/lang/Integer", "I") if k == "int" else ("lload", "java/lang/Long", "J")
+                a.op("iload", pos)
+                a.op(ld, s)
+                a.op("invokestatic", mref(own, "stringSize", f"({td})I"))
+                a.op("iadd")
+                a.op("istore", pos)
+                a.op(ld, s)
+                a.op("iload", pos)
+                a.op("aload", buf)
+                a.op("invokestatic", mref(own, "getChars", f"({td}I[C)I"))
+                a.op("pop")
+
+        # new String(buf, true): diziyi kopyalamadan sahiplenir
+        a.op("new", ClassConst(STR))
+        a.op("dup")
+        a.op("aload", buf)
+        a.iconst(1)
+        a.op("invokespecial", mref(STR, "<init>", "([CZ)V"))
+        a.op("areturn")
+        return self._static_holder(cf, name, "concat", d.desc, a, pos + 1)
 
     # -------------------------------------------------------------- record'lar
     def object_methods(self, cf: ClassFile, d: DynamicConst, bargs):
