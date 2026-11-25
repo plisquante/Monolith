@@ -87,3 +87,10 @@ Sıra: önce güvenilirlik, sonra bellek, sonra platformlar.
 - Yönetilen yığında toplama sonrası canlı veri: ilk toplamalarda hızlı artış (dünya yükleme), 29. toplamadan sonra 555 MiB'de düz kalıyor (29-42. toplamalar: 554-556 MiB), 43-44. toplamada 573-581 MiB.
 - Yani yönetilen yığında sızıntı görünmüyor. Soak'taki yaklaşık 6,6 MB/dk büyümenin kaynağı yönetilen yığın dışı: yazılım GL (llvmpipe), doku/ara bellek ya da bölünme. Bu ortamda ayırt edilemez; gerçek GPU'da ayrıca ölçülmeli.
 - Asıl ürün sorunu duraklama: 555 MiB canlı veride her durdur-ve-süpür toplama yaklaşık 1,4 sn sürüyor. Bütçe 1 ms altı. Bu yüzden eşzamanlı işaretleyici (`GC_PLAN.md` faz 1-3) ve sahipli bellek (yonga/palet) öncelikli.
+
+## 8. Eşzamanlı işaretleyici ölçümü (25 Kasım 2026, `MONO_GC_CONCURRENT=1`, 240 sn)
+
+- Çalışma zamanında SATB eşzamanlı işaretleyici zaten var ve açılabiliyor. Oyun 240 sn çökmeden çalıştı, 52 toplama.
+- Duraklama dağılımı (canlı yaklaşık 600 MiB): kök tarama 7-9 ms, işaretleme duraklaması yaklaşık 1 ms (eskiden yaklaşık 1000 ms), süpürme 260-335 ms. Toplam duraklama yaklaşık 270-350 ms (eskiden yaklaşık 1400 ms).
+- Kalan duraklamanın tamamı süpürmeden geliyor: `monolith/rt/gc.rs` toplamanın 5. ve 6. adımları durdur-ve-süpür içinde dilimleri tek tek tarıyor. Sıradaki iş tembel/eşzamanlı süpürme (epoch işaret biti). Hedef 1 ms altı.
+- Bu varsayılan değil: doğrulama modu ve 30 dk'lık temiz koşu (`GC_PLAN.md` faz 3 ölçütü) yapılmadan açılmaz.
