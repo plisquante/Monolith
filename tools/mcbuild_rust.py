@@ -59,6 +59,8 @@ def main() -> int:
                     help="whole-program escape analysis (non-escaping objects in frame slots, arrays in the method arena); "
                          "off by default; measured at idle it allocates about 40 percent more, see docs/VERIFICATION.md")
     ap.add_argument("--inline", action="store_true", help="inline small callees before code generation (pairs with --escape)")
+    ap.add_argument("--transpile-only", action="store_true",
+                    help="yalnızca Java -> Rust çevirisini yap, derleme yapma (ör. MONO_VERBOSE=1 ile bağlantı hatası kapısı Q4)")
     a = ap.parse_args()
 
     jar = os.path.abspath(a.jar)
@@ -95,6 +97,9 @@ def main() -> int:
                    (["--escape"] if a.escape else []) + (["--inline"] if a.inline else []))
         if subprocess.run(gen, cwd=ROOT).returncode:
             return 1
+        if a.transpile_only:
+            print(f"transpiled: {rust}")
+            return 0
     comp = common + ["--cp", "-", "--main", "-", "--resume"] + ([] if a.android else ["--compile"]) + (["--reuse-objs"] if a.reuse_objs else [])
     if subprocess.run(comp, cwd=ROOT).returncode:
         return 1
