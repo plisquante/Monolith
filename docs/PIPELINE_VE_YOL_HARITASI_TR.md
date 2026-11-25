@@ -209,11 +209,20 @@ Bu yüzden yol 1 yalnızca bir analiz değil, dil anlamını değiştiren bir ka
 |---|---|---|
 | 1 | A: bölge tahsisi (Vec3, AABB, Optional, Pair, DataResult$Success) tam oyun ölçümü | derleme sürüyor (`build/minecraft-26.3-region`) |
 | 2 | I: duraklama sıçramalarının (en uzun 278 ms) nedeni ve düzeltmesi | A'dan sonra |
-| 3 | mimalloc v3.7.1 denemesi: kaynaktan derlendi (proje dışı, `scratchpad/mimalloc`); `LD_PRELOAD` ile 30 dk soak, RSS eğimi karşılaştırması (taban: 5,9 MB/dk) | I'dan sonra. Projeye eklenmez; fark belirgin çıkarsa kullanıcı onayıyla düşünülür |
+| 3 | ~~mimalloc v3.7.1 denemesi~~ | **ertelendi** (kullanıcı kararı, 25 Kasım): kütüphane kaynaktan derlendi (`scratchpad/mimalloc`, proje dışı), deneme yapılmayacak |
 | 4 | Sıradaki tahsis işleri: H (GC eşiği), B (dizgi tamponları), C (büyük diziler), D (çarpışma şekilleri) | ölçüme göre |
 | 5 | Eksik kapılar: Q2/Q3 (27 test), Q9 (native sayacı), Q10 (kaynak envanteri) | kullanıcı sırası gereği GC işinden sonra |
-| 6 | **LTO** (en son, hepsi bittikten sonra) | bkz. aşağıda |
+| 6 | ~~LTO ve hızlandırma yöntemleri~~ | **ertelendi** (kullanıcı kararı, 25 Kasım): bkz. aşağıdaki not, planda ileride yeniden ele alınır |
 
 **LTO notu.** Bugünkü derleme düzeni: `mono_rt` bir kez derlenir, 16 shard ayrı ayrı `--emit=obj` ile nesneye çevrilir, sonra bağlanır; shard'lar arasında ve çalışma zamanıyla satır içi optimizasyon yoktur. Gerçekçi yol `-C linker-plugin-lto` ile bağlama aşamasında ThinLTO'dur (`clang`/`lld`). Kazanç yalnızca hızda beklenir (bellek ve GC'de değil), ölçülmedi. Riskler: bayt kodlu nesneler `--reuse-objs` önbelleğini bozar; 700 MB'lık program için derleme süresi ve RAM çok artar (tek `rustc` bile ~5 GB); `-C panic=abort` tutarlılığı. Bu yüzden yalnızca diğer her şey bittikten sonra, ayrı bir deney olarak ve öncesi/sonrası ölçümle (derleme süresi, tepe RAM, kare süresi, program boyutu) yapılır.
 
 **Hızlandırma yöntemleri (LTO ile birlikte, en son; hepsi tahmin, hiçbiri ölçülmedi).** Önce ölçüm düzeneği kurulur (sabit dünya tohumu, sabit kamera yolu, CPU tarafı tick süresi; `tools/frame_time.py` T11 henüz yok; yazılım GL kare süresi için anlamlı değil). Sonra sırayla: (1) `--opt 2` yalnızca sıcak shard'larda, (2) PGO + ThinLTO birlikte, (3) BOLT/kod yerleşimi, (4) büyük sayfalar (`MADV_HUGEPAGE`), (5) tahsis hızlı yolu (dilim başına bump), (6) bağlayıcı işlev sıralaması (açılış süresi), (7) derleyici kazançları (`06_YOL_HARITASI.md` C1-C9). `-C target-cpu` dağıtım için uygun değil (yalnızca bilinen donanım). Her biri için öncesi/sonrası: derleme süresi, tepe RAM, tick süresi, program boyutu.
+
+**Karar (25 Kasım 2026, kullanıcı):** mimalloc v3 denemesi ve LTO/hızlandırma yöntemleri şimdilik yapılmayacak. Yukarıdaki notlar ileride yeniden ele alınmak üzere saklanır.
+
+## 21. Android gerçek cihaz testi: önkoşullar (25 Kasım 2026)
+
+- Bu oturumda hiçbir Android derlemesi yapılmadı. `docs/STATUS.md`'deki Android doğrulaması 18-19 Kasım tarihli (Zig arka ucu dönemi); Rust arka ucu için tam `libminecraft_mono.so` derlemesi ve APK bu oturumda doğrulanmadı.
+- Bu ortamda Android NDK, Android SDK ve `aarch64-linux-android` Rust hedefi kurulu değil.
+- GitHub Actions iş akışı mevcut: `.github/workflows/build-so.yml` (`workflow_dispatch`: sürüm, `opt-level` 3 ya da `s`, shard sayısı, paralel iş; zaman aşımı 180 dk) ARM64 `.so` üretir. Çalıştırmak kullanıcının GitHub hesabını gerektirir; bu oturumda çalıştırılmadı.
+- Bölge tahsisi (`MONO_REGION_CLASSES`) yalnızca Linux'ta etkindir (`target_os = "linux"`); Android'de kapalıdır.
