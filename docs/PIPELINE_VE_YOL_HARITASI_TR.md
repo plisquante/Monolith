@@ -202,3 +202,16 @@ Bu yüzden yol 1 yalnızca bir analiz değil, dil anlamını değiştiren bir ka
 - **Yama** `patches/rust/palette_reencode.rs` (`PalettedContainer.reencodeContents`): iş parçacığı başına tek `int[]` (4096 ve 64 boyutları) yeniden kullanılır. Profil karşılaştırması (aynı betikli oyun, yazılım GL): `[I` tahsisi 1.110 MiB'den 190 MiB'ye düştü (−%83); toplam tahsis oranı 49,5'ten 40,2 MiB/sn'ye (koşu süreleri 242 sn ve 288 sn, bu yüzden oran karşılaştırması gürültülü). GC duraklama uzunluğu değişmedi (canlı veri aynı).
 - **`headless_play.sh` iki hatası düzeltildi:** (1) `ls crash-reports && ... exit 1` boş klasörde de başarılı döndüğü için betik, klasör varken hep "crash report found" ile çıkıyor ve temiz kapanış / kayıt denetimine hiç ulaşmıyordu; önceki "dünya kaydedilmedi" ve `SMOKE_EXIT=1` sonuçları bunun yüzündendi. (2) Kayıt ölçütü `level.dat` idi; bu sürümde `level.dat` yalnızca dünya yüklenirken yazılıyor, çıkışta yongalar (`region/*.mca`) ve ilgi noktaları (`poi/*.mca`) yazılıyor. Ölçüt "SIGTERM'den sonra yazılmış `level.dat` ya da `.mca`" yapıldı.
 - **Dünya kaydı kapısı:** iki ardışık koşu (kaydet, sonra aynı dünyayı yükle), her ikisi de "clean exit: status 143 after SIGTERM, world saved on exit"; ikinci koşuda bozuk/okunamadı satırı yok, yeni çökme raporu yok. Palet yaması kayıt yolunu (`pack`) ve yükleme yolunu (`unpack`) kapsadığı için bu sonuç yamayı da doğrular. Sınırlama: bayt bayt karşılaştırma yok, vanilla ile karşılaştırma yok (§ "aynı girdi, aynı çıktı" kanıtlanmadı).
+
+## 20. Sıradaki iş planı (25 Kasım 2026, kullanıcı sırası)
+
+| Sıra | İş | Durum |
+|---|---|---|
+| 1 | A: bölge tahsisi (Vec3, AABB, Optional, Pair, DataResult$Success) tam oyun ölçümü | derleme sürüyor (`build/minecraft-26.3-region`) |
+| 2 | I: duraklama sıçramalarının (en uzun 278 ms) nedeni ve düzeltmesi | A'dan sonra |
+| 3 | mimalloc v3.7.1 denemesi: kaynaktan derlendi (proje dışı, `scratchpad/mimalloc`); `LD_PRELOAD` ile 30 dk soak, RSS eğimi karşılaştırması (taban: 5,9 MB/dk) | I'dan sonra. Projeye eklenmez; fark belirgin çıkarsa kullanıcı onayıyla düşünülür |
+| 4 | Sıradaki tahsis işleri: H (GC eşiği), B (dizgi tamponları), C (büyük diziler), D (çarpışma şekilleri) | ölçüme göre |
+| 5 | Eksik kapılar: Q2/Q3 (27 test), Q9 (native sayacı), Q10 (kaynak envanteri) | kullanıcı sırası gereği GC işinden sonra |
+| 6 | **LTO** (en son, hepsi bittikten sonra) | bkz. aşağıda |
+
+**LTO notu.** Bugünkü derleme düzeni: `mono_rt` bir kez derlenir, 16 shard ayrı ayrı `--emit=obj` ile nesneye çevrilir, sonra bağlanır; shard'lar arasında ve çalışma zamanıyla satır içi optimizasyon yoktur. Gerçekçi yol `-C linker-plugin-lto` ile bağlama aşamasında ThinLTO'dur (`clang`/`lld`). Kazanç yalnızca hızda beklenir (bellek ve GC'de değil), ölçülmedi. Riskler: bayt kodlu nesneler `--reuse-objs` önbelleğini bozar; 700 MB'lık program için derleme süresi ve RAM çok artar (tek `rustc` bile ~5 GB); `-C panic=abort` tutarlılığı. Bu yüzden yalnızca diğer her şey bittikten sonra, ayrı bir deney olarak ve öncesi/sonrası ölçümle (derleme süresi, tepe RAM, kare süresi, program boyutu) yapılır.
