@@ -273,3 +273,26 @@ Bölgeli ve düzeltmeli koşuda 60 dk soak yapılmadı; sayılar 240 sn koşular
 | Q9 native sayacı | **atlandı (kullanıcı kararı)**: 90 sn oyunda 2 çağrı, 2 farklı native; ikisi de `NarratorLinux$FliteLibrary` (`flite_init`, `register_cmu_us_kal16`). Eski ölçüm 139 çağrıydı. Bu çağrılar zaten doğrudan Rust FFI'dir (`natives_jni.rs`, `dlopen("libflite.so.1")`; JNA yok); sayaç (`ncount.rs`) `natives_jni.rs`'teki her yerel metodu "öykünme" saydığı için görünüyor. Sıfıra indirmenin yolları: Flite'ı sayaç dışına taşımak (kapı tanımı değişir), Linux'ta anlatıcıyı kapatmak (özellik kaybı) ya da saf Rust sentezleyici (çok büyük iş). Karar bekliyor |
 | Q10 kaynak envanteri (`lib_inventory.py`) | **geçmedi**: 300 dosya, K1 (kabuk) 68, K2 (mantık) 232 dosya, 19.045 satır (`classlib/src` 13.208, `runtime/java_nolwjgl` 5.837). Hedef K2 = 0. Sınıflanmamış kalem 0 (yol haritası madde 8 ölçütü karşılandı) |
 | Q2/Q3 fark testleri (`tests/run_tests.py`, JVM ile çıktı karşılaştırması) | **geçti: 28/28**, 3 atlandı (`ClientCoreE2E`: Zig dönemi donanımı ister, Rust çekirdeği `cargo test` ile ayrı sınanır; `HttpFetch`: derlemesi 8 GiB'tan fazla bellek ister; `Jni`: uygulama JNI kütüphaneleri tasarım gereği desteklenmiyor). Koşu 15:44-16:36 UTC, bölge ve tembel süpürme kodu varsayılan kapalıyken (varsayılan derleme davranışı) |
+
+## 24. Üretilen kodun hız incelemesi (25 Kasım 2026)
+
+Kaynak: `build/minecraft-26.3-region/rust/shard_12.rs` (tek parça), `monolith/rt/rt.rs`, iki küçük Rust ölçümü.
+
+Bir parçadaki çalışma zamanı yardımcı çağrı yerleri: `set_line` 52 246, `nn` 52 036, `enter_frame` ve `stack_check` 16 112,
+`itab_find` 4 454, `checkcast` 4 263, `alloc` 7 102.
+
+| bulgu | yer | ölçüm |
+|---|---|---|
+| Her çağrıda gölge çerçeve (`RefCell<Vec<72 bayt>>`) ve her satırda kilitli `set_line` | `rt.rs` `enter_frame`, `set_line` | fib(35): bugünkü 247 ms, işaretçi dizili ucuz çerçeve 66 ms, çerçevesiz 41 ms (opt 1); çağrı başına ~7 ns |
+| Arayüz çağrısı her seferinde ikili arama, satır içine alınmaz | `rt.rs:519` `itab_find` | ölçülmedi; Zig sürümündeki çağrı yeri önbelleği taşınmamış |
+| `checkcast`/`instanceof` sınıf zincirini doğrusal gezer, satır içine alınmaz | `rt.rs:1003` `is_subclass` | ölçülmedi |
+| Kontrol akışı `loop { match pc }` | `rustgen.py` | sıkı döngü: 132 ms / 111 ms (opt 1), 126 ms / 81 ms (opt 3), durum makinesi / düz döngü |
+| Ayırma iki satır içine alınmayan çağrıdan geçer | `rt::alloc` -> `heap::alloc_obj` | ölçülmedi |
+| Parçalar arası ve sanal çağrılar `extern "C"` + `cres` | `rustgen.py` | ölçülmedi |
+
+Önerilen sıra: (1) ucuz çerçeve ve derinliğe bağlı yığın denetimi, (2) çağrı yeri arayüz önbelleği, (3) sabit süreli alt tip
+denetimi ve satır içi tam sınıf hızlı yolu, (4) ayırma hızlı yolunun satır içine alınması, (5) satır numarasının istisna anında
+tablodan bulunması, (6) yapılandırılmış döngü üretimi, (7) parçalama/PGO/opt 3. Her biri anahtarla açılır, eski yol kalır.
+
+Dizgi birleştirme (`MONO_CONCAT=exact`, `indy.py` `concat_exact`): JVM'e karşı kenar durum testi ve Strings, Lambdas, Oop,
+Collections1, Exceptions 5/5 geçti; varsayılan eski yol değişmedi. Oyundaki tahsis etkisi henüz ölçülmedi.
