@@ -4,6 +4,9 @@ Kural: her iş bir anahtarla açılır, eski yol yerinde kalır. Test (JVM'e kar
 varsayılanı olur ve burada "varsayılan" diye işaretlenir. Her iş bütün platformlar için düşünülür (Linux, Windows, Android).
 Ölçümler ve ayrıntı: `docs/PIPELINE_VE_YOL_HARITASI_TR.md` §22-24.
 
+Her büyük değişiklikten sonraki oyun derlemesinde ekran görüntüleri (`tools/headless_play.sh` -> `<build>/shots`: ana menü,
+dünyaya giriş, yürüyüş) kullanıcıya gönderilir.
+
 Durum: `bitti` / `sürüyor` / `bekliyor` / `ertelendi` / `yapılmayacak`.
 
 ## A. GC'siz / Rust bellek yönetimi
