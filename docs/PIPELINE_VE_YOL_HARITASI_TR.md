@@ -81,3 +81,9 @@ Sıra: önce güvenilirlik, sonra bellek, sonra platformlar.
 - Kaçış nedenleri: başka metoda argüman olarak verilmiş 107.443, `areturn` 59.327, `via owner` 28.606, çözülemeyen çağrı 14.362, `putfield` 11.146.
 - `Vec3` ve `AABB` fabrikalarının hepsi "taze nesne döndürür" (`ret_fresh`) olarak işaretli, ama çağıranlar sonucu çoğunlukla başka bir metoda verir ya da alana yazar. Taze nesne alan 76.486 çağrının yalnızca 5.386'sında çağıran tarafta yığına alınabilir.
 - Sonuç: yalnızca derleyici kaçış analiziyle tahsisin küçük bir bölümü kalkar; `Vec3`, `AABB`, `Optional`, `DataResult$Success` çöpünün çoğu kısa ömürlü ama gerçekten metot dışına çıkıyor. Bunlar için kapsam (bölge) tabanlı tahsis ya da skaler değiştirme gerekir (`GC_PLAN.md` kademe 2-3). GC kapatma kapısı hâlâ açık.
+
+## 7. Sızıntı ayrımı (25 Kasım 2026, 15 dk koşu, `MONO_GC_PHASES=1`)
+
+- Yönetilen yığında toplama sonrası canlı veri: ilk toplamalarda hızlı artış (dünya yükleme), 29. toplamadan sonra 555 MiB'de düz kalıyor (29-42. toplamalar: 554-556 MiB), 43-44. toplamada 573-581 MiB.
+- Yani yönetilen yığında sızıntı görünmüyor. Soak'taki yaklaşık 6,6 MB/dk büyümenin kaynağı yönetilen yığın dışı: yazılım GL (llvmpipe), doku/ara bellek ya da bölünme. Bu ortamda ayırt edilemez; gerçek GPU'da ayrıca ölçülmeli.
+- Asıl ürün sorunu duraklama: 555 MiB canlı veride her durdur-ve-süpür toplama yaklaşık 1,4 sn sürüyor. Bütçe 1 ms altı. Bu yüzden eşzamanlı işaretleyici (`GC_PLAN.md` faz 1-3) ve sahipli bellek (yonga/palet) öncelikli.
