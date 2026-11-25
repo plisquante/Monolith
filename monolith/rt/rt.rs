@@ -527,6 +527,115 @@ pub fn itab_find(c: &'static Class, sel: u32) -> *const () {
     }
 }
 
+// ---------------------------------------------------------------- çağrı yeri önbelleği (MONO_ICACHE=1 ile üretilen kod)
+//
+// Acemi notu: bir arayüz çağrısı (`list.size()` gibi, `list` bir List arayüzü) hangi metodun çalışacağını nesnenin sınıfına
+// bakarak bulur. `itab_find` bunu her çağrıda sınıfın arayüz tablosunda ikili aramayla yapar (ölçüm: ~6 ns). Oysa bir çağrı
+// yeri pratikte çoğunlukla hep aynı sınıfı görür. Önbellek o çağrı yerinin İLK gördüğü sınıfı ve bulunan metodu saklar;
+// sonraki çağrılarda sınıf aynıysa tek bir karşılaştırmayla metodu verir (~1,5 ns). HotSpot buna "inline cache" der.
+// Aynı fikir `checkcast`/`instanceof` için de kullanılır: başarıyla geçmiş sınıf saklanır, aynı sınıf bir daha zincir
+// gezmeden geçer (ölçüm: ~9 ns -> ~1 ns).
+//
+// Doğruluk: sınıf -> metot ve sınıf -> "şunun alt türü mü" eşlemeleri program boyunca değişmez, yani saklanan sonuç hiç
+// bayatlamaz. Kayıt bir kez yazılır (CAS ile, null'dan dolu hale) ve bir daha değişmez; okuyan iş parçacığı ya boş görür ya
+// da tam yazılmış kaydı (kayıt yazıldıktan SONRA işaretçi yayımlanır). Başka sınıf gören çağrılar eski yavaş yoldan gider,
+// yani en kötü durumda bugünkü hızdır. Bellek: çağrı yeri başına en çok bir 16 baytlık kayıt.
+
+/// Bir çağrı yerinin önbelleği. Üretilen kodda her çağrı yeri kendi `static`'ini taşır.
+pub struct ICache(std::sync::atomic::AtomicPtr<ICEntry>);
+pub struct ICEntry {
+    class: *const Class,
+    val: *const (),
+}
+impl ICache {
+    pub const fn new() -> Self {
+        ICache(std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()))
+    }
+    /// Kayıtlıysa ve sınıf eşleşiyorsa saklanan değer.
+    #[inline(always)]
+    fn hit(&self, c: &'static Class) -> Option<*const ()> {
+        let p = self.0.load(std::sync::atomic::Ordering::Acquire);
+        if !p.is_null() {
+            let e = unsafe { &*p };
+            if std::ptr::eq(e.class, c) {
+                return Some(e.val);
+            }
+        }
+        None
+    }
+    /// Önbellek boşsa (c, val) kaydını yazar; doluysa (başka sınıf için yazılmışsa) dokunmaz.
+    #[cold]
+    #[inline(never)]
+    fn fill(&self, c: &'static Class, val: *const ()) {
+        use std::sync::atomic::Ordering;
+        if !self.0.load(Ordering::Relaxed).is_null() {
+            return;
+        }
+        let b = Box::into_raw(Box::new(ICEntry { class: c, val }));
+        if self.0.compare_exchange(std::ptr::null_mut(), b, Ordering::AcqRel, Ordering::Acquire).is_err() {
+            drop(unsafe { Box::from_raw(b) }); // başka iş parçacığı önce yazdı
+        }
+    }
+}
+
+/// `itab_find`'in önbellekli hali (arayüz çağrısı).
+#[inline(always)]
+pub fn itab_find_ic(ic: &'static ICache, c: &'static Class, sel: u32) -> *const () {
+    if let Some(f) = ic.hit(c) {
+        return f;
+    }
+    itab_find_ic_slow(ic, c, sel)
+}
+#[cold]
+#[inline(never)]
+fn itab_find_ic_slow(ic: &'static ICache, c: &'static Class, sel: u32) -> *const () {
+    let f = itab_find(c, sel);
+    ic.fill(c, f);
+    f
+}
+
+/// `checkcast`'in önbellekli hali: null ya da tam hedef sınıf satır içinde, daha önce geçmiş sınıf önbellekten geçer.
+#[inline(always)]
+pub fn checkcast_ic(r: Ref, target: &'static Class, ic: &'static ICache) -> Res<Ref> {
+    if r.is_null() {
+        return Ok(r);
+    }
+    let c = unsafe { (*r.0).class };
+    if std::ptr::eq(c, target) || ic.hit(c).is_some() {
+        return Ok(r);
+    }
+    checkcast_ic_slow(r, target, ic)
+}
+#[cold]
+#[inline(never)]
+fn checkcast_ic_slow(r: Ref, target: &'static Class, ic: &'static ICache) -> Res<Ref> {
+    let r = checkcast(r, target)?;
+    ic.fill(unsafe { (*r.0).class }, std::ptr::null());
+    Ok(r)
+}
+
+/// `instance_of`'un önbellekli hali: yalnızca "evet" sonuçları saklanır.
+#[inline(always)]
+pub fn instance_of_ic(r: Ref, target: &'static Class, ic: &'static ICache) -> bool {
+    if r.is_null() {
+        return false;
+    }
+    let c = unsafe { (*r.0).class };
+    if std::ptr::eq(c, target) || ic.hit(c).is_some() {
+        return true;
+    }
+    instance_of_ic_slow(r, target, ic)
+}
+#[cold]
+#[inline(never)]
+fn instance_of_ic_slow(r: Ref, target: &'static Class, ic: &'static ICache) -> bool {
+    let yes = instance_of(r, target);
+    if yes {
+        ic.fill(unsafe { (*r.0).class }, std::ptr::null());
+    }
+    yes
+}
+
 pub fn checkcast(r: Ref, target: &'static Class) -> Res<Ref> {
     if r.is_null() || instance_of(r, target) {
         return Ok(r);
@@ -1347,27 +1456,194 @@ pub fn enter_frame(class: &'static str, method: &'static str, desc: &'static str
     FrameGuard
 }
 
+// ---------------------------------------------------------------- hızlı gölge yığın (MONO_FRAMES=fast ile üretilen kod)
+//
+// Acemi notu: yukarıdaki eski yol her metot çağrısında 72 baytlık bir etiketi (dört metin + satır) bir `RefCell<Vec>`'e iter.
+// Bunun için her çağrıda: iş parçacığına özel değişkene "hâlâ yaşıyor mu" sorusu (`try_with`), RefCell kilidi, Vec
+// kapasite denetimi ve 72 bayt kopyalama yapılır; ayrıca `stack_check` aynı işi ayrı bir değişken için tekrarlar.
+// Ölçüm (fib(35), ~30 milyon çağrı): eski yol 245 ms, bu yol 112 ms, hiç defter tutmamak 43 ms.
+//
+// Bu yolda:
+//   * Her metodun sınıf/metot/tanımlayıcı/dosya bilgisi derleme anında bir kez `static FI: FrameInfo` olarak yazılır;
+//     çağrıda yalnızca ona işaretçi (8 bayt) ve satır (4 bayt) itilir.
+//   * Çerçeveler kilitsiz, ham bir tamponda tutulur (yalnızca kendi iş parçacığı dokunur, kilit gereksiz).
+//   * Yığın taşması denetimi aynı yapının içindeki alt sınırla yapılır (ikinci bir thread-local erişimi yok).
+// Bilgi eskisiyle birebir aynıdır: yığın izleri, StackWalker ve hata raporları değişmez.
+// Bir derleme ya tamamen eski ya tamamen yeni yolla üretilir; iki yol aynı programda karışmaz.
+
+/// Bir metodun sabit kimliği: derleme anında üretilir, programın ömrü boyunca yaşar.
+pub struct FrameInfo {
+    pub class: &'static str,
+    pub method: &'static str,
+    pub desc: &'static str,
+    pub file: &'static str,
+}
+
+#[derive(Clone, Copy)]
+struct FastSlot {
+    info: *const FrameInfo,
+    /// İşlenmekte olan ifadenin kaynak satırı (ilk satır işaretçisi gelene kadar -1)
+    line: i32,
+}
+
+struct FastStack {
+    /// çerçeve tamponu (ilk kullanımda ayrılır, dolunca iki katına büyür)
+    p: *mut FastSlot,
+    len: usize,
+    cap: usize,
+    /// yığın alt sınırı: 0 = henüz sorulmadı, 1 = işletim sistemi söylemedi (denetim yok), diğer = sınır
+    low: usize,
+    /// StackOverflowError nesnesi kurulurken tampon bölgede çalışılıyor (bu sırada yeniden fırlatılmaz)
+    in_overflow: bool,
+}
+
+thread_local! {
+    // Drop'u olmayan, sabit ilk değerli thread-local: erişimi tek bir adres hesabıdır ("hâlâ yaşıyor mu" denetimi yok).
+    static FAST: std::cell::UnsafeCell<FastStack> = const {
+        std::cell::UnsafeCell::new(FastStack { p: std::ptr::null_mut(), len: 0, cap: 0, low: 0, in_overflow: false })
+    };
+    // Yalnızca iş parçacığı biterken FAST'in tamponunu geri vermek için var; ilk büyütmede kaydedilir.
+    static FAST_FREE: FastFree = const { FastFree };
+}
+
+struct FastFree;
+impl Drop for FastFree {
+    fn drop(&mut self) {
+        // FAST'in Drop'u olmadığı için bu noktada hâlâ erişilebilir.
+        FAST.with(|f| unsafe {
+            let f = &mut *f.get();
+            if f.cap > 0 {
+                drop(Vec::from_raw_parts(f.p, 0, f.cap));
+                f.p = std::ptr::null_mut();
+                f.cap = 0;
+                f.len = 0;
+            }
+        });
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn fast_grow(f: &mut FastStack) {
+    let nc = if f.cap == 0 { 1024 } else { f.cap * 2 };
+    let mut v: Vec<FastSlot> = Vec::with_capacity(nc);
+    unsafe {
+        std::ptr::copy_nonoverlapping(f.p, v.as_mut_ptr(), f.len);
+        if f.cap > 0 {
+            drop(Vec::from_raw_parts(f.p, 0, f.cap));
+        } else {
+            FAST_FREE.with(|_| ()); // ilk ayırma: iş parçacığı bitince tamponu geri verecek nesneyi kaydet
+        }
+    }
+    f.p = v.as_mut_ptr();
+    f.cap = nc;
+    std::mem::forget(v);
+}
+
+#[cold]
+#[inline(never)]
+fn fast_low_init(f: &mut FastStack) {
+    let l = stack_low_init();
+    f.low = if l == 0 { 1 } else { l };
+}
+
+#[cold]
+#[inline(never)]
+fn fast_overflow() -> Res<FastGuard> {
+    FAST.with(|f| unsafe { (*f.get()).in_overflow = true });
+    let e = stack_overflow();
+    FAST.with(|f| unsafe { (*f.get()).in_overflow = false });
+    e
+}
+
+pub struct FastGuard;
+
+impl Drop for FastGuard {
+    #[inline(always)]
+    fn drop(&mut self) {
+        FAST.with(|f| unsafe { (*f.get()).len -= 1 });
+    }
+}
+
+/// Hızlı yol: yığın taşmasını denetler (eski `stack_check`'in işi) ve metodun çerçevesini iter.
+#[inline(always)]
+pub fn enter_frame_s(info: &'static FrameInfo) -> Res<FastGuard> {
+    let marker = 0u8;
+    let sp = std::ptr::addr_of!(marker) as usize;
+    let over = FAST.with(|f| unsafe {
+        let f = &mut *f.get();
+        if f.low == 0 {
+            fast_low_init(f);
+        }
+        if sp < f.low && !f.in_overflow {
+            return true;
+        }
+        if f.len == f.cap {
+            fast_grow(f);
+        }
+        *f.p.add(f.len) = FastSlot { info, line: -1 };
+        f.len += 1;
+        false
+    });
+    if over {
+        return fast_overflow();
+    }
+    Ok(FastGuard)
+}
+
+/// Hızlı yol: mevcut çerçevenin kaynak satırını işaretler.
+#[inline(always)]
+pub fn set_line_s(line: i32) {
+    FAST.with(|f| unsafe {
+        let f = &mut *f.get();
+        if f.len > 0 {
+            (*f.p.add(f.len - 1)).line = line;
+        }
+    });
+}
+
+/// Hızlı yol kullanılıyorsa onun çerçeveleri (en içten başlayarak), yoksa None.
+fn fast_frames() -> Option<Vec<(&'static str, &'static str, &'static str, &'static str, i32)>> {
+    FAST.with(|f| unsafe {
+        let f = &*f.get();
+        if f.len == 0 {
+            return None;
+        }
+        Some(
+            (0..f.len)
+                .rev()
+                .map(|i| {
+                    let s = *f.p.add(i);
+                    let fi = &*s.info;
+                    (fi.class, fi.method, fi.desc, fi.file, s.line)
+                })
+                .collect(),
+        )
+    })
+}
+
 /// Bu iş parçacığındaki her çerçeve, en içten başlayarak: (sınıf iç adı, metot, tanımlayıcı, kaynak dosya, satır).
 pub fn frames_snapshot() -> Vec<(&'static str, &'static str, &'static str, &'static str, i32)> {
+    if let Some(v) = fast_frames() {
+        return v;
+    }
     FRAMES.with(|f| f.borrow().iter().rev().map(|t| (t.class, t.method, t.desc, t.file, t.line)).collect())
 }
 
 /// Çerçeve başına bir satır, en içten başlayarak: sınıf (noktalı), metot, kaynak dosya (boş olabilir), satır (bilinmiyorsa -1),
 /// sekmelerle ayrılmış. Kurucu çerçeveleri ve en üstteki `fillInStackTrace` atlanır. HotSpot da böyle yapar.
 pub fn capture_backtrace() -> String {
-    FRAMES.with(|f| {
-        let frames = f.borrow();
-        let mut out = String::new();
-        for t in frames
-            .iter()
-            .rev()
-            // Gizli lambda vekil sınıfları (`Owner$$Lambda$N`) HotSpot izlerinde görünmez.
-            .filter(|t| !t.class.contains("$$Lambda$"))
-            // Her Throwable alt sınıfı fillInStackTrace'i geçersiz kılabilir. JDK'nın NullPointerException'ı da böyle yapar.
-            .skip_while(|t| t.method == "<init>" || t.method == "fillInStackTrace")
-        {
-            out.push_str(&format!("{}\t{}\t{}\t{}\n", t.class.replace('/', "."), t.method, t.file, t.line));
-        }
-        out.trim_end_matches('\n').to_string()
-    })
+    // iki yol (eski ve hızlı) aynı listeyi verir: frames_snapshot en içten başlayarak döndürür
+    let frames = frames_snapshot();
+    let mut out = String::new();
+    for (class, method, _desc, file, line) in frames
+        .into_iter()
+        // Gizli lambda vekil sınıfları (`Owner$$Lambda$N`) HotSpot izlerinde görünmez.
+        .filter(|t| !t.0.contains("$$Lambda$"))
+        // Her Throwable alt sınıfı fillInStackTrace'i geçersiz kılabilir. JDK'nın NullPointerException'ı da böyle yapar.
+        .skip_while(|t| t.1 == "<init>" || t.1 == "fillInStackTrace")
+    {
+        out.push_str(&format!("{}\t{}\t{}\t{}\n", class.replace('/', "."), method, file, line));
+    }
+    out.trim_end_matches('\n').to_string()
 }

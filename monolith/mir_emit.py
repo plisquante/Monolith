@@ -95,7 +95,7 @@ class MirMethodGen(MethodGen):
                     lines.append(f"pc = {pc};")
                 ln = self.line_for(pc)
                 if ln is not None and ln != cur_line[0]:
-                    lines.append(f"rt::set_line({ln});")
+                    lines.append(f"rt::{self.g.set_line_fn}({ln});")
                     cur_line[0] = ln
 
             for mi in b.insns:

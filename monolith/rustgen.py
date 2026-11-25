@@ -184,6 +184,29 @@ def find_iterator_scopes(insns) -> dict:
     return out
 
 
+
+# java.lang.Math için doğrudan Rust karşılıkları (MONO_INTRINSICS=1). Yalnızca Java'nın tanımıyla HER girdide (NaN, sonsuz,
+# -0.0, MIN_VALUE dahil) birebir aynı sonucu veren işlemler buradadır:
+#   * int/long max/min: tam sayı karşılaştırması, fark yok.
+#   * int/long abs: Java'da Math.abs(MIN_VALUE) == MIN_VALUE (taşar); Rust'ta bunu wrapping_abs verir.
+#   * float/double abs: Java işaret bitini temizler (NaN dahil); Rust abs da öyle.
+#   * double sqrt: ikisi de IEEE 754'e göre doğru yuvarlanmış karekök.
+#   * double floor/ceil: ikisi de IEEE tanımı (NaN, sonsuz ve -0.0 korunur; ceil(-0.5) == -0.0).
+# float/double max/min BURADA YOK: Java'da NaN'ı yayar ve -0.0 < 0.0 sayar, Rust'ın max/min'i farklı davranır.
+MATH_INTRINSICS = {
+    ("max", "(II)I"): "{0}.max({1})",
+    ("min", "(II)I"): "{0}.min({1})",
+    ("max", "(JJ)J"): "{0}.max({1})",
+    ("min", "(JJ)J"): "{0}.min({1})",
+    ("abs", "(I)I"): "{0}.wrapping_abs()",
+    ("abs", "(J)J"): "{0}.wrapping_abs()",
+    ("abs", "(F)F"): "{0}.abs()",
+    ("abs", "(D)D"): "{0}.abs()",
+    ("sqrt", "(D)D"): "{0}.sqrt()",
+    ("floor", "(D)D"): "{0}.floor()",
+    ("ceil", "(D)D"): "{0}.ceil()",
+}
+
 class MethodGen:
     def __init__(self, gen, ci, m):
         self.g, self.p, self.w, self.ci, self.m = gen, gen.prog, gen.world, ci, m
@@ -337,15 +360,40 @@ class MethodGen:
             e(f"{self.sname(len(stk) - 1, rk)} = {call};")
         return None
 
+    def itab_expr(self, cls: str, sel) -> str:
+        """Arayüz çağrısının hedef metodunu bulan ifade: önbellekli (MONO_ICACHE=1) ya da her seferinde arayan eski yol."""
+        if self.g.icache:
+            return f"rt::itab_find_ic({{ static IC: rt::ICache = rt::ICache::new(); &IC }}, {cls}, {sel})"
+        return f"rt::itab_find({cls}, {sel})"
+
     def iface_call(self, m2, recv, vals, ptypes, cret) -> str:
         sel = self.g.sel(m2.name, m2.desc)
         fp = (f"unsafe {{ std::mem::transmute::<*const (), extern \"C\" fn({', '.join(ptypes)}) -> {cret}>"
-              f"(rt::itab_find((*rt::nn({recv})?).class, {sel})) }}")
+              f"({self.itab_expr(f'(*rt::nn({recv})?).class', sel)}) }}")
         return f"({fp})({', '.join([recv] + vals)}).res()?"
 
     def init_class(self, ci2, emit):
+        if self.g.init_elide and self.already_initialized(ci2):
+            return
         if self.g.needs_init(ci2):
             emit(f"unsafe {{ {self.g.init_name(ci2)}() }}.res()?;")
+
+    def already_initialized(self, ci2) -> bool:
+        """Bu metot çalışırken `ci2` kesinlikle başlatılmış mı (ya da bu iş parçacığı tarafından başlatılıyor mu)?
+
+        JVM kuralları (JLS 12.4): bir sınıfın metodu ancak sınıf başlatıldıktan sonra (ya da başlatıcısının içinden)
+        çalışabilir: statik metot çağrısı ve `new` önce sınıfı başlatır, örnek metodu için o sınıfın bir nesnesi olmalıdır.
+        Bir sınıf başlatılmadan önce de üst sınıfı başlatılır. Dolayısıyla metodun kendi sınıfı ve onun üst sınıfları
+        (arayüzler değil) için denetim her zaman "zaten yapıldı" cevabını verir; o çağrıyı üretmemek davranışı değiştirmez.
+        Arayüz metotları için de kendi arayüzü başlatılmıştır (statik çağrı başlatır; varsayılan metot çalışıyorsa onu
+        uygulayan sınıf başlatılmıştır ve varsayılan metot bildiren üst arayüzler onunla birlikte başlatılır).
+        """
+        c = self.ci
+        while c is not None:
+            if c is ci2 or c.name == ci2.name:
+                return True
+            c = c.super
+        return False
 
     @staticmethod
     def kind_of_field(desc: str) -> str:
@@ -636,7 +684,10 @@ class MethodGen:
             except LinkError as le:
                 self.emit_link_err(e, "java/lang/NoClassDefFoundError", str(le), stk, 1, "Ljava/lang/Object;")
                 return None
-            e(f"{top()} = rt::checkcast({top()}, {cr})?;")
+            if self.g.icache:
+                e(f"{top()} = rt::checkcast_ic({top()}, {cr}, {{ static IC: rt::ICache = rt::ICache::new(); &IC }})?;")
+            else:
+                e(f"{top()} = rt::checkcast({top()}, {cr})?;")
         elif op == "instanceof":
             try:
                 cr = self.cref(a.name)
@@ -644,13 +695,26 @@ class MethodGen:
                 self.emit_link_err(e, "java/lang/NoClassDefFoundError", str(le), stk, 1, "I")
                 return None
             x = pop()
-            push("I", f"rt::instance_of({x}, {cr}) as i32")
+            if self.g.icache:
+                push("I", f"rt::instance_of_ic({x}, {cr}, {{ static IC: rt::ICache = rt::ICache::new(); &IC }}) as i32")
+            else:
+                push("I", f"rt::instance_of({x}, {cr}) as i32")
         elif op == "invokestatic":
             args, ret = parse_method_desc(a.desc)
             try:
                 dc, m2 = self.resolve(a, special=False)
             except LinkError as le:
                 self.emit_link_err(e, "java/lang/NoSuchMethodError", str(le), stk, len(args), ret)
+                return None
+            intr = MATH_INTRINSICS.get((m2.name, m2.desc)) if (self.g.intrinsics and dc.name == "java/lang/Math"
+                                                               and (dc.name, m2.name, m2.desc) not in self.g.patches) else None
+            if intr is not None:
+                # Doğrudan Rust işlemi: çağrı yok, sınıf başlatma denetimi yok (Math'in başlatıcısının gözlenebilir bir yan
+                # etkisi yoktur), derleyici döngüyü vektörleştirebilir. Her ifade Java'nın tanımıyla birebir aynı sonucu verir.
+                vals = [None] * len(args)
+                for j in range(len(args) - 1, -1, -1):
+                    vals[j] = pop()
+                push(kind_of(ret), intr.format(*vals))
                 return None
             self.init_class(dc, e)
             vals = [None] * len(args)
@@ -731,7 +795,7 @@ class MethodGen:
                         kw = "if" if idx_p == 0 else "else if"
                         arms_code.append(f"{kw} std::ptr::eq(c__, {c_ref}) {{ {d_call} }}")
                     sel = self.g.sel(m2.name, m2.desc)
-                    fb_fp = f"unsafe {{ std::mem::transmute::<*const (), extern \"C\" fn({', '.join(ptypes)}) -> {cret}>(rt::itab_find((*o__).class, {sel})) }}"
+                    fb_fp = f"unsafe {{ std::mem::transmute::<*const (), extern \"C\" fn({', '.join(ptypes)}) -> {cret}>({self.itab_expr('(*o__).class', sel)}) }}"
                     fb = f"({fb_fp})({', '.join(['r__'] + vals)}).res()?"
                     call = f"{{ let r__ = {recv}; let o__ = rt::nn(r__)?; let c__ = unsafe {{ (*o__).class as *const rt::Class }}; {' '.join(arms_code)} else {{ {fb} }} }}"
                 else:
@@ -851,7 +915,7 @@ class MethodGen:
                     lines.append(f"pc = {ins.pc};")
                 if ins.pc in line_at:
                     # bu ifadenin kaynak satırı: yığın izleri, dışarıya çağrı yapan her çerçeve için bunu okur
-                    lines.append(f"rt::set_line({line_at[ins.pc]});")
+                    lines.append(f"rt::{self.g.set_line_fn}({line_at[ins.pc]});")
                 if ins.targets and any(t <= ins.pc for t in ins.targets):
                     has_sp = True
                     lines.append("_sp_tick = _sp_tick.wrapping_add(1); if (_sp_tick & 1023) == 0 { rt::gc_safepoint(); }")
@@ -907,8 +971,13 @@ class MethodGen:
         rret = "()" if ret == "V" else RT[kind_of(ret)]
         if handlers:
             self.sname(0, "A")
-        body = ["    rt::stack_check()?;",
-                f"    let _frame = rt::enter_frame({rstr(self.ci.name)}, {rstr(m.name)}, {rstr(m.desc)}, {rstr(self.ci.cf.source_file or '')});"]
+        if self.g.fast_frames:
+            body = [f"    static FI: rt::FrameInfo = rt::FrameInfo {{ class: {rstr(self.ci.name)}, method: {rstr(m.name)}, "
+                    f"desc: {rstr(m.desc)}, file: {rstr(self.ci.cf.source_file or '')} }};",
+                    "    let _frame = rt::enter_frame_s(&FI)?;"]
+        else:
+            body = ["    rt::stack_check()?;",
+                    f"    let _frame = rt::enter_frame({rstr(self.ci.name)}, {rstr(m.name)}, {rstr(m.desc)}, {rstr(self.ci.cf.source_file or '')});"]
         for n, k in sorted(self.used_locals.items()):
             body.append(f"    let mut {n}: {RT[k]} = {DEFAULT[k]};")
         for n, k in sorted(self.used_stack.items()):
@@ -987,7 +1056,8 @@ class MethodGen:
             if nt:
                 nt_body = []
                 for ln in body:
-                    if ln.startswith("    rt::stack_check()?;") or ln.startswith("    let _frame = rt::enter_frame(") or ln.lstrip().startswith("rt::set_line("):
+                    if (ln.startswith("    rt::stack_check()?;") or ln.startswith("    let _frame = rt::enter_frame")
+                            or ln.startswith("    static FI: rt::FrameInfo") or ln.lstrip().startswith("rt::set_line")):
                         continue  # a method that cannot throw makes no calls: no bound to check, no trace to record
                     s = ln.lstrip()
                     ind = ln[:len(ln) - len(s)]
@@ -1260,6 +1330,25 @@ class Gen:
         self.patches = patches if patches is not None else PatchSet({}, [])
         import collections as _c
         self.use_mir = bool(os.environ.get("MONO_MIR"))
+        # MONO_FRAMES=fast: hızlı gölge yığın (rt.rs `enter_frame_s`/`set_line_s`). Metot başına bir `static FI: FrameInfo`
+        # üretilir, çağrıda yalnızca ona işaretçi itilir; yığın taşması denetimi de aynı adımda yapılır. Varsayılan: eski yol
+        # (`stack_check` + `enter_frame` + `set_line`), değişmedi.
+        self.fast_frames = os.environ.get("MONO_FRAMES", "") == "fast"
+        self.set_line_fn = "set_line_s" if self.fast_frames else "set_line"
+        # MONO_ICACHE=1: arayüz çağrısı, checkcast ve instanceof için çağrı yeri önbelleği (rt.rs `ICache`). Her çağrı yerine
+        # kendi `static IC` önbelleği üretilir. Varsayılan: eski yol (`itab_find`/`checkcast`/`instance_of`), değişmedi.
+        self.icache = os.environ.get("MONO_ICACHE", "") == "1"
+        # MONO_INTRINSICS=1: java.lang.Math'in bazı metotları çağrı yerine doğrudan Rust işlemi olarak üretilir (MATH_INTRINSICS).
+        # Varsayılan: eski yol (gerçek çağrı), değişmedi.
+        self.intrinsics = os.environ.get("MONO_INTRINSICS", "") == "1"
+        # MONO_INIT_ELIDE=1: bir metodun içinde kendi sınıfının ve üst sınıflarının başlatma denetimi üretilmez (gerekçe:
+        # MethodGen.init_class). Varsayılan: eski yol (her statik erişimde denetim), değişmedi.
+        self.init_elide = os.environ.get("MONO_INIT_ELIDE", "") == "1"
+        # MONO_SHARD=pkg: sınıflar parçalara SHA1 ile rastgele değil, paketlerine göre dağıtılır ve AYNI PARÇADAKİ sınıflar
+        # birbirini doğrudan (satır içine alınabilir `r_` fonksiyonuyla) çağırır (shard_of, rust_callable). Varsayılan: eski
+        # yol (rastgele dağıtım, yalnızca aynı sınıfın metotları doğrudan), değişmedi.
+        self.shard_pkg = os.environ.get("MONO_SHARD", "") == "pkg"
+        self._shard_map: dict | None = None
         self.mir_fallback = _c.Counter()
         self.mir_methods = 0
         self.mir_inlined = 0
@@ -1344,7 +1433,81 @@ class Gen:
 
     def rust_callable(self, cur_cn: str, dc, m) -> bool:
         return (not m.is_native and m.code is not None and not (m.access & 0x0020)
-                and (self.shards <= 1 or cur_cn == dc.name))
+                and (self.shards <= 1 or cur_cn == dc.name
+                     or (self.shard_pkg and self.shard_of(cur_cn) == self.shard_of(dc.name))))
+
+    def shard_of(self, cn: str) -> int:
+        """Sınıfın parça numarası. Eski yol: sınıf adının SHA1'i. MONO_SHARD=pkg: paket bazlı dengeli dağıtım.
+
+        Acemi notu: 16 parça ayrı ayrı derlenir; bir parçadaki kod başka parçadaki fonksiyonu yalnızca `extern "C"` üzerinden,
+        satır içine almadan çağırabilir. Sınıfları rastgele dağıtınca birbirini en çok çağıran sınıflar (aynı paketin
+        sınıfları) çoğunlukla farklı parçalara düşer. Paket bazlı dağıtım onları aynı parçada toplar.
+        Dağıtım çeviriden ÖNCE, erişilebilir metotların bytecode boyutlarıyla bir kez hesaplanır (aynı girdi -> aynı
+        dağıtım). Tabloda olmayan sınıf (çeviri sırasında üretilen) önce paketinin parçasına, paket de yoksa SHA1'e düşer.
+        """
+        if not self.shard_pkg or self.shards <= 1:
+            return int(hashlib.sha1(cn.encode()).hexdigest()[:8], 16) % self.shards
+        if self._shard_map is None:
+            self._shard_map = self._build_shard_map()
+        cmap, pmap = self._shard_map
+        if cn in cmap:
+            return cmap[cn]
+        pkg = cn.rsplit("/", 1)[0] if "/" in cn else ""
+        if pkg in pmap:
+            return pmap[pkg]
+        return int(hashlib.sha1(cn.encode()).hexdigest()[:8], 16) % self.shards
+
+    def _build_shard_map(self):
+        """(sınıf -> parça, paket -> parça). Paketler ağırlığa göre büyükten küçüğe en hafif parçaya konur (LPT). Bir parçaya
+        sığmayacak kadar büyük paket, üst düzey sınıflarına göre (iç sınıflar dış sınıfıyla birlikte kalır) bölünür."""
+        n = self.shards
+        weight: dict[str, int] = {}
+        for cn, key in self.prog.reachable:
+            ci = self.world.get(cn)
+            if ci is None:
+                continue
+            w = 0
+            for mm in ci.cf.methods:
+                if mm.name + mm.desc == key and mm.code is not None:
+                    w = len(mm.code.code)
+                    break
+            weight[cn] = weight.get(cn, 200) + w  # 200: sınıf başına sabit pay (sınıf tablosu, vtable, alanlar)
+        by_pkg: dict[str, list[str]] = {}
+        for cn in weight:
+            by_pkg.setdefault(cn.rsplit("/", 1)[0] if "/" in cn else "", []).append(cn)
+        total = sum(weight.values()) or 1
+        cap = total / n * 0.5  # bundan büyük paket bölünür, böylece dengeleme yapılabilir
+        groups: list[tuple[int, str, list[str]]] = []
+        for pkg, cls in by_pkg.items():
+            pw = sum(weight[c] for c in cls)
+            if pw <= cap:
+                groups.append((pw, pkg, sorted(cls)))
+                continue
+            tops: dict[str, list[str]] = {}
+            for c in sorted(cls):
+                tops.setdefault(c.split("$", 1)[0], []).append(c)
+            cur: list[str] = []
+            cw = 0
+            for t in sorted(tops):
+                cur.extend(tops[t])
+                cw += sum(weight[c] for c in tops[t])
+                if cw >= cap:
+                    groups.append((cw, pkg + "#" + t, cur))
+                    cur, cw = [], 0
+            if cur:
+                groups.append((cw, pkg + "#~", cur))
+        groups.sort(key=lambda g: (-g[0], g[1]))
+        load = [0] * n
+        cmap: dict[str, int] = {}
+        pmap: dict[str, int] = {}
+        for w, key, cls in groups:
+            i = min(range(n), key=lambda k: (load[k], k))
+            load[i] += w
+            for c in cls:
+                cmap[c] = i
+            pkg = key.split("#", 1)[0]
+            pmap.setdefault(pkg, i)
+        return cmap, pmap
 
     def call_direct(self, cur_cn: str, dc, m, arg_exprs: list[str]) -> str:
         fn_nm = fname(dc.name, m.name, m.desc)
@@ -2220,7 +2383,9 @@ def _generate_parts(main: str, natives_src: str, cp_dirs: list, strict: bool = F
     nshards = max(1, min(shards, len(sorted_cls)))
     buckets: list[list[str]] = [[] for _ in range(nshards)]
     for cn in sorted_cls:
-        idx = int(hashlib.sha1(cn.encode()).hexdigest()[:8], 16) % nshards
+        # g.shard_of: eski yolda SHA1 (önceki satırın aynısı), MONO_SHARD=pkg ile paket tablosu. rust_callable da aynı
+        # fonksiyonu kullanır: doğrudan çağrının hedefi gerçekten aynı parça dosyasında olmalı.
+        idx = g.shard_of(cn) if nshards == g.shards else int(hashlib.sha1(cn.encode()).hexdigest()[:8], 16) % nshards
         buckets[idx].append(cn)
 
     arr_syms = {f"CLS_ARR_{k}" for k in ARR_KINDS}
