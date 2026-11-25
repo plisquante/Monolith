@@ -313,3 +313,11 @@ Diğer bulgular (ölçülmedi):
 - Parçalama SHA1 ile rastgele: çağrıların yaklaşık yarısı parça dışı (`extern "C"`, satır içine alınamaz). Paket ya da çağrı grafiğine göre parçalama yerelliği artırır.
 - `rustc` hedef işlemci ayarı yok (`-C target-cpu` / `target-feature`): x86-64 temel seviye, aarch64 temel armv8.0. ARM'da LSE atomikleri ve FMA gibi özellikler kullanılmıyor olabilir; Android için doğrulanmalı.
 - `String` kaplaması UTF-16 `char[]` (JDK'nın Latin-1 sıkıştırılmış dizgisi yok): dizgi belleği iki kat. Java kaplaması değişikliği gerektirir (Java kuralı).
+
+### 24.2 Genişletilmiş bölge: ikiye bölme sonucu (25 Kasım 2026)
+
+- Liste 5 sınıf + `BlockPos` + `CubePointRange` + `OffsetDoubleList` + `*$$Lambda$*`: iki koşu da çöktü (SIGSEGV adres `0x94`, ardından
+  `AbstractMethodError: LinkedTreeMap$Node`): boşaltılıp yeniden kullanılan bir bölge parçasını gösteren bayat referans.
+- Aynı liste lambdalar HARİÇ: 240 sn koşu temiz (çökme yok, temiz çıkış, dünya kaydedildi). Suçlu lambdalar; delik bulunmadı.
+- Bu koşu (tembel + eşzamanlı): son STW ortalama 25,8 ms, p95 66,3, en çok 104,7 (5 sınıflı koşu: 17,8 / 32,4 / 66); başlangıç kökleri
+  ortalama 7,1 ms. Bölge: 74,5 milyon tahsis, %24,9 yükseltildi. Tahsis profili alınmadı; duraklama artışı tek koşu, doğrulanmadı.
