@@ -113,7 +113,9 @@ def main() -> int:
                 off = to_vaddr(segs, addr - start + foff)
                 if off is None:
                     continue
-                offs.append(off)
+                # dönüş adresi çağrının SONRAKİ komutunu gösterir; çağrı işlevin son komutuysa bu bir sonraki işleve düşer.
+                # 1 çıkarmak adresi çağrı komutunun içine geri alır (addr2line'ın çağrı yerini bulması için standart yöntem)
+                offs.append(off - 1)
                 if len(offs) >= a.frames:
                     break
         per_site.append((r, offs))
