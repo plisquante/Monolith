@@ -15,6 +15,7 @@
 - [`MASTER_PLAN_TR.md`](MASTER_PLAN_TR.md) — **Güncel ana plan**: mimari, iş akışları, sürüm yolu, 1.0 onay listesi
 - [`IMPL_SPEC.md`](IMPL_SPEC.md) — **Uygulama şartnamesi**: kapalı kararlar, arayüzler, görev listesi, kabul testleri
 - [`GC_PLAN.md`](GC_PLAN.md) — Bellek mimarisi planı (katmanlar, rölanti toplayıcı, kaçak bütçesi)
+- [`PIPELINE_VE_YOL_HARITASI_TR.md`](PIPELINE_VE_YOL_HARITASI_TR.md) — **Basit Türkçe**: Java'dan çalışan oyuna pipeline, güncel kapı sonuçları ve sıralı yol haritası
 - [`YOL_HARITASI_TR.md`](YOL_HARITASI_TR.md) — Türkçe güncel durum, client'ı %100 çalıştırma ve RAM/hızda JVM'i geçme eksikleri
 - [`STATUS.md`](STATUS.md) — Kronolojik doğrulama kayıtları (güncel durum için §16–§19'a bakın)
 - [`BENCHMARK.md`](BENCHMARK.md) — Alt sistem mikrobenchmarkları ve tarihsel HotSpot vs native ölçümleri
