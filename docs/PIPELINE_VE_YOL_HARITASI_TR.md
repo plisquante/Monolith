@@ -66,3 +66,11 @@ Sıra: önce güvenilirlik, sonra bellek, sonra platformlar.
 
 - Bir kapı geçildiğinde 2. bölümü, bir iş bittiğinde 3. bölümü güncelle.
 - Ayrıntılı kronoloji `STATUS.md` içindedir, buraya taşınmaz.
+
+## 5. Güncel tahsis profili (25 Kasım 2026, GC açık, 242 sn oyun)
+
+- Toplam 11.950 MiB tahsis, saniyede 49,5 MiB (hedef: 5 MiB/sn altı). %84,5'i ömrü kısa (TEMP). 29 toplama, toplam duraklama 16 sn, en uzun 1,5 sn.
+- En büyük çöp sınıfları: `[C` 1.284 MiB, `[I` 1.110 MiB, `Object[]` 755 MiB, `[J` 590 MiB, `[B` 584 MiB, `DataResult$Success` 506 MiB, `Optional` 478 MiB, `ArrayList$Itr` 295 MiB, `Vec3` 278 MiB, `AABB` 233 MiB.
+- En büyük tek nokta: `PalettedContainer.pack` (yonga kaydı/gönderimi) `int[]` ayırıyor, örneklerin %7,6'sı.
+- Kolay yol yok: çöpün çoğu Codec (`DataResult`, `Optional`, `Pair`) ve fizik (`Vec3`, `AABB`) kodundan geliyor, tek tek yama yerine derleyicinin kaçış analizi (`monolith/escape.py`, çerçeve ve arena katmanları) bu sınıfları kapsayacak şekilde genişletilmeli. Geri dönüştürülen yineleyiciler zaten %6,5'i yığın dışında karşılıyor.
+- Sonuç: GC şimdilik kapatılamaz. Kapatma kapısı (`MONO_GC=off` ile 60 dk, büyüme 1 MiB/dk altı) geçilmedi.
