@@ -725,7 +725,7 @@ def write_report(result: Optional[Result], path: str) -> None:
     if prefix:
         dump = {}
         for (cn, key), r in result.methods.items():
-            if cn.startswith(tuple(prefix.split(","))) and (r.sites or r.rsites):
+            if cn.startswith(tuple(prefix.split(","))) and (r.sites or r.rsites or key.startswith("<init>")):
                 dump[f"{cn}.{key}"] = {
                     "params_escape": list(r.params),
                     "ret_fresh": r.ret_fresh,
