@@ -296,3 +296,20 @@ tablodan bulunması, (6) yapılandırılmış döngü üretimi, (7) parçalama/P
 
 Dizgi birleştirme (`MONO_CONCAT=exact`, `indy.py` `concat_exact`): JVM'e karşı kenar durum testi ve Strings, Lambdas, Oop,
 Collections1, Exceptions 5/5 geçti; varsayılan eski yol değişmedi. Oyundaki tahsis etkisi henüz ölçülmedi.
+
+### 24.1 Tam tarama, ek bulgular (25 Kasım 2026)
+
+Küçük Rust ölçümleri (opt 1, 100 milyon tekrar; `scratchpad/fb/*.rs` kalıpları üretilen kodun aynısını taklit eder):
+
+| bulgu | bugün | düzeltilmiş | not |
+|---|---|---|---|
+| Arayüz çağrısı (`itab_find` ikili arama, 24 girdili tablo) | 6,1 ns | 1,5 ns (çağrı yeri önbelleği) | parça başına ~4 500 çağrı yeri |
+| `checkcast` arayüze, 3 kat derinlik (`is_subclass` zincir gezme) | 8,9 ns | 1,0 ns (satır içi tam sınıf hızlı yolu) | parça başına ~4 300 yer |
+| `Math.max` (dış çağrı + `init_java_lang_Math` + `CRes`) | 0,62 ns | 0,19 ns (satır içi, döngü vektörleşir) | çağrının kendisi döngü optimizasyonunu engeller |
+| Sınıf başlatma denetimi | çağrı başına ~0,3 ns | | parça başına 22 291 yer; kendi sınıfına bile (Vec3 içinde 35); ucuz ama her biri dış çağrı |
+
+Diğer bulgular (ölçülmedi):
+- `synchronized`: her `monitorenter` bir parça kilidi + `HashMap` araması + `Arc` sayacı + iç kilit; `monitorexit` aynısı. HotSpot tek CAS.
+- Parçalama SHA1 ile rastgele: çağrıların yaklaşık yarısı parça dışı (`extern "C"`, satır içine alınamaz). Paket ya da çağrı grafiğine göre parçalama yerelliği artırır.
+- `rustc` hedef işlemci ayarı yok (`-C target-cpu` / `target-feature`): x86-64 temel seviye, aarch64 temel armv8.0. ARM'da LSE atomikleri ve FMA gibi özellikler kullanılmıyor olabilir; Android için doğrulanmalı.
+- `String` kaplaması UTF-16 `char[]` (JDK'nın Latin-1 sıkıştırılmış dizgisi yok): dizgi belleği iki kat. Java kaplaması değişikliği gerektirir (Java kuralı).
