@@ -491,7 +491,12 @@ class MethodGen:
             e(f"if {IF1[op].format(a=x)} {{ pc = {ins.targets[0]}; continue; }}")
         elif op in IF2:
             b = pop(); a_ = pop()
-            e(f"if {IF2[op].format(a=a_, b=b)} {{ pc = {ins.targets[0]}; continue; }}")
+            if op in ("if_acmpeq", "if_acmpne") and self.g.region_classes:
+                # bölge etkin: asıl nesne ile yığın kopyası aynı nesnedir (iletme işaretçisi izlenir)
+                cond = f"{'' if op == 'if_acmpeq' else '!'}rt::ref_eq({a_}, {b})"
+            else:
+                cond = IF2[op].format(a=a_, b=b)
+            e(f"if {cond} {{ pc = {ins.targets[0]}; continue; }}")
         elif op == "goto":
             e(f"pc = {ins.targets[0]}; continue;")
             return [ins.targets[0]]
@@ -527,7 +532,7 @@ class MethodGen:
             v = pop()
             if f.desc[0] in "L[":
                 # referans yazımı: SATB yazma bariyeri (rt::satb_store); işaretleme etkin değilken işlem yapmaz
-                e(f"unsafe {{ rt::satb_store(&raw mut {self.g.static_name(dc, f)}, {v}); }}")
+                e(f"unsafe {{ rt::{'satb_store_r' if self.g.region_classes else 'satb_store'}(&raw mut {self.g.static_name(dc, f)}, {v}); }}")
             else:
                 e(f"unsafe {{ {self.g.static_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
         elif op == "getfield":
@@ -551,7 +556,7 @@ class MethodGen:
             o = pop()
             if f.desc[0] in "L[":
                 # referans yazımı: SATB yazma bariyeri (rt::satb_store); işaretleme etkin değilken işlem yapmaz
-                e(f"unsafe {{ rt::satb_store(&raw mut (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)}, {v}); }}")
+                e(f"unsafe {{ rt::{'satb_store_r' if self.g.region_classes else 'satb_store'}(&raw mut (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)}, {v}); }}")
             else:
                 e(f"unsafe {{ (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
         elif op == "new":
@@ -568,6 +573,8 @@ class MethodGen:
                 var = f"stk{ins.pc}"
                 self.stack_slots[ins.pc] = (var, self.g.struct_name(ci2))
                 push("A", f"unsafe {{ rt::stack_obj(&raw mut {var} as *mut u8, {cr}) }}")
+            elif a.name in self.g.region_classes:
+                push("A", f"rt::alloc_region({cr})")
             elif rslot is not None:
                 push("A", f"rt::alloc_recyclable({cr}, {rslot})")
             else:
@@ -1240,6 +1247,10 @@ class Gen:
 
     def __init__(self, world, prog, natives_src: str, esc_res=None, patches=None):
         self.world, self.prog, self.esc = world, prog, esc_res
+        # MONO_REGION_CLASSES=a/b/C,d/e/F: bu sınıfların örnekleri bölgeye tahsis edilir (docs/PIPELINE_VE_YOL_HARITASI_TR.md
+        # bölüm 18). Boşsa üretilen kod değişmez. Sınıflar değişmez olmalı ve kurucuları `this`'i kaçırmamalı
+        # (tools/region_eligible.py denetler).
+        self.region_classes = frozenset(x.strip().replace(".", "/") for x in os.environ.get("MONO_REGION_CLASSES", "").split(",") if x.strip())
         from .patches import PatchSet
         self.patches = patches if patches is not None else PatchSet({}, [])
         import collections as _c

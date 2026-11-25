@@ -304,7 +304,7 @@ pub fn set_ref(o: Ref, name: &str, v: Ref) {
     let c = unsafe { (*o.0).class };
     if let Some((_, f)) = c.find_field(name, false) {
         if let FLoc::Off(off) = f.loc {
-            unsafe { satb_store((o.0 as *mut u8).add(off as usize) as *mut Ref, v); }
+            unsafe { satb_store_r((o.0 as *mut u8).add(off as usize) as *mut Ref, v); }
         }
     }
 }
@@ -458,6 +458,17 @@ pub use crate::heap::{recycle as recycle_scope, safepoint as gc_safepoint, Arena
 #[inline(always)]
 pub fn gc_thread_guard() -> ThreadGuard {
     ThreadGuard::enter()
+}
+
+/// Bölgede tahsis (bkz. region.rs). Üretilen kod yalnızca MONO_REGION_CLASSES ile seçilen sınıflar için kullanır.
+pub fn alloc_region(class: &'static Class) -> Ref {
+    crate::region::alloc_region(class)
+}
+
+/// `if_acmpeq/ne`: bölge nesnesinin iletmesini izleyerek karşılaştırır (asıl ve kopya aynı nesnedir).
+#[inline(always)]
+pub fn ref_eq(a: Ref, b: Ref) -> bool {
+    crate::region::ref_eq(a, b)
 }
 
 pub fn alloc(class: &'static Class) -> Ref {
@@ -799,6 +810,15 @@ pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
     crate::heap::satb_store(slot, v)
 }
 
+/// Bölge farkında referans yazımı: `slot` bölge nesnesinin içindeyse değer olduğu gibi (kurucu), değilse bölge nesnesi yığına
+/// kopyalanıp kopya yazılır (docs/PIPELINE_VE_YOL_HARITASI_TR.md bölüm 18). Üretilen kod bunu yalnızca bölge sınıfı seçilince kullanır.
+/// # Güvenlik
+/// `satb_store` ile aynı sözleşme.
+#[inline(always)]
+pub unsafe fn satb_store_r(slot: *mut Ref, v: Ref) {
+    crate::heap::satb_store(slot, crate::region::guard_into(slot as usize, v))
+}
+
 pub fn aastore_ref(a: Ref, i: i32, v: Ref) -> Res<()> {
     let d = checked(a, i)?;
     if !v.is_null() {
@@ -810,7 +830,7 @@ pub fn aastore_ref(a: Ref, i: i32, v: Ref) -> Res<()> {
             }
         }
     }
-    unsafe { crate::heap::satb_store((d as *mut Ref).add(i as usize), v) };
+    unsafe { crate::heap::satb_store((d as *mut Ref).add(i as usize), crate::region::guard(v)) };
     Ok(())
 }
 

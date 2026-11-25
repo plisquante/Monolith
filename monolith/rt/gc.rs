@@ -1016,6 +1016,11 @@ fn try_push(
             return;
         }
     }
+    if crate::region::in_region(addr) {
+        // bölge nesnesi: heap toplayıcısı onu süpürmez ama içinden geçer (heap'e verdiği referanslar canlı kalmalı)
+        crate::region::note(addr, work);
+        return;
+    }
     if addr >= large_min && addr < large_max {
         if let Some(&lsz) = large_map.get(&addr) {
             unsafe {
@@ -1272,6 +1277,9 @@ fn collect_impl(begin_only: bool) {
     // iş parçacığı `collect()` çağırırsa o da `finishing` açıkken gelir ve bağımsız bir toplamadır; döndürülmezse önceki
     // döngünün işaretli nesneleri "zaten işaretli" sayılır, çocukları taranmaz ve canlı nesneler süpürülür.
     let new_cycle = begin_only || !G.cycle.load(Ordering::Acquire);
+    if new_cycle {
+        crate::region::cycle_begin(); // bölge parçaları "kanıtlanmamış" olur, iş parçacıkları parça bırakır
+    }
     if lazy_enabled() && new_cycle {
         // Yeni döngü: önceki döngüden kalan süpürülmemiş dilimler, kutup dönmeden önce bitirilir (aksi halde eski ve yeni
         // işaretler karışırdı). Sonra kutup döner: tüm nesneler bir anda "işaretsiz" olur.
@@ -1709,6 +1717,7 @@ fn collect_impl(begin_only: bool) {
         G.satb_on.store(false, Ordering::Release);
         G.cycle.store(false, Ordering::Release);
     }
+    crate::region::cycle_end(); // yığın kelimeleriyle gösterilmeyen bölge parçaları serbest bırakılır
     h.collecting = false;
     G.gc_stopping.store(0, Ordering::Release);
     cv.notify_all();

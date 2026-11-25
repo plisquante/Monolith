@@ -55,7 +55,7 @@ pub fn identity_hash(r: Ref) -> i32 {
 }
 pub fn n_java_lang_Object__hashCode(this: Ref) -> Res<i32> {
     rt::nn(this)?;
-    Ok(identity_hash(this))
+    Ok(identity_hash(crate::region::canon_ref(this)))
 }
 pub fn n_java_lang_Object__clone(this: Ref) -> Res<Ref> {
     let p = rt::nn(this)?;
@@ -97,7 +97,7 @@ pub fn n_java_lang_System__arraycopy(src: Ref, sp: i32, dst: Ref, dp: i32, n: i3
                         if !v.is_null() && !rt::is_subclass((*v.0).class, de) {
                             return rt::throw("java/lang/ArrayStoreException", format!("arraycopy: element type {} is not compatible with {}", (*v.0).class.name.replace('/', "."), de.name.replace('/', ".")));
                         }
-                        *dptr.add(dp as usize + i) = v;
+                        *dptr.add(dp as usize + i) = crate::region::guard(v);
                     }
                     return Ok(());
                 }
@@ -109,6 +109,16 @@ pub fn n_java_lang_System__arraycopy(src: Ref, sp: i32, dst: Ref, dp: i32, n: i3
             crate::heap::satb_log_range((arr_data(dst)).add(dp as usize * es), n as usize * es);
         }
         std::ptr::copy((arr_data(src)).add(sp as usize * es), (arr_data(dst)).add(dp as usize * es), n as usize * es);
+        if sc.elem == b'A' && crate::region::active() {
+            // kaynak bir çerçeve/arena dizisiyse bölge nesneleri içerebilir: hedefe geçen bölge referansları yığına çıkarılır
+            let dptr = arr_data(dst).add(dp as usize * es) as *mut Ref;
+            for k in 0..n as usize {
+                let v = *dptr.add(k);
+                if crate::region::in_region(v.0 as usize) {
+                    *dptr.add(k) = crate::region::guard(v);
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -120,7 +130,7 @@ pub fn n_java_lang_System__nanoTime() -> Res<i64> {
     Ok(START.get_or_init(std::time::Instant::now).elapsed().as_nanos() as i64 + 1_000_000_000)
 }
 pub fn n_java_lang_System__identityHashCode(o: Ref) -> Res<i32> {
-    Ok(identity_hash(o))
+    Ok(identity_hash(crate::region::canon_ref(o)))
 }
 pub fn n_java_lang_System__write0(fd: i32, b: Ref, off: i32, len: i32) -> Res<()> {
     let a = rt::nn(b)? as *mut Arr;
@@ -304,10 +314,11 @@ unsafe_put!(n_jdk_internal_misc_Unsafe__putFloat, f32, f32);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putDouble, f64, f64);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putIntVolatile, i32, i32);
 pub fn n_jdk_internal_misc_Unsafe__putReference(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
-    unsafe { crate::heap::satb_store(addr(o, off) as *mut Ref, v) };
+    unsafe { crate::heap::satb_store(addr(o, off) as *mut Ref, crate::region::guard_into(addr(o, off) as usize, v)) };
     Ok(())
 }
 pub fn n_jdk_internal_misc_Unsafe__putReferenceVolatile(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
+    let v = crate::region::guard_into(addr(o, off) as usize, v);
     unsafe {
         crate::heap::satb_overwrite(addr(o, off) as *mut *mut Obj);
         std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).store(v.0, std::sync::atomic::Ordering::SeqCst)
@@ -333,12 +344,14 @@ pub fn n_jdk_internal_misc_Unsafe__compareAndExchangeLong(this: Ref, o: Ref, off
     Ok(unsafe { match std::sync::atomic::AtomicI64::from_ptr(addr(o, off) as *mut i64).compare_exchange(e, n, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst) { Ok(v) => v, Err(v) => v } })
 }
 pub fn n_jdk_internal_misc_Unsafe__compareAndSetReference(this: Ref, o: Ref, off: i64, e: Ref, n: Ref) -> Res<i32> {
+    let (e, n) = (crate::region::canon_ref(e), crate::region::guard_into(addr(o, off) as usize, n));
     Ok(unsafe {
         crate::heap::satb_overwrite(addr(o, off) as *mut *mut Obj);
         std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).compare_exchange(e.0, n.0, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst).is_ok()
     } as i32)
 }
 pub fn n_jdk_internal_misc_Unsafe__compareAndExchangeReference(this: Ref, o: Ref, off: i64, e: Ref, n: Ref) -> Res<Ref> {
+    let (e, n) = (crate::region::canon_ref(e), crate::region::guard_into(addr(o, off) as usize, n));
     Ok(unsafe {
         crate::heap::satb_overwrite(addr(o, off) as *mut *mut Obj);
         match std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).compare_exchange(e.0, n.0, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst) { Ok(v) => Ref(v), Err(v) => Ref(v) }

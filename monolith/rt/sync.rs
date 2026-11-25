@@ -51,6 +51,7 @@ fn mon(o: *mut Obj) -> Arc<Mon> {
         .clone()
 }
 pub fn enter(r: Ref) -> Res<()> {
+    let r = crate::region::guard(r); // bölge nesnesi üzerinde kilit alınıyorsa önce yığına kopyalanır; kilit hep kopyada yaşar
     let o = rt::nn(r)?;
     let m = mon(o);
     let me = tid();
@@ -84,6 +85,7 @@ pub fn enter(r: Ref) -> Res<()> {
     }
 }
 pub fn exit(r: Ref) -> Res<()> {
+    let r = crate::region::guard(r); // bölge nesnesi üzerinde kilit alınıyorsa önce yığına kopyalanır; kilit hep kopyada yaşar
     let o = rt::nn(r)?;
     let m = mon(o);
     let mut st = m.st.lock().unwrap();
@@ -125,6 +127,7 @@ fn peek(o: *mut Obj) -> Option<Arc<Mon>> {
     table()[(a >> 4) % SHARDS].lock().unwrap().get(&a).cloned()
 }
 pub fn holds_lock(r: Ref) -> Res<bool> {
+    let r = crate::region::guard(r); // bölge nesnesi üzerinde kilit alınıyorsa önce yığına kopyalanır; kilit hep kopyada yaşar
     let o = rt::nn(r)?;
     Ok(match peek(o) {
         Some(m) => m.st.lock().unwrap().owner == tid(),
@@ -132,6 +135,7 @@ pub fn holds_lock(r: Ref) -> Res<bool> {
     })
 }
 pub fn notify(r: Ref, all: bool) -> Res<()> {
+    let r = crate::region::guard(r); // bölge nesnesi üzerinde kilit alınıyorsa önce yığına kopyalanır; kilit hep kopyada yaşar
     let o = rt::nn(r)?;
     let Some(m) = peek(o) else {
         return rt::throw("java/lang/IllegalMonitorStateException", "current thread is not owner".to_string());
@@ -145,6 +149,7 @@ pub fn notify(r: Ref, all: bool) -> Res<()> {
 }
 /// Object.wait: millis/nanos == 0 ise zaman aşımı olmadan bekler.
 pub fn wait(r: Ref, millis: i64, nanos: i32) -> Res<()> {
+    let r = crate::region::guard(r); // bölge nesnesi üzerinde kilit alınıyorsa önce yığına kopyalanır; kilit hep kopyada yaşar
     let o = rt::nn(r)?;
     let m = mon(o);
     let me = tid();

@@ -75,10 +75,12 @@ impl Vt for Ref {
     fn from_st(s: Ref) -> Self { s }
     unsafe fn load(p: *mut Self) -> Self { Ref(AtomicPtr::from_ptr(p as *mut *mut Obj).load(Ordering::SeqCst)) }
     unsafe fn store(p: *mut Self, v: Self) {
+        let v = crate::region::guard_into(p as usize, v);
         crate::heap::satb_overwrite(p as *mut *mut Obj);
         AtomicPtr::from_ptr(p as *mut *mut Obj).store(v.0, Ordering::SeqCst)
     }
     unsafe fn cas(p: *mut Self, e: Self, n: Self) -> Self {
+        let (e, n) = (crate::region::canon_ref(e), crate::region::guard_into(p as usize, n));
         crate::heap::satb_overwrite(p as *mut *mut Obj);
         match AtomicPtr::from_ptr(p as *mut *mut Obj).compare_exchange(e.0, n.0, Ordering::SeqCst, Ordering::SeqCst) { Ok(v) => Ref(v), Err(v) => Ref(v) }
     }
