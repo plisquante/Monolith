@@ -100,3 +100,14 @@ Sıra: önce güvenilirlik, sonra bellek, sonra platformlar.
 - `monolith/rt/gc.rs`: sayım (profil) kapalıyken yığın dilimleri 4 iş parçacığıyla paralel süpürülüyor (`sweep_slab_nocensus`). Dilimler birbirinden bağımsız, dünya zaten durmuş. Yalnızca çalışma zamanı değişti; `--resume --reuse-objs` ile yeniden derleme birkaç dakika sürdü.
 - Doğrulama: `GcStress` testi geçti (1/1). `MONO_GC_CONCURRENT=1` ile 240 sn oyun: çökme yok, 53 toplama. Süpürme 260-335 ms'den en çok 110-120 ms'ye indi; son toplamalarda toplam duraklama 150-160 ms (önce 270-350 ms). Dünya kaydı doğrulaması bu betikte hep başarısız (bilinen betik sorunu), bu yüzden kayıt kapsanmadı.
 - Hâlâ hedefin (1 ms altı) çok üstünde. Kalan: tembel/eşzamanlı süpürme (epoch bit) ve kök tarama (7 ms).
+
+## 10. Tembel süpürme tasarımı (henüz kodlanmadı)
+
+Hedef: kalan yaklaşık 110 ms süpürme duraklamasını durdur-dünya dışına almak. `gc.rs` okunarak çıkarılan plan:
+
+1. İşaret biti kutbu her döngüde döner (`G.sense` = 0 ya da `GC_MARK`). "İşaretli" demek `gc & GC_MARK == sense`. Süpürme artık biti silmez. Yeni nesneler (`new_obj_bits`) her zaman `GC_HEAP | sense` alır: hem sonraki döngüde otomatik "işaretsiz" olur, hem eşzamanlı döngüde "siyah" doğar.
+2. Kutup, döngünün en başında bir kez döner: tek aşamalı toplamada `collect_impl` başında, eşzamanlı toplamada `begin_only` yolunda (bitiş aşaması `collect_impl(false)` tekrar döndürmez). Güncellenecek işaret bakış noktaları: `gc.rs` satır 264, 273, 943, 955, 1346 ve süpürme.
+3. Döngü sonunda dilimler süpürülmez; `h.unswept[sc]` listelerine konur. `alloc_small_slow` önce `partial`, sonra `unswept` listesinden bir dilim alıp kilit altında süpürür (`sweep_slab_nocensus`). Süpürülmemiş dilime tahsis yapılmaz.
+4. Sonraki döngünün başında, kutup dönmeden önce, kalan süpürülmemiş dilimler paralel süpürülür (en kötü durum bugünkü duraklama).
+5. Açık sorular: `live_bytes` ve `gc_threshold` bir döngü gecikmeli hesaplanır; boş dilimlerin işletim sistemine geri verilmesi (şu an `to_dealloc`) ertelenmiş süpürmede ayrıca ele alınmalı; büyük nesneler (`h.large`) için aynı kutup kuralı.
+6. Doğrulama: `GcStress`, `MONO_GC_POISON=1`, `MONO_GC_CONCURRENT=1` ile 30 dk oyun, duraklama ölçümü.
