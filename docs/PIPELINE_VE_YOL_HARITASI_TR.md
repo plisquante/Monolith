@@ -147,3 +147,12 @@ Hedef: kalan yaklaşık 110 ms süpürme duraklamasını durdur-dünya dışına
 
 - Betikli oyun, `MONO_GC=off`, yazılım GL, 16 GB makine. RSS: 11:24:04'te 1,1 GB, 11:24:44'te 3,5 GB, 11:25:34'te 6,3 GB, 11:26:54'te 11,3 GB. Güvenlik için 11 GB'ı geçince süreç öldürüldü (yaklaşık 3 dk). Büyüme yaklaşık 3,6 GB/dk, yani yaklaşık 60 MB/sn.
 - Sonuç: GC kapalıyken bellek tüketimi 60 dk soak bütçesinin (1 MiB/dk altı) yaklaşık 3.600 katı. Daha önceki ölçümle (10 dk'da 13,3 GB) ve tahsis profiliyle (saniyede 49,5 MiB) tutarlı. GC varsayılan olarak kapatılamaz; önce tahsis oranı yaklaşık 10 kat azalmalıdır (`GC_PLAN.md` faz 4-5).
+
+## 15. Değerlendirme: "GC'yi kaldırmak" gerçekçi mi? (25 Kasım 2026)
+
+Bu bölüm ölçümlerden çıkan bir yorumdur, karar kullanıcıya aittir.
+
+- Ölçülen gerçekler: tahsis saniyede 49,5 MiB; GC kapalıyken büyüme yaklaşık 3,6 GB/dk; kaçış analizi tahsis noktalarının yalnızca %7,2'sini yığına alabiliyor; çöpün büyük kısmı kısa ömürlü ama metot dışına çıkıyor (Codec ve fizik nesneleri `putfield`, `areturn`, `arg` ile akıyor).
+- Bölge (tick) tabanlı tahsis, nesnelerin tick sonunda toplu bırakılabileceğini kanıtlamayı ya da kaçanları tick sonunda yığına taşımayı gerektirir. Taşıma (kopyalama) için kesin (precise) yığın haritaları gerekir; mevcut toplayıcı yığını tutucu (conservative) taradığı için nesneleri taşıyamaz. Kanıtlama ise kaçış analizinin ulaşamadığı yerdir. Yani bölge tabanlı tahsis, bugünkü mimaride güvenli biçimde yapılamaz; önce kesin yığın haritaları ya da Rust'ta sahiplik modeli (`GC_PLAN.md` kademe 3, faz 5) gerekir.
+- Önerilen hedef revizyonu: "GC sıfır" yerine "GC duraklaması bütçe altında". Tembel + eşzamanlı toplayıcı bugün ortalama 16-25 ms, en uzun 35-217 ms duraklama veriyor (yazılım GL). 60 FPS için bütçe kare başına yaklaşık 2 ms'nin altında olmalı. Kalan iş: kökleri durdur-dünya dışına almak (statikler için yazma bariyeri) ve bariyer maliyetini (%3 altı) ölçmek. Bu, sızıntı bütçesinden (`MONO_GC=off`) çok daha ulaşılabilir ve ürün için aynı kullanıcı etkisini (takılmama) verir.
+- `MONO_GC=off` yolu, sahipli bellek ve kesin yığın haritaları tamamlanana kadar kapalı kalır.
