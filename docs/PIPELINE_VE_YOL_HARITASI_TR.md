@@ -176,3 +176,23 @@ Asıl sorun analizden önce gelir: `Object` türünde `==` her yerde (koleksiyon
 2. **Değer eşitliği (Valhalla gibi):** Aday sınıfların örnekleri için `==` alan alan karşılaştırır (`rt::ref_eq` ile). Böylece asıl nesne ile kopyası "aynı" sayılır. Sonuç: iki ayrı ama alanları eşit `new Vec3(0,0,0)` Java'da `!=` iken burada `==` olur. Kodun buna dayanıp dayanmadığı elle ya da testle doğrulanmalı. Maliyet: her referans karşılaştırmasında sınıf bakışı.
 
 Bu yüzden yol 1 yalnızca bir analiz değil, dil anlamını değiştiren bir karardır (`GC_PLAN.md`'nin ve davranış eşdeğerliği hedefinin dışına çıkar). Karar kullanıcıdadır; verilmeden kod üretimine dokunulmayacak.
+
+## 18. Yol 1 tasarımı: bölge + kopyalama bekçisi + iletme işaretçisi (henüz kodlanmadı)
+
+§17'deki kimlik sorununun çözümü: değer eşitliği gerekmez, kimlik **iletme (forwarding) işaretçisiyle** korunur. Java davranışı değişmez. Aşağıdaki tasarım `gc.rs`, `rt.rs` ve `rustgen.py` okunarak çıkarıldı; hiçbiri uygulanmadı.
+
+**Fikir.** Seçilen sınıflar (önce `Vec3`, `AABB`, `Pair`, `DataResult$Success`, `Optional`) yığına değil, iş parçacığına özel bir bölgeye (bump arena) tahsis edilir. Bölge, sanal adres olarak tek bir ayrılmış aralıktır (ör. 32 GiB, `mmap` ile, dokunulmadıkça bellek yemez); bir adresin bölgede olup olmadığı iki karşılaştırmayla anlaşılır.
+
+**Güvenlik kuralı (heap'ten bölgeye referans yok).** Bölge nesnesi uzun yaşayan bir yere yazılacağı anda kopyalanır:
+- Referans yazımları zaten tek noktadan geçiyor: alan ve statik için `gc::satb_store`, dizi için `rt::aastore_ref` (`rustgen.py` satır 530, 554, 622). Bunların bölge farkında kopyaları (`_r`) üretilir; bölge kapalıyken üretilen kod değişmez.
+- Bölge nesnesi yazılacaksa heap'e kopyalanır (derin: içindeki bölge referansları da), kopyanın adresi yazılır ve asıl nesnenin başlığına iletme adresi konur. Aynı nesne ikinci kez yazılırsa aynı kopya kullanılır.
+- Kimlik: `if_acmpeq/ne`, `monitorenter/exit`, `identityHashCode`, varsayılan `hashCode` önce iletmeyi izleyip (`canon`) kopyaya çevirir. Böylece asıl ve kopya her zaman "aynı nesne" sayılır. `Obj` başlığındaki `hash` alanı kopyayla taşınır.
+- Ek yazım yolları kapatılmalı: `System.arraycopy` (kaynak çerçeve ya da arena dizisi ise), Unsafe/VarHandle/yansıma yazımları (`rt.rs` satır 307, 759, `vh.rs`), lambda yakalama (`indy.py`), yerel metotlar. Her biri bir testle doğrulanır.
+
+**Uygunluk.** Sınıf değişmez olmalı (tüm alanlar `final`, kurucudan sonra yazım yok) ve kurucu `this`'i dışarı kaçırmamalı (`aload_0` yalnızca `putfield` alıcısı ve üst `<init>` çağrısında). Bayt kodundan denetlenir. `BlockPos` uygun değil (`Vec3i` alanları değişebilir).
+
+**Bölge toplama (küçük toplama).** Bölge parçalara (64 KiB) bölünür. Belirli aralıklarla (ör. her 64 MiB bölge tahsisinde) kısa bir durdur-dünya yapılır: yalnızca iş parçacığı yığınları, arenaları ve `recycled` listeleri taranır (ölçüm: yığınlar yaklaşık 0,3 ms). Bir yığın kelimesi bölge nesnesini gösteriyorsa o nesnenin parçası canlı sayılır ve nesne içindeki bölge referansları izlenir. Hiçbir canlı nesne göstermeyen parçalar topluca serbest bırakılır. Heap'ten bölgeye referans olmadığı için kök kümesi budur. Beklenen duraklama yaklaşık 1 ms.
+
+**Ana toplayıcıyla ilişki.** Bölge nesneleri heap toplayıcısınca süpürülmez ama içinden geçilir: bir bölge nesnesi `String` gibi bir heap nesnesine referans veriyorsa, ana işaretleme o nesneyi canlı tutmalıdır. Bu yüzden işaretleme bölge adreslerini de izler (işaret biti kutbu gerekir, yani tembel kip: §11). Ana işaretleme sürerken bölge toplama parça serbest bırakmaz.
+
+**Maliyet ve kapsam.** Her referans yazımına ve karşılaştırmasına iki adres karşılaştırması eklenir (hedef: %3 altı, ölçülmedi). Tahsis payı tahminim: aday sınıflar toplam tahsisin yaklaşık %17'si. Gerçek kazanç, bölgede kalan (kopyalanmayan) oran ile ölçülecek. Kod üretimi, çalışma zamanı ve tam yeniden derleme (yaklaşık 95 dk) gerektirir; küçük Java test programlarıyla fark testi (`tests/run_tests.py`) ilk adım olmalıdır.
