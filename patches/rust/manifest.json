@@ -106,6 +106,17 @@
       "vcalls": {
         "set_detail": "net/minecraft/SystemReport.setDetail(Ljava/lang/String;Ljava/lang/String;)V"
       }
+    },
+    "palette_reencode.rs": {
+      "calls": {
+        "no_resize": "net/minecraft/world/level/chunk/PaletteResize.noResizeExpected()Lnet/minecraft/world/level/chunk/PaletteResize;"
+      },
+      "vcalls": {
+        "bs_size": "net/minecraft/util/BitStorage.getSize()I",
+        "bs_unpack": "net/minecraft/util/BitStorage.unpack([I)V",
+        "pal_value_for": "net/minecraft/world/level/chunk/Palette.valueFor(I)Ljava/lang/Object;",
+        "pal_id_for": "net/minecraft/world/level/chunk/Palette.idFor(Ljava/lang/Object;Lnet/minecraft/world/level/chunk/PaletteResize;)I"
+      }
     }
   },
   "patches": [
@@ -319,6 +330,15 @@
       "replace": true,
       "verify": false,
       "fingerprint": "3a3a748f08e6729d"
+    },
+    {
+      "class": "net/minecraft/world/level/chunk/PalettedContainer",
+      "method": "reencodeContents",
+      "desc": "(Lnet/minecraft/util/BitStorage;Lnet/minecraft/world/level/chunk/Palette;Lnet/minecraft/world/level/chunk/Palette;)[I",
+      "file": "palette_reencode.rs",
+      "fn": "reencode_contents",
+      "orig": true,
+      "fingerprint": "dd4aa5ed69027c94"
     }
   ]
 }

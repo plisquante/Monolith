@@ -68,7 +68,7 @@ while [ "$(date +%s)" -lt "$END" ]; do
   sleep 4
 done
 if kill -0 $GAME 2>/dev/null; then echo "game still running after $SECONDS_TOTAL s: OK"; else echo "game exited"; wait $GAME || true; exit 1; fi
-ls "$BUILD/game/crash-reports" 2>/dev/null && { echo "crash report found"; exit 1; } || true
+[ -n "$(ls -A "$BUILD/game/crash-reports" 2>/dev/null)" ] && { ls "$BUILD/game/crash-reports"; echo "crash report found"; exit 1; } || true  # boş klasör hata değildir
 ls "$BUILD"/game/mono-crash-*.txt 2>/dev/null && { echo "native crash report found"; exit 1; } || true
 if [ "$CLEAN_EXIT" = 1 ]; then
   # SIGTERM, bir sistem kapanışının ya da `kill`'in gönderdiği gibi: çalışma zamanı kapanış kancalarını çalıştırır (Minecraft dünyayı orada kaydeder)
@@ -79,8 +79,9 @@ if [ "$CLEAN_EXIT" = 1 ]; then
   if kill -0 $GAME 2>/dev/null; then echo "the game did not end within 90 s of SIGTERM"; exit 1; fi
   set +e; wait $GAME; STATUS=$?; set -e
   [ "$STATUS" = 143 ] || { echo "exit status $STATUS after SIGTERM (143 expected: shutdown hooks ran, then exit)"; exit 1; }
-  SAVED=$(find "$BUILD/game/saves" -name level.dat -newermt "@$T0" 2>/dev/null | head -1)
-  [ -n "$SAVED" ] || { echo "the world was not saved on exit (no level.dat newer than the SIGTERM)"; exit 1; }
+  # Yeni sürümde level.dat yalnızca dünya yüklenirken yazılır; çıkışta yongalar (bölge .mca) ve ilgi noktaları (poi .mca) kaydedilir.
+  SAVED=$(find "$BUILD/game/saves" \( -name level.dat -o -name '*.mca' \) -newermt "@$T0" 2>/dev/null | head -1)
+  [ -n "$SAVED" ] || { echo "the world was not saved on exit (no level.dat or region file newer than the SIGTERM)"; exit 1; }
   echo "clean exit: status 143 after SIGTERM, world saved on exit"
 fi
 echo "screenshots: $SHOTS"
