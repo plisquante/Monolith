@@ -394,6 +394,10 @@ def reflection_metadata(jars: list[str]) -> list[str]:
 
 
 MODDED_LABEL = " Rust\u00a76+"
+# Ana menüde logonun yanında eğik duran sarı yazı (splash). Minecraft bunu assets/minecraft/texts/splashes.txt
+# dosyasından rastgele seçer; dosyada tek satır olunca hep bu yazı görünür. Yalnızca çıkarılmış kaynak kopyası
+# değişir, jar'a dokunulmaz. (Oyunun kendi koduna gömülü birkaç özel gün yazısı, ör. 24 Aralık, yine görünür.)
+SPLASH_TEXT = "işiniz rust gitsin :)"
 
 
 def _patch_modded_label(path: str, src: str | None = None) -> bool:
@@ -438,6 +442,10 @@ def apply_branding(resources: str, assets: str | None = None):
                     h = o["hash"]
                     obj = os.path.join(assets, "objects", h[:2], h)
                     n_lang += _patch_modded_label(os.path.join(resources, "assets", name), obj)
+    sp = os.path.join(resources, "assets", "minecraft", "texts", "splashes.txt")
+    if os.path.isfile(sp):
+        with open(sp, "w", encoding="utf-8") as fh:
+            fh.write(SPLASH_TEXT + "\n")
     log(f"branding: Monolith title screen applied ({n_lang} language files)")
 
 
