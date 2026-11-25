@@ -94,3 +94,9 @@ Sıra: önce güvenilirlik, sonra bellek, sonra platformlar.
 - Duraklama dağılımı (canlı yaklaşık 600 MiB): kök tarama 7-9 ms, işaretleme duraklaması yaklaşık 1 ms (eskiden yaklaşık 1000 ms), süpürme 260-335 ms. Toplam duraklama yaklaşık 270-350 ms (eskiden yaklaşık 1400 ms).
 - Kalan duraklamanın tamamı süpürmeden geliyor: `monolith/rt/gc.rs` toplamanın 5. ve 6. adımları durdur-ve-süpür içinde dilimleri tek tek tarıyor. Sıradaki iş tembel/eşzamanlı süpürme (epoch işaret biti). Hedef 1 ms altı.
 - Bu varsayılan değil: doğrulama modu ve 30 dk'lık temiz koşu (`GC_PLAN.md` faz 3 ölçütü) yapılmadan açılmaz.
+
+## 9. Paralel süpürme (25 Kasım 2026)
+
+- `monolith/rt/gc.rs`: sayım (profil) kapalıyken yığın dilimleri 4 iş parçacığıyla paralel süpürülüyor (`sweep_slab_nocensus`). Dilimler birbirinden bağımsız, dünya zaten durmuş. Yalnızca çalışma zamanı değişti; `--resume --reuse-objs` ile yeniden derleme birkaç dakika sürdü.
+- Doğrulama: `GcStress` testi geçti (1/1). `MONO_GC_CONCURRENT=1` ile 240 sn oyun: çökme yok, 53 toplama. Süpürme 260-335 ms'den en çok 110-120 ms'ye indi; son toplamalarda toplam duraklama 150-160 ms (önce 270-350 ms). Dünya kaydı doğrulaması bu betikte hep başarısız (bilinen betik sorunu), bu yüzden kayıt kapsanmadı.
+- Hâlâ hedefin (1 ms altı) çok üstünde. Kalan: tembel/eşzamanlı süpürme (epoch bit) ve kök tarama (7 ms).

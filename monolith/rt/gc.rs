@@ -1018,6 +1018,38 @@ fn marker_main() {
     G.finishing.store(false, Ordering::Release);
 }
 
+/// Bir dilimi sayım olmadan süpürür: ölü yuvaları serbest listeye bağlar, canlıların işaret bitini siler ve canlı sayısını
+/// `live_count` alanına yazar. Dilimler birbirinden bağımsız olduğundan farklı iş parçacıklarından çağrılabilir.
+unsafe fn sweep_slab_nocensus(base: usize) {
+    let s = &mut *(base as *mut Slab);
+    let n = s.next_bump;
+    let sz = s.slot_size as usize;
+    s.free_head = -1;
+    let mut live_c = 0u16;
+    for idx in (0..n).rev() {
+        let off = SLAB_HDR + idx as usize * sz;
+        let bit = off >> 4;
+        if !s.alloc_bit(bit) {
+            *((base + off) as *mut i32) = s.free_head;
+            s.free_head = idx as i32;
+            continue;
+        }
+        let o = (base + off) as *mut Obj;
+        if ((*o).gc & GC_MARK) != 0 {
+            (*o).gc &= !GC_MARK;
+            live_c += 1;
+        } else {
+            s.clear_bit(bit);
+            if poison_enabled() {
+                std::ptr::write_bytes((base + off) as *mut u8, 0xDD, sz);
+            }
+            *((base + off) as *mut i32) = s.free_head;
+            s.free_head = idx as i32;
+        }
+    }
+    s.live_count = live_c;
+}
+
 #[inline(never)]
 fn collect_impl(begin_only: bool) {
     if !G.finishing.load(Ordering::Acquire) {
@@ -1324,6 +1356,29 @@ fn collect_impl(begin_only: bool) {
     let mut new_live = 0usize;
     let mut new_slabs = Vec::with_capacity(slabs_old.len());
     let mut to_dealloc = Vec::new();
+    // Sayım (profil) kapalıysa dilimlerin içi paralel süpürülür: her dilim bağımsızdır (kendi işaret bitleri, kendi serbest
+    // listesi), dünya zaten durdurulmuştur. Sonuç `live_count` alanına yazılır; aşağıdaki sıralı döngü yalnızca hesap tutar.
+    let pre_swept = census.is_none();
+    if pre_swept {
+        let in_use: Vec<usize> = slabs_old.iter().copied().filter(|&b| unsafe { (*(b as *mut Slab)).in_use }).collect();
+        let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).min(8);
+        if workers > 1 && in_use.len() >= 64 {
+            let chunk = in_use.len().div_ceil(workers);
+            std::thread::scope(|sc| {
+                for part in in_use.chunks(chunk) {
+                    sc.spawn(move || {
+                        for &b in part {
+                            unsafe { sweep_slab_nocensus(b) };
+                        }
+                    });
+                }
+            });
+        } else {
+            for &b in &in_use {
+                unsafe { sweep_slab_nocensus(b) };
+            }
+        }
+    }
     for &base in &slabs_old {
         unsafe {
             let s = &mut *(base as *mut Slab);
@@ -1333,8 +1388,12 @@ fn collect_impl(begin_only: bool) {
             }
             let n = s.next_bump;
             let sz = s.slot_size as usize;
-            s.free_head = -1;
             let mut live_c = 0u16;
+            if pre_swept {
+                live_c = s.live_count;
+                new_live += live_c as usize * sz;
+            } else {
+            s.free_head = -1;
             // Serbest listeyi tersten yeniden kur; böylece düşük indisler önce çıkar
             for idx in (0..n).rev() {
                 let off = SLAB_HDR + idx as usize * sz;
@@ -1362,6 +1421,7 @@ fn collect_impl(begin_only: bool) {
                     *p = s.free_head;
                     s.free_head = idx as i32;
                 }
+            }
             }
             s.live_count = live_c;
             if live_c == 0 {
