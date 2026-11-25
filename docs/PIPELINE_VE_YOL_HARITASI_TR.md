@@ -127,3 +127,11 @@ Hedef: kalan yaklaşık 110 ms süpürme duraklamasını durdur-dünya dışına
 
 - Hedef 1 ms altı hâlâ geçilmedi (kök tarama yaklaşık 7 ms). `GcStress`, `MonitorChurn`, `Threads` testleri `MONO_GC_MB=1` ile tembel+eşzamanlı+zehirli kipte geçti.
 - Varsayılan yapılması için `GC_PLAN.md` faz 3 ölçütü gerekir: doğrulama modunda 30 dk temiz koşu ve bariyer maliyeti ölçümü. Henüz yapılmadı.
+
+## 12. 30 dk doğrulama koşusu (25 Kasım 2026, tembel+eşzamanlı, zehir ve arena denetimi açık)
+
+- Kip: `MONO_GC_LAZY=1 MONO_GC_CONCURRENT=1 MONO_GC_POISON=1 MONO_ARENA_CHECK=abort`, 1800 sn betikli oyun, yazılım GL.
+- Sonuç: oyun 1800 sn çökmeden çalıştı ("game still running after 1800 s: OK"); yeni çökme raporu ve yerel çökme dosyası yok; arena ihlali ve `panic`/`SIGSEGV` yok. 56 toplama döngüsü, ortalama duraklama 19 ms, en uzun 62 ms (canlı yaklaşık 154 MiB). Faz 3'ün "30 dk doğrulama modu temiz" ölçütü karşılandı; duraklama ölçütü (1 ms altı) ve bariyer maliyeti ölçütü (%3 altı) karşılanmadı/ölçülmedi.
+- RSS: 4,5 GB (15. dk) ve 5,1 GB (30. dk), zehir dolgusu belleği şişirdiği için önceki soak ile doğrudan karşılaştırılamaz.
+- Dünya kaydı yine betikte doğrulanamadı (bilinen betik sorunu); kayıt yolu bu koşuda kapsanmadı.
+- Karar: tembel+eşzamanlı kip varsayılan yapılmadı. Önce kök taramayı (yaklaşık 7 ms) ve duraklamayı 1 ms altına indirme işi ile bariyer maliyeti ölçümü yapılmalı.
