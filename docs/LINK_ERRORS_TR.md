@@ -10,7 +10,7 @@ Bir çağrı noktası, alan erişimi ya da catch maddesi, sınıf yolunda olmaya
 o nokta çalışırsa. JVM de aynı yerde aynı hatayı verir (tembel bağlama). Yani link error bir çeviri hatası değil, "bu yol bu
 kurulumda çalışmaz" bilgisidir.
 
-## Dağılım (446)
+## Dağılım (444, 25 Kasım 2026 derlemesi)
 
 | Grup | Adet | Neden | Karar |
 |---|---|---|---|
@@ -18,7 +18,7 @@ kurulumda çalışmaz" bilgisidir.
 | `netty-log4j` | 84 | netty'nin opsiyonel log4j 1.x günlükçü bağdaştırıcısı (`org.apache.log4j.Logger/Level` yok) | beklenen |
 | `commons-compress` | 37 | zstd (`com.github.luben`) ve xz (`org.tukaani`) codec'leri | beklenen |
 | `lambdaform` | 21 | JDK'nın `LambdaForm`/`ClassSpecializer`/`BoundMethodHandle` düzeni. monolith'te `MethodHandle` bir nesne ağacıdır (`classlib/.../MethodHandle.java`), LambdaForm yok | tasarım gereği |
-| `macos-objc` | 11 | `MacosUtil.disableCloseWindowMenuItem` ve `NarratorMac`: `ca.weblite.objc` köprüsü yalnızca macOS'ta indirilir | Minecraft'ın macOS'a özgü sınıfları; macOS desteklenmiyor, bu sınıflar çalıştırılmaz |
+| `macos-objc` | 9 | `MacosUtil.disableCloseWindowMenuItem` ve `NarratorMac`: `ca.weblite.objc` köprüsü yalnızca macOS'ta indirilir | Minecraft'ın macOS'a özgü sınıfları; macOS desteklenmiyor, bu sınıflar çalıştırılmaz |
 
 ## macOS
 
