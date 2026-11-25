@@ -14,7 +14,7 @@ Durum: `bitti` / `sürüyor` / `bekliyor` / `ertelendi` / `yapılmayacak`.
 | # | iş | anahtar | durum |
 |---|---|---|---|
 | A0 | Profil aracı adres dönüşümü | - | bitti |
-| A1 | Bölge: 8 sınıf (Vec3, AABB, Optional, Pair, DataResult$Success, BlockPos, CubePointRange, OffsetDoubleList) | `MONO_REGION_CLASSES` | sürüyor: lambdasız temiz; oyun derlemesinde ölçülecek |
+| A1 | Bölge: kanıtlı liste 5 sınıf (Vec3, AABB, Optional, Pair, DataResult$Success) | `MONO_REGION_CLASSES` | 5 sınıf temiz. 8 sınıf (+BlockPos, CubePointRange, OffsetDoubleList) seyrek çöküyor: bölge açık 9 koşuda 3 çökme (SIGSEGV, bozuk işaretçi), bölge kapalı (`MONO_REGION=0`) 7 koşuda 0. Aynı ikili, yeni hız anahtarları açık. Üç sınıftan hangisi, bulunmadı |
 | A1a | Bölge + lambdalar çökmesi (bayat referans) | - | bekliyor: tanı kipi (parça boşaltılmadan önce ona işaret eden yığın alanını bul) |
 | A1b | Bölgeyi Windows'a taşımak (`VirtualAlloc`) | - | bekliyor (varsayılan olmadan önce şart) |
 | A2 | Dizgi birleştirme tam boy tek dizi | `MONO_CONCAT=exact` | sürüyor: testler geçti, oyunda ölçülecek |
