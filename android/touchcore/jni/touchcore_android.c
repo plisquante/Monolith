@@ -23,7 +23,7 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "Monolith", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "Monolith", __VA_ARGS__)
 
-/* ---- Self-contained EGL / GLES3 / Vulkan minimal ABI types & constants ---- */
+/* ---- Kendi içinde yeterli EGL / GLES3 / Vulkan asgari ABI türleri ve sabitleri ---- */
 typedef void *EGLDisplay;
 typedef void *EGLConfig;
 typedef void *EGLSurface;
@@ -139,7 +139,7 @@ typedef void (*PFN_glVertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsi
 typedef void (*PFN_glDrawArrays)(GLenum, GLint, GLsizei);
 typedef void (*PFN_glLineWidth)(GLfloat);
 
-/* Native core bridge (android/touchcore/native, Rust) */
+/* Yerel çekirdek köprüsü (android/touchcore/native, Rust) */
 typedef struct {
     uint64_t frame_epoch;
     uint64_t arena_bytes;
@@ -163,7 +163,7 @@ extern void tc_tick_frame(
     uint32_t entity_count, TcTelemetry *out_tel);
 extern void tc_shutdown(void);
 
-/* GLFW key subset mapped cleanly for TouchCore + external MONOLITH lib */
+/* TouchCore ve dışarıdaki MONOLITH kütüphanesi için eşlenen GLFW tuş alt kümesi */
 #define KEY_SPACE 32
 #define KEY_W 87
 #define KEY_A 65
@@ -202,8 +202,8 @@ typedef struct {
     volatile uint8_t req_break;
     volatile uint8_t req_place;
     volatile uint8_t third_person;
-    volatile float move_x; /* analog horizontal [-1..1] */
-    volatile float move_y; /* analog forward [-1..1] */
+    volatile float move_x; /* analog yatay hareket [-1..1] */
+    volatile float move_y; /* analog ileri hareket [-1..1] */
     volatile float look_dx;
     volatile float look_dy;
     volatile int32_t hotbar_slot;
@@ -228,7 +228,7 @@ typedef struct {
     float look_dx, look_dy, cursor_x, cursor_y;
 } TcPollSnapshot;
 
-/* Exported input struct so external libminecraft_mono.so can poll touch events directly */
+/* Dışa açılan girdi yapısı: dışarıdaki libminecraft_mono.so dokunma olaylarını doğrudan yoklayabilsin */
 __attribute__((visibility("default"))) TcInputState g_tc_input;
 
 typedef int (*PFN_mono_main)(const char *, const char *, const char *, TcInputState *);
@@ -242,7 +242,7 @@ static ANativeWindow *g_window = NULL;
 static ANativeWindow *g_pending_window = NULL;
 static int g_win_w = 1280;
 static int g_win_h = 720;
-static int g_egl_w, g_egl_h; /* last size read from the EGL surface (0 until the first swap) */
+static int g_egl_w, g_egl_h; /* EGL yüzeyinden okunan son boyut (ilk takasa kadar 0) */
 static int g_backend_pref = 0;
 static int g_power_profile = 1;
 static TcTelemetry g_tel;
@@ -262,7 +262,7 @@ static void set_log(const char *msg) {
     LOGI("%s", msg ? msg : "");
 }
 
-/* ---- Voxel Sandbox World (built-in interactive Monolith RHI verification & touch testbed) ---- */
+/* ---- Voksel kum havuzu dünyası (gömülü etkileşimli Monolith RHI doğrulaması ve dokunma deneme alanı) ---- */
 #define WX 32
 #define WY 24
 #define WZ 32
@@ -274,8 +274,8 @@ static bool g_on_ground = false;
 static int g_hit_bx = -1, g_hit_by = -1, g_hit_bz = -1;
 static int g_place_bx = -1, g_place_by = -1, g_place_bz = -1;
 
-/* Block IDs matching 9 hotbar slots:
- * 1: Grass, 2: Dirt, 3: Stone, 4: Oak Planks, 5: Oak Log, 6: Leaves, 7: Cobble, 8: Gold Block, 9: Glowstone */
+/* 9 çubuk yuvasıyla eşleşen blok kimlikleri:
+ * 1: Çimen, 2: Toprak, 3: Taş, 4: Meşe Tahtası, 5: Meşe Kütüğü, 6: Yaprak, 7: Kırıktaş, 8: Altın Blok, 9: Parlaktaş */
 static uint8_t block_for_slot(int slot) {
     static const uint8_t map[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
     if (slot < 0 || slot >= 9) return 1;
@@ -289,7 +289,7 @@ static void init_sandbox_world(void) {
             int dx = x - 16, dz = z - 16;
             float hill = 2.6f * sinf(x * 0.25f) * cosf(z * 0.25f) + 1.4f * cosf((x + z) * 0.18f);
             int h = 7 + (int)hill;
-            if (dx * dx + dz * dz < 16) h = 8; /* flat spawn pad */
+            if (dx * dx + dz * dz < 16) h = 8; /* düz doğma platformu */
             if (h < 3) h = 3;
             if (h > WY - 6) h = WY - 6;
             for (int y = 0; y <= h; y++) {
@@ -300,7 +300,7 @@ static void init_sandbox_world(void) {
             }
         }
     }
-    /* Small Monolith stone/wood arch & glowing beacon */
+    /* Küçük bir Monolith taş/ahşap kemeri ve parlayan işaret ışığı */
     for (int y = 9; y <= 13; y++) {
         g_world[14][y][10] = 5;
         g_world[18][y][10] = 5;
@@ -310,7 +310,7 @@ static void init_sandbox_world(void) {
     }
     g_world[16][14][10] = 9;
     g_world[16][9][12] = 8;
-    /* Trees */
+    /* Ağaçlar */
     int tx[3] = {8, 23, 22};
     int tz[3] = {9, 10, 23};
     for (int t = 0; t < 3; t++) {
@@ -404,7 +404,7 @@ static void step_player(float dt) {
         g_vy = 0.0f;
     }
 
-    /* Raycast up to 6 blocks for target highlight + break/place */
+    /* Hedef vurgusu ile kırma/koyma için en çok 6 blok uzağa ışın at */
     float eye_y = g_py + (g_tc_input.key_sneak ? 1.28f : 1.54f);
     float lx = sinf(g_yaw) * cosf(g_pitch);
     float ly = sinf(g_pitch);
@@ -442,7 +442,7 @@ static void step_player(float dt) {
     }
 }
 
-/* ---- GLES 3.0 Renderer State ---- */
+/* ---- GLES 3.0 çizici durumu ---- */
 typedef struct {
     void *lib_egl;
     void *lib_gles;
@@ -559,7 +559,7 @@ static const char *FS_300 =
     "  oColor = vec4(base * vShade * border * tex, uColor.a);\n"
     "}\n";
 
-/* 36-vertex unit cube [0..1]^3 with normals (CCW front) */
+/* 36 köşeli birim küp [0..1]^3, normalleriyle (ön yüz saat yönünün tersi) */
 static const float CUBE_VERTS[36 * 6] = {
     /* +Z */ 0,0,1, 0,0,1,  1,0,1, 0,0,1,  1,1,1, 0,0,1,  0,0,1, 0,0,1,  1,1,1, 0,0,1,  0,1,1, 0,0,1,
     /* -Z */ 1,0,0, 0,0,-1, 0,0,0, 0,0,-1, 0,1,0, 0,0,-1, 1,0,0, 0,0,-1, 0,1,0, 0,0,-1, 1,1,0, 0,0,-1,
@@ -748,7 +748,7 @@ static void destroy_egl(GlState *g) {
         if (g->surf != EGL_NO_SURFACE && g->eglDestroySurface) g->eglDestroySurface(g->dpy, g->surf);
         if (g->ctx != EGL_NO_CONTEXT && g->eglDestroyContext) g->eglDestroyContext(g->dpy, g->ctx);
     }
-    /* lib_egl / lib_gles are never dlclose()d: the platform EGL stays in use by HWUI. */
+    /* lib_egl / lib_gles asla dlclose() edilmez: platformun EGL'si HWUI tarafından kullanılmaya devam eder. */
     memset(g, 0, sizeof(*g));
 }
 
@@ -763,7 +763,7 @@ static void build_mvp(float *out16, float aspect, float fov_deg,
         0, 0, (farp + nearp) * nf, -1.0f,
         0, 0, 2.0f * farp * nearp * nf, 0
     };
-    /* forward = (fx, fy, fz), up = (0, 1, 0) */
+    /* ileri = (fx, fy, fz), yukarı = (0, 1, 0) */
     float rx = -fz, ry = 0.0f, rz = fx;
     float rlen = sqrtf(rx * rx + rz * rz);
     if (rlen > 1e-6f) { rx /= rlen; rz /= rlen; } else { rx = 1.0f; rz = 0.0f; }
@@ -791,15 +791,15 @@ static void build_mvp(float *out16, float aspect, float fov_deg,
 static void block_color(uint8_t id, float *c, float *top) {
     top[3] = 0.0f;
     switch (id) {
-        case 1: c[0]=0.48f; c[1]=0.33f; c[2]=0.22f; c[3]=1; top[0]=0.27f; top[1]=0.68f; top[2]=0.26f; top[3]=1.0f; break; /* grass */
-        case 2: c[0]=0.52f; c[1]=0.36f; c[2]=0.23f; c[3]=1; break; /* dirt */
-        case 3: c[0]=0.50f; c[1]=0.52f; c[2]=0.55f; c[3]=1; break; /* stone */
-        case 4: c[0]=0.74f; c[1]=0.58f; c[2]=0.34f; c[3]=1; break; /* planks */
-        case 5: c[0]=0.38f; c[1]=0.25f; c[2]=0.15f; c[3]=1; break; /* log */
-        case 6: c[0]=0.18f; c[1]=0.54f; c[2]=0.21f; c[3]=1; break; /* leaves */
-        case 7: c[0]=0.35f; c[1]=0.37f; c[2]=0.40f; c[3]=1; break; /* cobble */
-        case 8: c[0]=0.94f; c[1]=0.78f; c[2]=0.16f; c[3]=1; break; /* gold */
-        case 9: c[0]=0.99f; c[1]=0.89f; c[2]=0.42f; c[3]=1; break; /* glowstone */
+        case 1: c[0]=0.48f; c[1]=0.33f; c[2]=0.22f; c[3]=1; top[0]=0.27f; top[1]=0.68f; top[2]=0.26f; top[3]=1.0f; break; /* çimen */
+        case 2: c[0]=0.52f; c[1]=0.36f; c[2]=0.23f; c[3]=1; break; /* toprak */
+        case 3: c[0]=0.50f; c[1]=0.52f; c[2]=0.55f; c[3]=1; break; /* taş */
+        case 4: c[0]=0.74f; c[1]=0.58f; c[2]=0.34f; c[3]=1; break; /* tahta */
+        case 5: c[0]=0.38f; c[1]=0.25f; c[2]=0.15f; c[3]=1; break; /* kütük */
+        case 6: c[0]=0.18f; c[1]=0.54f; c[2]=0.21f; c[3]=1; break; /* yaprak */
+        case 7: c[0]=0.35f; c[1]=0.37f; c[2]=0.40f; c[3]=1; break; /* kırıktaş */
+        case 8: c[0]=0.94f; c[1]=0.78f; c[2]=0.16f; c[3]=1; break; /* altın */
+        case 9: c[0]=0.99f; c[1]=0.89f; c[2]=0.42f; c[3]=1; break; /* parlaktaş */
         default: c[0]=0.8f; c[1]=0.8f; c[2]=0.8f; c[3]=1; break;
     }
 }
@@ -902,7 +902,7 @@ static void *render_loop(void *arg) {
                 for (int y = 0; y < WY; y++) {
                     uint8_t id = g_world[x][y][z];
                     if (id == 0) continue;
-                    /* Simple face occlusion reject so mobile GPU renders swiftly */
+                    /* Basit yüz gizleme reddi: mobil GPU hızlı çizsin */
                     bool exposed = (x == 0 || x == WX - 1 || y == 0 || y == WY - 1 || z == 0 || z == WZ - 1 ||
                                     g_world[x-1][y][z] == 0 || g_world[x+1][y][z] == 0 ||
                                     g_world[x][y-1][z] == 0 || g_world[x][y+1][z] == 0 ||
@@ -925,7 +925,7 @@ static void *render_loop(void *arg) {
                 }
             }
         }
-        /* Render simple third-person avatar cube if F5 mode active */
+        /* F5 kipi açıksa basit üçüncü şahıs avatar küpünü çiz */
         if (g_tc_input.third_person) {
             gl.glUniform3f(gl.u_offset, g_px - 0.35f, g_py, g_pz - 0.35f);
             gl.glUniform4f(gl.u_color, 0.13f, 0.77f, 0.55f, 1.0f);
@@ -971,12 +971,12 @@ static void *render_loop(void *arg) {
     return NULL;
 }
 
-/* ---- stdout/stderr -> logcat. The engine reports fatal errors on fd 1/2, which Android drops. ---- */
+/* ---- stdout/stderr -> logcat. Motor ölümcül hataları fd 1/2'ye yazar, Android bunları atar. ---- */
 static int g_stdio_pipe[2] = {-1, -1};
 
-/* ---- Diagnostics: engine output and native crashes are kept in the game dir, the launcher shows them ---- */
-static int g_engine_log_fd = -1;          /* <game dir>/engine_log.txt: everything the engine prints */
-static char g_crash_path[512];            /* <game dir>/native_crash.txt: written by the signal handler */
+/* ---- Tanılama: motor çıktısı ve yerel çökmeler oyun dizininde tutulur, başlatıcı bunları gösterir ---- */
+static int g_engine_log_fd = -1;          /* <oyun dizini>/engine_log.txt: motorun yazdığı her şey */
+static char g_crash_path[512];            /* <oyun dizini>/native_crash.txt: sinyal işleyicisi yazar */
 static struct sigaction g_prev_sa[32];
 
 static void crash_puts(int fd, const char *s) {
@@ -1036,7 +1036,7 @@ static void crash_handler(int sig, siginfo_t *si, void *ucv) {
         crash_puts(fd, head);
         crash_hex(fd, si ? (uintptr_t)si->si_addr : 0);
         char tn[32] = "";
-        prctl(PR_GET_NAME, (unsigned long)tn, 0, 0, 0); /* current thread name */
+        prctl(PR_GET_NAME, (unsigned long)tn, 0, 0, 0); /* geçerli iş parçacığının adı */
         crash_puts(fd, "\nthread ");
         crash_puts(fd, tn);
         crash_puts(fd, "\n");
@@ -1057,7 +1057,7 @@ static void crash_handler(int sig, siginfo_t *si, void *ucv) {
         close(fd);
     }
     if (g_engine_log_fd >= 0) fsync(g_engine_log_fd);
-    /* hand the signal on: the previous handler (ART, debuggerd) still produces the tombstone */
+    /* sinyali ilet: önceki işleyici (ART, debuggerd) mezar taşını yine üretsin */
     struct sigaction *prev = (sig > 0 && sig < 32) ? &g_prev_sa[sig] : NULL;
     if (prev && (prev->sa_flags & SA_SIGINFO) && prev->sa_sigaction) {
         prev->sa_sigaction(sig, si, ucv);
@@ -1075,7 +1075,7 @@ static void install_crash_handler(const char *game_dir) {
     snprintf(logp, sizeof(logp), "%s/engine_log.txt", game_dir);
     if (g_engine_log_fd < 0) {
         g_engine_log_fd = open(logp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-        /* launcher debug setting: name the player at the top of the log (who sent which report) */
+        /* başlatıcı hata ayıklama ayarı: oyuncunun adını günlüğün başına yaz (hangi raporu kim gönderdi) */
         const char *dbg_user = getenv("MONO_DEBUG_USER");
         if (g_engine_log_fd >= 0 && dbg_user && dbg_user[0]) {
             char line[160];
@@ -1146,7 +1146,7 @@ static void stdio_redirect_once(void) {
     else LOGE("stdio forwarder thread failed");
 }
 
-/* ---- JNI Entry Points ---- */
+/* ---- JNI giriş noktaları ---- */
 JNIEXPORT jstring JNICALL Java_com_monolith_touchcore_NativeBridge_nativeProbeHardware(JNIEnv *env, jclass cls) {
     (void)cls;
     char vk_info[128] = "Vulkan: Unavailable";
@@ -1167,7 +1167,7 @@ JNIEXPORT jstring JNICALL Java_com_monolith_touchcore_NativeBridge_nativeProbeHa
     } else if (hegl) {
         snprintf(egl_info, sizeof(egl_info), "EGL Ready (GLES Fallback)");
     }
-    /* Handles stay open on purpose: unloading the vendor EGL/GLES stack under a live HWUI RenderThread is unsafe. */
+    /* Tutamaçlar bilerek açık bırakılır: canlı bir HWUI RenderThread'in altında üretici EGL/GLES yığınını boşaltmak güvenli değildir. */
 
     long cpus = sysconf(_SC_NPROCESSORS_ONLN);
     long pages = sysconf(_SC_PHYS_PAGES);
@@ -1216,20 +1216,20 @@ __attribute__((visibility("default"))) void tc_android_get_size(int32_t *out_w, 
     pthread_mutex_unlock(&g_lock);
 }
 
-/* ---- GL diagnostics: what the driver says about the game's calls (KHR_debug) and what it draws with ---- */
+/* ---- GL tanılaması: sürücünün oyunun çağrıları hakkında söyledikleri (KHR_debug) ve neyle çizdiği ---- */
 static volatile int g_gldebug_count;
 
 static void gl_debug_cb(GLenum source, GLenum type, unsigned int id, GLenum severity, int length, const char *msg, const void *user) {
     (void)user; (void)length;
     int n = __sync_add_and_fetch(&g_gldebug_count, 1);
-    if (n > 300) return; /* the first ones carry the cause; later ones are repeats */
+    if (n > 300) return; /* ilk hatalar nedeni taşır; sonrakiler tekrardır */
     fprintf(stderr, "monolith GLDEBUG #%d source 0x%x type 0x%x id %u severity 0x%x: %s\n", n, source, type, id, severity,
             msg ? msg : "");
     if (n == 300) fprintf(stderr, "monolith GLDEBUG: further messages suppressed\n");
     fflush(stderr);
 }
 
-/* Called once after the context exists and is current. */
+/* Bağlam oluşup geçerli olduktan sonra bir kez çağrılır. */
 static void gl_diag_init(GlState *g) {
     if (!g->glGetString) return;
     const char *ver = (const char *)g->glGetString(0x1F02);   /* GL_VERSION */
@@ -1258,7 +1258,7 @@ static void gl_diag_init(GlState *g) {
     fflush(stderr);
 }
 
-/* ---- Screen captures: what the game really drew, as PNG files in the game dir (included in the report export) ---- */
+/* ---- Ekran görüntüleri: oyunun gerçekte çizdiği, oyun dizininde PNG dosyaları (rapor dışa aktarmasına girer) ---- */
 static uint32_t crc_table[256];
 
 static uint32_t png_crc(const uint8_t *buf, size_t n, uint32_t crc) {
@@ -1289,7 +1289,7 @@ static void png_chunk(FILE *f, const char *type, const uint8_t *data, uint32_t l
     fwrite(c, 1, 4, f);
 }
 
-/* RGB8 image, zlib "stored" blocks (no compression: a few hundred KB are fine for a diagnostic) */
+/* RGB8 görüntü, zlib "stored" blokları (sıkıştırma yok: tanılama için birkaç yüz KB yeterli) */
 static bool write_png_rgb(const char *path, const uint8_t *rgb, int w, int h) {
     FILE *f = fopen(path, "wb");
     if (!f) return false;
@@ -1330,8 +1330,8 @@ static bool write_png_rgb(const char *path, const uint8_t *rgb, int w, int h) {
     return true;
 }
 
-/* Before the swap (the back buffer still holds the finished frame): frames 30, 120, 300, 600 and 1200 are saved
- * at a third of the size. Pixel pack buffer, read framebuffer and pack alignment are set up and restored around it. */
+/* Takastan önce (arka tampon bitmiş kareyi hâlâ tutuyor): 30, 120, 300, 600 ve 1200. kareler
+ * üçte bir boyutta kaydedilir. Piksel paketleme tamponu, okuma çerçeve tamponu ve paketleme hizası bunun etrafında kurulup geri yüklenir. */
 static void gl_diag_capture(GlState *g, int w, int h) {
     static unsigned long frame;
     frame++;
@@ -1352,7 +1352,7 @@ static void gl_diag_capture(GlState *g, int w, int h) {
     if (rgba && small) {
         g->glReadPixels_(0, 0, w, h, 0x1908, 0x1401, rgba);   /* GL_RGBA, GL_UNSIGNED_BYTE */
         for (int y = 0; y < sh; y++) {
-            const uint8_t *src = rgba + ((size_t)(h - 1 - y * 3) * w) * 4;   /* GL rows run bottom-up */
+            const uint8_t *src = rgba + ((size_t)(h - 1 - y * 3) * w) * 4;   /* GL satırları alttan üste doğru gider */
             for (int x = 0; x < sw; x++) {
                 small[((size_t)y * sw + x) * 3 + 0] = src[(size_t)x * 3 * 4 + 0];
                 small[((size_t)y * sw + x) * 3 + 1] = src[(size_t)x * 3 * 4 + 1];
@@ -1372,8 +1372,8 @@ static void gl_diag_capture(GlState *g, int w, int h) {
     g->glBindBuffer_(0x88EB, (unsigned)old_pack_buf);
 }
 
-/* After a swap, on the render thread: the viewport and scissor the game left, and any pending GL error. */
-/* frames presented (eglSwapBuffers), for the launcher's FPS sampling (nativeSurfaceSizes()[4]) */
+/* Takastan sonra, çizim iş parçacığında: oyunun bıraktığı görünüm alanı ve kesme kutusu ile bekleyen GL hatası. */
+/* sunulan kare sayısı (eglSwapBuffers), başlatıcının FPS örneklemesi için (nativeSurfaceSizes()[4]) */
 static volatile int32_t g_swap_count = 0;
 
 static void gl_diag_frame(GlState *g) {
@@ -1395,11 +1395,11 @@ static void gl_diag_frame(GlState *g) {
     fflush(stderr);
 }
 
-/* init_egl_surface sets the context up for the built-in demo cube: its VAO and VBO bound, depth test and back-face
- * culling on. The engine gets the same context and its renderer (GlStateManager) assumes the GL defaults: it never
- * disables a capability it believes is already off. With culling and depth test left on, every GUI quad was culled
- * or failed the depth test while clears still worked (red loading screen, then black). Hand the engine the
- * defaults. */
+/* init_egl_surface bağlamı gömülü deneme küpü için kurar: VAO ve VBO bağlı, derinlik testi ve arka yüz
+ * ayıklaması açık. Motor aynı bağlamı alır ve çizicisi (GlStateManager) GL varsayılanlarını bekler: zaten kapalı
+ * saydığı bir özelliği asla kapatmaz. Ayıklama ve derinlik testi açık kalınca her GUI dörtgeni ayıklandı
+ * ya da derinlik testini geçemedi, temizlemeler ise çalışmaya devam etti (kırmızı yükleme ekranı, sonra siyah).
+ * Motora varsayılanları ver. */
 static void reset_gl_state_for_engine(GlState *g) {
     if (g->glDisable) {
         g->glDisable(GL_DEPTH_TEST);
@@ -1448,8 +1448,8 @@ __attribute__((visibility("default"))) int32_t tc_android_init_egl(int32_t *out_
     return 1;
 }
 
-/* The Surface changed (app backgrounded, rotated, recreated): keep the EGL context, and with it every GL object
- * the engine created, and only swap the window surface. */
+/* Surface değişti (uygulama arka plana gitti, döndü, yeniden oluştu): EGL bağlamını ve onunla birlikte motorun
+ * oluşturduğu her GL nesnesini koru, yalnızca pencere yüzeyini değiştir. */
 static void egl_drop_surface(GlState *g) {
     if (g->dpy == EGL_NO_DISPLAY || g->surf == EGL_NO_SURFACE) return;
     if (g->eglMakeCurrent) g->eglMakeCurrent(g->dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
@@ -1478,7 +1478,7 @@ __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
     if (dirty) {
         g_surface_dirty = false;
         if (g_window) ANativeWindow_release(g_window);
-        g_window = pending; /* NULL when the Surface was destroyed: nothing to render into until a new one arrives */
+        g_window = pending; /* Surface yok edildiyse NULL: yenisi gelene kadar çizilecek yer yok */
         g_pending_window = NULL;
     }
     ANativeWindow *cur_win = g_window;
@@ -1488,7 +1488,7 @@ __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
         if (!cur_win) {
             egl_drop_surface(&g_ext_gl);
         } else if (!egl_rebind_surface(&g_ext_gl, cur_win)) {
-            /* No usable context (first window, or context lost): full re-init */
+            /* Kullanılabilir bağlam yok (ilk pencere ya da bağlam kayboldu): tam yeniden başlatma */
             destroy_egl(&g_ext_gl);
             if (load_gl_procs(&g_ext_gl) && !init_egl_surface(&g_ext_gl, cur_win)) {
                 set_log("ERROR: EGL re-initialisation after Surface change failed");
@@ -1502,9 +1502,9 @@ __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
         g_ext_gl.eglSwapBuffers(g_ext_gl.dpy, g_ext_gl.surf);
         __atomic_add_fetch(&g_swap_count, 1, __ATOMIC_RELAXED);
         gl_diag_frame(&g_ext_gl);
-        /* The size the game must draw at is the size of the drawable it draws into. Java reports the Surface size
-         * through callbacks that can lag behind or disagree (rotation, system bars, a fixed buffer size), so the EGL
-         * surface is asked directly after every swap; the game picks the change up through the poll snapshot. */
+        /* Oyunun çizeceği boyut, içine çizdiği çizim yüzeyinin boyutudur. Java, Surface boyutunu geri çağrılarla bildirir;
+         * bunlar geride kalabilir ya da çelişebilir (döndürme, sistem çubukları, sabit tampon boyutu). Bu yüzden EGL
+         * yüzeyine her takastan sonra doğrudan sorulur; oyun değişikliği yoklama anlık görüntüsünden alır. */
         EGLint qw = 0, qh = 0;
         if (g_ext_gl.eglQuerySurface && g_ext_gl.eglQuerySurface(g_ext_gl.dpy, g_ext_gl.surf, EGL_WIDTH, &qw) &&
             g_ext_gl.eglQuerySurface(g_ext_gl.dpy, g_ext_gl.surf, EGL_HEIGHT, &qh) && qw > 0 && qh > 0) {
@@ -1521,13 +1521,13 @@ __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
     }
 }
 
-/* Typed text and editing keys: written by the UI thread (JNI), drained by the engine's input poll as (kind, a, b)
- * triples. kind 1 = character (a = code point), kind 2 = key (a = SDL keycode, b = 1 down / 0 up / 2 repeat). */
+/* Yazılan metin ve düzenleme tuşları: UI iş parçacığı (JNI) yazar, motorun girdi yoklaması (tür, a, b)
+ * üçlüleri olarak boşaltır. tür 1 = karakter (a = kod noktası), tür 2 = tuş (a = SDL tuş kodu, b = 1 basıldı / 0 bırakıldı / 2 tekrar). */
 #define TC_TEXT_Q 256
 static int32_t g_tq[TC_TEXT_Q][3];
 static int g_tq_head, g_tq_tail;
 static pthread_mutex_t g_tq_lock = PTHREAD_MUTEX_INITIALIZER;
-static volatile int g_engine_grab = 1; /* 1 = the game holds the mouse (playing), 0 = a screen shows its cursor */
+static volatile int g_engine_grab = 1; /* 1 = oyun fareyi tutuyor (oynanıyor), 0 = bir ekran imlecini gösteriyor */
 
 static void tq_push(int32_t kind, int32_t a, int32_t b) {
     pthread_mutex_lock(&g_tq_lock);
@@ -1628,7 +1628,7 @@ JNIEXPORT jint JNICALL Java_com_monolith_touchcore_NativeBridge_nativeInitEngine
     const char *gd = gameDir ? (*env)->GetStringUTFChars(env, gameDir, NULL) : NULL;
     if (gd) {
         setenv("MC_GAME_DIR", gd, 1);
-        /* An Android process starts in "/": relative paths of the game (options.txt, logs, ...) belong in the game dir. */
+        /* Android süreci "/" içinde başlar: oyunun göreli yolları (options.txt, günlükler, ...) oyun dizinine ait olmalı. */
         if (chdir(gd) != 0) LOGE("chdir('%s') failed: %s", gd, strerror(errno));
         install_crash_handler(gd);
         (*env)->ReleaseStringUTFChars(env, gameDir, gd);
@@ -1640,9 +1640,9 @@ JNIEXPORT jint JNICALL Java_com_monolith_touchcore_NativeBridge_nativeInitEngine
 
     setenv("MONO_RHI", "1", 1);
     setenv("MONO_NO_LWJGL", "1", 1);
-    /* The game always draws through the host's EGL/GLES context (gl_shim), whatever the launcher setting says. The RHI
-     * is only a companion: its own OpenGL backend does not exist on Android (asking for it made NativeRhi.init fail
-     * before the window opened), so "GLES" and "auto" run it headless; "Vulkan" adds the Vulkan companion device. */
+    /* Oyun, başlatıcı ayarı ne olursa olsun her zaman ana bilgisayarın EGL/GLES bağlamından (gl_shim) çizer. RHI
+     * yalnızca yardımcıdır: kendi OpenGL arka ucu Android'de yoktur (onu istemek pencere açılmadan NativeRhi.init'i
+     * başarısız kılıyordu), bu yüzden "GLES" ve "auto" onu ekransız çalıştırır; "Vulkan" Vulkan yardımcı aygıtını ekler. */
     setenv("MONO_RHI_BACKEND", backendPref == 1 ? "vulkan" : "headless", 1);
 
     const char *lp = extLibPath ? (*env)->GetStringUTFChars(env, extLibPath, NULL) : NULL;
@@ -1658,7 +1658,7 @@ JNIEXPORT jint JNICALL Java_com_monolith_touchcore_NativeBridge_nativeInitEngine
             set_log(err_msg);
             return -1;
         }
-        /* Same active .so: keep handle & detached thread alive without dlclose crash. */
+        /* Aynı etkin .so: dlclose çökmesi olmadan tutamacı ve ayrık iş parçacığını canlı tut. */
         (*env)->ReleaseStringUTFChars(env, extLibPath, lp);
         lp = NULL;
     } else {
@@ -1704,7 +1704,7 @@ JNIEXPORT jint JNICALL Java_com_monolith_touchcore_NativeBridge_nativeInitEngine
     g_tc_input.target_fps = targetFps;
 
     if (!g_ext_loaded) {
-        /* Explicit DEMO MODU only when no external engine library was requested */
+        /* Açık DEMO MODU yalnızca dışarıdan motor kütüphanesi istenmediğinde */
         init_sandbox_world();
         if (!g_thread_running) {
             g_stop_req = false;
@@ -1755,7 +1755,7 @@ JNIEXPORT jintArray JNICALL Java_com_monolith_touchcore_NativeBridge_nativeSurfa
     pthread_mutex_lock(&g_lock);
     v[0] = g_win_w; v[1] = g_win_h; v[2] = g_egl_w; v[3] = g_egl_h;
     pthread_mutex_unlock(&g_lock);
-    v[4] = __atomic_load_n(&g_swap_count, __ATOMIC_RELAXED); /* frames presented so far */
+    v[4] = __atomic_load_n(&g_swap_count, __ATOMIC_RELAXED); /* şu ana kadar sunulan kare sayısı */
     jintArray a = (*env)->NewIntArray(env, 5);
     if (a) (*env)->SetIntArrayRegion(env, a, 0, 5, v);
     return a;

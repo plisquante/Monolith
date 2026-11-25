@@ -1,11 +1,11 @@
 /*
- * libmonoshader.so: shaderc (GLSL -> SPIR-V) and SPIRV-Cross (SPIR-V -> GLSL) for the no-LWJGL engine.
+ * libmonoshader.so: LWJGL'siz motor için shaderc (GLSL -> SPIR-V) ve SPIRV-Cross (SPIR-V -> GLSL).
  *
- * Minecraft 26.x compiles its shaders at run time: renderpearl turns GLSL into SPIR-V with shaderc and the OpenGL
- * backend translates that back to GLSL with SPIRV-Cross. LWJGL ships both libraries; the no-LWJGL runtime does not,
- * so org.lwjgl.util.shaderc.Shaderc and org.lwjgl.util.spvc.Spvc (runtime/java_nolwjgl) call into this library
- * through org.lwjgl.util.MonoShader. Every function is a one-to-one forward of the C API with plain integers and
- * addresses; all marshalling lives on the Java side.
+ * Minecraft 26.x shader'larını çalışma anında derler: renderpearl, GLSL'i shaderc ile SPIR-V'ye çevirir; OpenGL
+ * arka ucu da bunu SPIRV-Cross ile tekrar GLSL'e çevirir. LWJGL bu iki kütüphaneyi kendi içinde getirir; LWJGL'siz
+ * çalışma zamanı getirmez. Bu yüzden org.lwjgl.util.shaderc.Shaderc ve org.lwjgl.util.spvc.Spvc (runtime/java_nolwjgl)
+ * bu kütüphaneyi org.lwjgl.util.MonoShader üzerinden çağırır. Her işlev, C API'sinin düz tamsayılar ve adreslerle
+ * birebir iletilmiş hâlidir; bütün veri dönüştürme işi Java tarafındadır.
  */
 #include <jni.h>
 #include <stdint.h>
@@ -19,7 +19,7 @@
 #define P(x) ((void *)(uintptr_t)(x))
 #define J(x) ((jlong)(uintptr_t)(x))
 
-/* ---- shaderc ---- */
+/* ---- shaderc (GLSL'i SPIR-V'ye çevirir) ---- */
 FN(jlong, scCompilerInit) { UNUSED; return J(shaderc_compiler_initialize()); }
 FN(void, scCompilerRelease, jlong c) { UNUSED; shaderc_compiler_release(P(c)); }
 FN(jlong, scOptInit) { UNUSED; return J(shaderc_compile_options_initialize()); }
@@ -45,7 +45,7 @@ FN(jlong, scResultMessage, jlong r) { UNUSED; return J(shaderc_result_get_error_
 FN(jlong, scResultBytes, jlong r) { UNUSED; return J(shaderc_result_get_bytes(P(r))); }
 FN(jlong, scResultLength, jlong r) { UNUSED; return (jlong)shaderc_result_get_length(P(r)); }
 
-/* ---- SPIRV-Cross ---- */
+/* ---- SPIRV-Cross (SPIR-V'yi tekrar GLSL'e çevirir) ---- */
 FN(jint, spCtxCreate, jlong out) { UNUSED; return (jint)spvc_context_create((spvc_context *)P(out)); }
 FN(void, spCtxDestroy, jlong ctx) { UNUSED; spvc_context_destroy(P(ctx)); }
 FN(jlong, spLastError, jlong ctx) { UNUSED; return J(spvc_context_get_last_error_string(P(ctx))); }

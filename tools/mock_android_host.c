@@ -1,16 +1,16 @@
 /*
- * Desktop stand-in for the TouchCore Android host (libtouchcore_mono.so).
+ * TouchCore Android ana bilgisayarının (libtouchcore_mono.so) masaüstündeki taklidi.
  *
- * The engine (monolith/rt/natives_rhi.rs) finds its window, size, GL context and input through five functions of that
- * library. This mock provides them on a Linux desktop with Mesa EGL (pbuffer surface, OpenGL ES 3), so the whole
- * Minecraft start-up, window creation and GLES rendering path can be exercised without a phone:
+ * Motor (monolith/rt/natives_rhi.rs) penceresini, boyutunu, GL bağlamını ve girdisini o kütüphanenin beş işlevi
+ * üzerinden bulur. Bu taklit, o işlevleri Mesa EGL'li (pbuffer yüzeyi, OpenGL ES 3) bir Linux masaüstünde sağlar;
+ * böylece Minecraft'ın bütün açılışı, pencere oluşturma ve GLES çizim yolu telefon olmadan denenebilir:
  *
  *   gcc -shared -fPIC -O1 tools/mock_android_host.c -o <dir>/libtouchcore_mono.so -lEGL -ldl
- *   ln -s libGLESv2.so.2 <dir>/libGLESv3.so            # the engine dlopens libGLESv3.so
+ *   ln -s libGLESv2.so.2 <dir>/libGLESv3.so            # motor libGLESv3.so'yu dlopen ile açar
  *   LD_LIBRARY_PATH=<dir>:<natives> MONO_RHI=1 MONO_NO_LWJGL=1 <engine> ...
  *
- * MOCK_FRAMES=N dumps frame N as a PPM to MOCK_DUMP (default /tmp/mock_frame.ppm); MOCK_EXIT_AFTER=M exits after M
- * frames. Both go to stderr/stdout of the engine as "MOCK_HOST ..." lines.
+ * MOCK_FRAMES=N, N. kareyi PPM olarak MOCK_DUMP dosyasına yazar (varsayılan /tmp/mock_frame.ppm); MOCK_EXIT_AFTER=M,
+ * M kareden sonra çıkar. İkisi de motorun stderr/stdout çıktısına "MOCK_HOST ..." satırları olarak düşer.
  */
 #define _GNU_SOURCE
 #include <EGL/egl.h>
@@ -94,7 +94,7 @@ void tc_android_swap_buffers(void) {
         dump_ppm(p ? p : "/tmp/mock_frame.ppm");
         fprintf(stderr, "MOCK_HOST dumped frame %lu\n", frames);
     }
-    const char *every = getenv("MOCK_DUMP_EVERY"); /* MOCK_DUMP_EVERY=K: also write <MOCK_DUMP>.<frame>.ppm every K frames */
+    const char *every = getenv("MOCK_DUMP_EVERY"); /* MOCK_DUMP_EVERY=K: her K karede ayrıca <MOCK_DUMP>.<kare>.ppm yazar */
     if (every && frames % strtoul(every, NULL, 10) == 0) {
         const char *p = getenv("MOCK_DUMP");
         char name[512];
@@ -110,11 +110,11 @@ void tc_android_swap_buffers(void) {
 }
 
 /*
- * Live input for UI tests. When MOCK_CMD names a file, its lines are executed once and the file is removed:
- *   move X Y     cursor to X,Y in pixels (the cursor is shown, as in the launcher's cursor mode)
- *   click        left button down for a few polls, then up
- *   key NAME     one poll with a key set: esc e q f t f3 f5 tab w a s d jump sneak
- *   shot PATH    PPM of the next presented frame
+ * Arayüz testleri için canlı girdi. MOCK_CMD bir dosya adı verirse dosyadaki satırlar bir kez çalıştırılır ve dosya silinir:
+ *   move X Y     imleç X,Y piksel konumuna gider (imleç görünür, başlatıcının imleç kipindeki gibi)
+ *   click        sol tuş birkaç yoklama boyunca basılı kalır, sonra bırakılır
+ *   key NAME     bir tuş kümesiyle tek yoklama: esc e q f t f3 f5 tab w a s d jump sneak
+ *   shot PATH    sıradaki gösterilen karenin PPM görüntüsü
  */
 static float cur_x = 0.5f, cur_y = 0.5f;
 static int cursor_on, lmb_polls, key_polls;
