@@ -67,4 +67,4 @@ Durum: `bitti` / `sürüyor` / `bekliyor` / `ertelendi` / `yapılmayacak`.
 | D6 | Samsung S26 / Android başlangıcı | bekliyor (gün sonu) |
 | D7 | Geçen anahtarları `build.sh` varsayılanı yapmak | her iş geçtikçe |
 | D8 | Ana menü sarı yazısı "işiniz rust gitsin :)" geçici: geri almak için `git revert 5689ba5` (tek dosya, `tools/mcbuild_common.py` `SPLASH_TEXT`); özgün yazılar jar'da duruyor, sonraki derlemede geri gelir | geri alınacak |
-| D9 | Ana menü telif satırı "mojang tarafından yapıldı cemo ve plisquante tarafından modlandı" geçici: geri almak için `git revert 1dd65a1` (`tools/mcbuild_common.py` `CREDITS_TEXT`); özgün metin jar'daki dil dosyalarında duruyor, sonraki derlemede geri gelir | geri alınacak |
+| D9 | Ana menü telif satırı "mojang yaptı, cemo ve plisquante modladı" geçici: geri almak için `git revert 1dd65a1` ve kısaltma commit'i (`tools/mcbuild_common.py` `CREDITS_TEXT`); özgün metin jar'daki dil dosyalarında duruyor, sonraki derlemede geri gelir | geri alınacak |

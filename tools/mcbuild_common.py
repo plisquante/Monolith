@@ -400,7 +400,7 @@ MODDED_LABEL = " Rust\u00a76+"
 SPLASH_TEXT = "işiniz rust gitsin :)"
 # Ana menünün sağ altındaki telif satırı (dil anahtarı `title.credits`; özgünü "Copyright Mojang AB. Do not distribute!").
 # Bütün dil dosyalarında bu metinle değiştirilir; jar'a dokunulmaz.
-CREDITS_TEXT = "mojang tarafından yapıldı cemo ve plisquante tarafından modlandı"
+CREDITS_TEXT = "mojang yaptı, cemo ve plisquante modladı"
 
 
 def _patch_modded_label(path: str, src: str | None = None) -> bool:
