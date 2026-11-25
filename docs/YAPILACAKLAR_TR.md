@@ -66,3 +66,4 @@ Durum: `bitti` / `sürüyor` / `bekliyor` / `ertelendi` / `yapılmayacak`.
 | D5 | Q9 (Flite) ve Q10 (Java kuralı) kararları | kullanıcıda |
 | D6 | Samsung S26 / Android başlangıcı | bekliyor (gün sonu) |
 | D7 | Geçen anahtarları `build.sh` varsayılanı yapmak | her iş geçtikçe |
+| D8 | Ana menü sarı yazısı "işiniz rust gitsin :)" geçici: geri almak için `git revert 5689ba5` (tek dosya, `tools/mcbuild_common.py` `SPLASH_TEXT`); özgün yazılar jar'da duruyor, sonraki derlemede geri gelir | geri alınacak |
