@@ -262,3 +262,14 @@ Bölge sayaçları (son koşu): 35,6 milyon bölge tahsisi, 8,8 milyonu (%24,7) 
 | pre (yeni) | | ort 1,5 / en uzun 21,8 |
 
 Bölgeli ve düzeltmeli koşuda 60 dk soak yapılmadı; sayılar 240 sn koşulardandır. `pre` toplam sütununa dahil değildir (kök taramadan önce, ayrı bir durdur-dünya).
+
+## 23. Eksik kapılar (25 Kasım 2026)
+
+| Kapı | Sonuç |
+|---|---|
+| Q1 `pyflakes` | geçti |
+| Q4 link hatası | geçti (444 hata, 0 açıklanmamış) |
+| Dünya kaydı | geçti (kaydet ve yükle, iki koşu) |
+| Q9 native sayacı | **atlandı (kullanıcı kararı)**: 90 sn oyunda 2 çağrı, 2 farklı native; ikisi de `NarratorLinux$FliteLibrary` (`flite_init`, `register_cmu_us_kal16`). Eski ölçüm 139 çağrıydı. Bu çağrılar zaten doğrudan Rust FFI'dir (`natives_jni.rs`, `dlopen("libflite.so.1")`; JNA yok); sayaç (`ncount.rs`) `natives_jni.rs`'teki her yerel metodu "öykünme" saydığı için görünüyor. Sıfıra indirmenin yolları: Flite'ı sayaç dışına taşımak (kapı tanımı değişir), Linux'ta anlatıcıyı kapatmak (özellik kaybı) ya da saf Rust sentezleyici (çok büyük iş). Karar bekliyor |
+| Q10 kaynak envanteri (`lib_inventory.py`) | **geçmedi**: 300 dosya, K1 (kabuk) 68, K2 (mantık) 232 dosya, 19.045 satır (`classlib/src` 13.208, `runtime/java_nolwjgl` 5.837). Hedef K2 = 0. Sınıflanmamış kalem 0 (yol haritası madde 8 ölçütü karşılandı) |
+| Q2/Q3 fark testleri (27 test) | koşuyor |
