@@ -321,3 +321,24 @@ Diğer bulgular (ölçülmedi):
 - Aynı liste lambdalar HARİÇ: 240 sn koşu temiz (çökme yok, temiz çıkış, dünya kaydedildi). Suçlu lambdalar; delik bulunmadı.
 - Bu koşu (tembel + eşzamanlı): son STW ortalama 25,8 ms, p95 66,3, en çok 104,7 (5 sınıflı koşu: 17,8 / 32,4 / 66); başlangıç kökleri
   ortalama 7,1 ms. Bölge: 74,5 milyon tahsis, %24,9 yükseltildi. Tahsis profili alınmadı; duraklama artışı tek koşu, doğrulanmadı.
+
+## 25. Daha fazla optimizasyon araştırması (26 Kasım 2026, yalnızca rapor; kod değiştirilmedi)
+
+Kaynak: hız anahtarlarıyla derlenen oyun (parça 05: `set_line_s` 63 207, `nn` 54 427, `enter_frame_s` 19 162, `cres` 13 766,
+`alloc` 6 898, `itab_find_ic` 4 938, `checkcast_ic` 3 938 yer), §24 ölçümleri ve çökme ayırma koşuları. `docs/YAPILACAKLAR_TR.md`
+listesinde olmayan ya da kapsamı değişen kalemler, beklenen etkiye göre:
+
+| # | fırsat | gerekçe / ölçüm | risk |
+|---|---|---|---|
+| R1 | Defteri tamamen kaldırmak (C9) | fib(40) opt 3: defter yok 265 ms, yeni defter ~1 270 ms (opt 1), HotSpot 401 ms (eski ölçüm). Çağrı yoğun kodda en büyük kalem | büyük iş: yığın yürütme + DWARF satır içi bilgisi her platformda |
+| R2 | Satır yazımını yalnızca çağrı ve hata fırlatabilen komutlardan önce üretmek | parça başına 63 207 `set_line_s`; satır yazımı çağrı başına ~0,5 ns | düşük; yığın izi satırları aynı kalır |
+| R3 | Nesil ayrımlı GC ya da iş parçacığı başına düz ayırma tamponu (TLAB) | yığın tahsis hızı ~30-40 MiB/s, tahsisin %72,7'si GEÇİCİ sınıfta; bölge yaklaşımı yeni sınıflarda seyrek çöküyor | büyük; GC'nin çekirdeği |
+| R4 | Tek hedefli sanal çağrıları ve aynı parçadaki çağrıları `extern "C"` + `cres` yerine doğrudan Rust çağrısı yapmak (C10'un genişletilmesi) | parça başına 13 766 `cres`; C10 küçük programda parçalar arası çağrıyı %37 azalttı | orta |
+| R5 | `this` ve yeni ayrılmış nesne üzerindeki null denetimlerini üretmemek | parça başına 54 427 `nn` | düşük |
+| R6 | Aynı metot içinde ikinci ve sonraki sınıf başlatma denetimlerini atlamak (baskınlık) | C6 yalnızca kendi/üst sınıfı kapsıyor | düşük-orta |
+| R7 | `--opt 3` ile hız ölçümü ve varsayılan seçimi | fib(40), defter yokken: opt 1 ~480 ms, opt 3 265 ms | derleme süresi artar |
+| R8 | Bölge: 8 sınıflı listedeki çökmeyi bulmak (tanı kipi) | bölge açık 9 koşuda 3 çökme, kapalı 7 koşuda 0 | orta |
+| R9 | Profil güdümlü yama: en sık tahsis yapan Minecraft metotlarına Rust yaması (palet yaması gibi) | profilde ilk 20 site tahsisin büyük kısmı | yama başına küçük |
+
+Sonuç: en büyük iki kalem R1 (çağrı başına defter) ve R3 (GC tahsis yolu). R2, R5, R6 küçük ve güvenli. Bu oturumda uygulanmadı
+(kullanıcı kararı: "bu haliyle kalsın").
