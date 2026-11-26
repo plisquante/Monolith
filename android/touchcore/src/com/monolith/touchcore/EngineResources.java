@@ -50,7 +50,7 @@ final class EngineResources {
      * Applies the launcher setting "Ek Ortam Degiskenleri" (KEY=VAL;KEY2=VAL2): engine switches can be changed without a
      * new engine build. The setting was saved but never reached the engine before. Only MONO_* names are accepted.
      */
-    private static void applyExtraEnv(String spec) throws android.system.ErrnoException {
+    private static void applyExtraEnv(Context ctx, String spec) throws android.system.ErrnoException {
         java.util.Set<String> now = new java.util.HashSet<>();
         if (spec != null) {
             for (String part : spec.split("[;\\n]")) {
@@ -59,6 +59,12 @@ final class EngineResources {
                 String key = part.substring(0, eq).trim();
                 String val = part.substring(eq + 1).trim();
                 if (!key.matches("MONO_[A-Z0-9_]+")) continue;
+                // MONO_CPU_PROFILE=1: the sampling profile goes to the app's external files dir (reachable with adb pull,
+                // carried by the report zip), like the allocation profile.
+                if (key.equals("MONO_CPU_PROFILE") && val.equals("1")) {
+                    File extDir = ctx.getExternalFilesDir(null);
+                    if (extDir != null) val = new File(extDir, "cpu_profile.json").getAbsolutePath();
+                }
                 Os.setenv(key, val, true);
                 now.add(key);
             }
@@ -164,7 +170,7 @@ final class EngineResources {
             // one line per collection in engine_log.txt (live heap, pause parts)
             Os.setenv("MONO_GC_VERBOSE", "1", true);
             // user-defined engine switches, applied last so they override the defaults above
-            applyExtraEnv(cfg.extraEnv);
+            applyExtraEnv(ctx, cfg.extraEnv);
             Os.setenv("TMPDIR", tmp.getAbsolutePath(), true);
             File jar = new File(cfg.clientJarPath == null ? "" : cfg.clientJarPath);
             File verDir = jar.getParentFile();

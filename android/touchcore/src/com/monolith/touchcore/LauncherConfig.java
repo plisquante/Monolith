@@ -404,7 +404,7 @@ public final class LauncherConfig {
         // allocation profile (debug setting): the engine writes it into the app's external files dir
         File extDir = appContext.getExternalFilesDir(null);
         if (extDir != null) {
-            for (String name : new String[] {"alloc_profile.json", "alloc_profile.json.classes"}) {
+            for (String name : new String[] {"alloc_profile.json", "alloc_profile.json.classes", "cpu_profile.json", "cpu_profile.json.classes"}) {
                 File f = new File(extDir, name);
                 if (f.isFile() && f.length() < 64L * 1024 * 1024) out.add(f);
             }
