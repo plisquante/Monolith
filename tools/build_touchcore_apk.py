@@ -543,6 +543,11 @@ def main() -> int:
     args = ap.parse_args()
     if (args.engine_resources is None) != (args.client_jar is None):
         ap.error("--engine-resources and --client-jar go together")
+    # Motorlu APK'da gölgelendirici derleyicisi (libmonoshader.so) zorunlu: yoksa oyun ilk gölgelendiricide
+    # "Failed to find or load pipeline minecraft:pipeline/gui" ile düşer (S26 raporu, 26 Kasım 2026).
+    if args.engine_resources is not None and args.shader_lib is None:
+        ap.error("--engine-resources needs --shader-lib (libmonoshader.so from tools/build_shader_lib.py); "
+                 "without it the engine cannot compile shaders")
     build_apk(args.out.resolve(), args.engine_resources, args.client_jar, args.shader_lib)
     return 0
 
