@@ -69,6 +69,8 @@ def build_rust(work: str, classes: str, name: str, opt: str, shards: int, env: d
     out = os.path.join(work, "out")
     cmd = [sys.executable, "-m", "monolith.rustgen", "--cp", classes, "--main", name, "-o", out,
            "--shards", str(shards), "--shard-jobs", str(max(1, os.cpu_count() or 1)), "--opt", opt, "--compile"]
+    # MONO_TEST_RUSTGEN_ARGS: derleyiciye ek seçenekler (ör. "--escape --inline"); boşsa eski komut aynen çalışır
+    cmd += os.environ.get("MONO_TEST_RUSTGEN_ARGS", "").split()
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env)
     return (os.path.join(out, "prog"), r.stderr[-1500:]) if r.returncode == 0 else ("", r.stderr[-1500:])
 
