@@ -1516,6 +1516,38 @@ class Gen:
         "ireturn", "lreturn", "freturn", "dreturn", "areturn", "return",
     })
 
+    _PUSH1_OPS = frozenset({"iload", "fload", "aload", "aconst_null", "bipush", "sipush", "iconst_m1", "iconst_0", "iconst_1",
+                            "iconst_2", "iconst_3", "iconst_4", "iconst_5", "fconst_0", "fconst_1", "fconst_2",
+                            "lload", "dload", "lconst_0", "lconst_1", "dconst_0", "dconst_1"})
+
+    def _this_field_op(self, dc, insns, k: int, targets: set) -> bool:
+        """MONO_NULL_ELIDE: insns[k] `this` üzerindeki bir getfield/putfield mi (alıcı kesinlikle yeniden yazılmamış `this`)?
+        Kalıplar: `aload 0; getfield` ve `aload 0; <tek değer yükle>; putfield`. Arada dallanma hedefi olmamalı (başka
+        yoldan gelen bir yığın değeri alıcı olmasın) ve alan çözülebilmeli (yoksa NoSuchFieldError fırlatılır).
+        Böyle bir alan erişimi hata fırlatamaz; getter/setter gibi metotlar böylece is_nothrow olur (çerçevesiz)."""
+        ins = insns[k]
+        if ins.op == "getfield":
+            pre = [k - 1]
+        elif ins.op == "putfield":
+            pre = [k - 2, k - 1]
+            if k - 1 < 0 or insns[k - 1].op not in self._PUSH1_OPS:
+                return False
+        else:
+            return False
+        if pre[0] < 0 or insns[pre[0]].op != "aload" or insns[pre[0]].arg != 0:
+            return False
+        if any(insns[j].pc in targets for j in pre[1:] + [k]):
+            return False
+        try:
+            ci = self.world.get(ins.arg.owner)
+            if ci is None or self.world.instance_fields(ci) is None:
+                return False
+            if not any(f.name == ins.arg.name and f.desc == ins.arg.desc for _, f in self.world.instance_fields(ci)):
+                return False
+        except Exception:
+            return False
+        return True
+
     def is_nothrow(self, dc, m) -> bool:
         k = (dc.name, m.key)
         if hasattr(self, "_nothrow_cache") and k in self._nothrow_cache:
@@ -1529,8 +1561,12 @@ class Gen:
         if not m.is_native and m.code is not None and not m.code.handlers and not (m.access & 0x0020):
             insns = self.prog.insns(dc, m)
             ok = True
-            for ins in insns:
+            this_ok = self.null_elide and not m.is_static and not any(x.op == "astore" and x.arg == 0 for x in insns)
+            targets = {t for x in insns for t in (x.targets or ())} if this_ok else set()
+            for k, ins in enumerate(insns):
                 if ins.op in self._NO_THROW_OPS:
+                    continue
+                if this_ok and self._this_field_op(dc, insns, k, targets):
                     continue
                 # kendine çağrı muaf değildir: sınırsız özyineleme StackOverflowError ile biter, bu da bir fırlatmadır
                 ok = False
