@@ -626,6 +626,11 @@ tek adres hesabı olduğu için orada görünmüyordu.
 `#[thread_local] static` olur (`RUSTC_BOOTSTRAP=1`, `-Z tls-model=global-dynamic`; initial-exec denendi, Android 17 bionic `dlopen`'da reddetti: "TLS symbol ... using IE access model"). Anahtar yoksa eski yol. Sınırlama: `dlopen` ile
 yüklenen kütüphanede yerel TLS Android 10 (API 29) ve sonrasında desteklenir. Beklenen kazanç ölçülmedi (v8 raporuyla ölçülecek).
 
+**Ölçüm (S26, 27 Kasım 2026, v7 -> v8, aynı APK):** ortalama FPS 29,8 -> 60,8 (yürürken pencereler 90-100 FPS); ilk 60 sn
+28 -> 54 FPS; 60. sn sonrası 100 ms'yi aşan kare görülen 2 sn'lik pencere 22/76 -> 0/40 (arka plana alma penceresi hariç);
+GC ortalama 10 -> 11 ms (değişmedi). CPU profili: Java kodu %24,8 -> %65,9, çerçeve kaydı (set_line/enter_frame/FastGuard +
+libc) ~%60 -> yok; yerine `[linker64]` %10,6 (TLSDESC dinamik çözücüsü, bionic dlopen'li kütüphaneye statik TLS vermiyor).
+
 **Sıradaki hedefler (profilden):** `itab_find_ic_slow` (arayüz çağrısı önbelleği), `init_enter`, `mono_rt::rt::is_subclass`,
 sonra Java tarafı: `DensityBuffer.get/set`, `OreFeature.doPlace`, `Beardifier`, `PalettedContainer.get` (dünya üretimi).
 
