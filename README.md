@@ -23,9 +23,11 @@ programınızı da Rust'a çevirip Java olmadan çalışan bir programa dönüş
 Amacınız buysa projenin bu bölümüne bakın:
 
 ```sh
-javac -d classes Main.java
-python3 -m monolith.rustgen --cp classes --main Main -o out --shards 4 --compile
-out/prog
+# depo kök klasöründe (Monolith/) çalıştırın; MONO_JDK_HOME bir JDK 25 klasörünü göstermeli
+export MONO_JDK_HOME=/yol/jdk-25
+javac -d /yol/classes Main.java
+python3 -m monolith.rustgen --cp /yol/classes --main Main -o /yol/out --shards 4 --compile
+/yol/out/prog
 ```
 
 - `--cp`: derlenmiş `.class` dosyalarının klasörü
@@ -41,8 +43,9 @@ Bilmeniz gerekenler:
   birebir korur.
 - Program bir bütün olarak çevrilir: çalışırken yeni sınıf yüklenemez.
 - Uygulamanın kendi JNI kütüphaneleri desteklenmez.
-- Gereksinimler aşağıdaki "Nasıl kullanılır?" bölümüyle aynıdır (JDK 25, Rust, Python). Küçük programlar dakikalar
-  içinde derlenir.
+- Gereksinimler aşağıdaki "Nasıl kullanılır?" bölümüyle aynıdır (JDK 25, Rust, Python). Küçük programlar birkaç
+  dakikada derlenir: liste, sıralama ve stream kullanan küçük bir örnek 4 çekirdekte yaklaşık 2,5 dakika sürdü, çünkü
+  kullanılan JDK sınıfları da (bu örnekte 1 371 sınıf) birlikte çevrilir.
 
 ## Durum
 
