@@ -1,0 +1,25 @@
+# Monolith'in Python tarafı (çevirici `monolith/`, araçlar `tools/`, testler `tests/`) uv ile çalışır.
+#
+# Kullanıcı için özet: venv oluşturmak, etkinleştirmek ya da `pip install` yapmak gerekmez.
+#   uv run tools/fetch_client_jar.py --version 26.3 --out client.jar
+#   uv run -m monolith.rustgen --cp classes --main Main -o out --compile
+# uv, uygun Python'u kendisi bulur (yoksa indirir) ve projeye ait ortamı `.venv` klasöründe kendisi kurar.
+#
+# Çalışma zamanı bağımlılığı YOK: çevirici yalnızca Python standart kütüphanesini kullanır.
+[project]
+name = "monolith"
+version = "0.1.0"
+description = "Java bytecode'unu Rust'a çevirip Java olmadan çalışan yerel programa dönüştüren çevirici (ilk hedef: Minecraft Java)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+# Yalnızca geliştirme denetimleri için; `uv run` varsayılan olarak bunu KURMAZ (ağ gerekmez):
+#   uv run --group lint -m pyflakes monolith tools tests
+[dependency-groups]
+lint = ["pyflakes"]
+
+[tool.uv]
+# Bu proje bir paket olarak kurulmaz: kod, depo kökünden çalıştırılır (`-m monolith.rustgen` kökten bulunur).
+# Böylece uv ayrıca bir derleme sistemi indirmez ve ilk çalıştırma anında biter.
+package = false

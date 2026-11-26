@@ -26,7 +26,7 @@ Amacınız buysa projenin bu bölümüne bakın:
 # depo kök klasöründe (Monolith/) çalıştırın; MONO_JDK_HOME bir JDK 25 klasörünü göstermeli
 export MONO_JDK_HOME=/yol/jdk-25
 javac -d /yol/classes Main.java
-python3 -m monolith.rustgen --cp /yol/classes --main Main -o /yol/out --shards 4 --compile
+uv run -m monolith.rustgen --cp /yol/classes --main Main -o /yol/out --shards 4 --compile
 /yol/out/prog
 ```
 
@@ -34,7 +34,7 @@ python3 -m monolith.rustgen --cp /yol/classes --main Main -o /yol/out --shards 4
 - `--main`: `main` metodu olan sınıf
 - Sonuç: `out/` içinde üretilen Rust kodu ve `out/prog` programı
 
-Örnek programlar `tests/java/` klasöründedir. `python3 tests/run_tests.py` her birini hem Java ile hem çevrilmiş
+Örnek programlar `tests/java/` klasöründedir. `uv run tests/run_tests.py` her birini hem Java ile hem çevrilmiş
 haliyle çalıştırır ve çıktıların aynı olduğunu denetler.
 
 Bilmeniz gerekenler:
@@ -43,7 +43,7 @@ Bilmeniz gerekenler:
   birebir korur.
 - Program bir bütün olarak çevrilir: çalışırken yeni sınıf yüklenemez.
 - Uygulamanın kendi JNI kütüphaneleri desteklenmez.
-- Gereksinimler aşağıdaki "Nasıl kullanılır?" bölümüyle aynıdır (JDK 25, Rust, Python). Küçük programlar birkaç
+- Gereksinimler aşağıdaki "Nasıl kullanılır?" bölümüyle aynıdır (JDK 25, Rust, uv). Küçük programlar birkaç
   dakikada derlenir: liste, sıralama ve stream kullanan küçük bir örnek 4 çekirdekte yaklaşık 2,5 dakika sürdü, çünkü
   kullanılan JDK sınıfları da (bu örnekte 1 371 sınıf) birlikte çevrilir.
 
@@ -57,19 +57,35 @@ Ayrıntılar: [docs/PROJE_OZETI.md](docs/PROJE_OZETI.md)
 
 Gerekenler:
 
-- Python 3.10 veya üstü
+- [uv](https://docs.astral.sh/uv/): Python'u ve Python ortamını kendisi kurar ve yönetir
 - JDK 25
 - Rust (stable)
 - Yaklaşık 12 GB RAM
 - Derleme yaklaşık 1 saat sürer
 
+Python'u ayrıca kurmanız, venv oluşturmanız ya da `pip install` yapmanız gerekmez. `uv run` ilk çalıştırmada uygun
+Python'u bulur (yoksa indirir) ve projeye ait ortamı `.venv` klasöründe kendisi hazırlar. Çevirici yalnızca Python
+standart kütüphanesini kullandığı için indirilecek başka paket yoktur.
+
+uv kurulumu (bir kez):
+
+```sh
+# Linux ve macOS
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
 Adımlar:
 
 ```sh
-python3 tools/fetch_client_jar.py --version 26.3 --out client.jar
-python3 tools/mcbuild_rust.py client.jar -o build/minecraft-26.3
+uv run tools/fetch_client_jar.py --version 26.3 --out client.jar
+uv run tools/mcbuild_rust.py client.jar -o build/minecraft-26.3
 build/minecraft-26.3/run.sh
 ```
+
+Geliştirenler için: kod denetimi `uv run --group lint -m pyflakes monolith tools tests` ile yapılır (pyflakes yalnızca
+bu komutta kurulur).
 
 ## Klasörler
 
@@ -77,6 +93,7 @@ build/minecraft-26.3/run.sh
 - `patches/` : elle yazılmış Rust kodları
 - `tools/` : yardımcı programlar
 - `docs/` : belgeler
+- `pyproject.toml`, `uv.lock` : uv ayarı (Python ortamı kendiliğinden kurulur)
 
 ## Lisans
 
