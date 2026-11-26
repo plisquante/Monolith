@@ -851,11 +851,23 @@ fn knobs() -> &'static Knobs {
             _ => 0,
         },
         poison: std::env::var_os("MONO_GC_POISON").is_some_and(|v| !v.is_empty() && v != "0"),
-        concurrent: std::env::var_os("MONO_GC_CONCURRENT").is_some(),
-        lazy: std::env::var_os("MONO_GC_LAZY").is_some_and(|v| !v.is_empty() && v != "0"),
+        // Android'de eşzamanlı işaretleme ve tembel süpürme varsayılan olarak AÇIK (telefonda oyunun duraklamaları
+        // kısalsın diye; masaüstü oyun koşularında ikisi birlikte sınandı). Masaüstünde varsayılan eskisi gibi kapalı.
+        // Her iki platformda da değişken açıkça verilirse o geçerlidir: "0" kapatır, başka bir değer açar.
+        concurrent: env_switch("MONO_GC_CONCURRENT", cfg!(target_os = "android")),
+        lazy: env_switch("MONO_GC_LAZY", cfg!(target_os = "android")),
         recycle: std::env::var("MONO_RECYCLE").map_or(true, |v| v != "0"),
         gc_off: std::env::var("MONO_GC").is_ok_and(|v| v == "off"),
     })
+}
+
+/// Açık/kapalı ortam değişkeni: tanımlı değilse `default`; boş ya da "0" kapalı; başka her değer açık.
+/// (Eskiden MONO_GC_CONCURRENT için "tanımlı olması" yetiyordu, "0" bile açıyordu; artık "0" kapatır.)
+fn env_switch(name: &str, default: bool) -> bool {
+    match std::env::var_os(name) {
+        None => default,
+        Some(v) => !v.is_empty() && v != "0",
+    }
 }
 
 fn arena_enabled() -> bool {

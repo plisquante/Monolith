@@ -11,7 +11,7 @@
 //!    gösterilmeyenler için serbest bırakılır.
 //!
 //! Her bölge nesnesinin önünde 16 baytlık bir önek vardır: ilk 8 bayt iletme adresi. `Obj` başlığı önekten sonra gelir.
-//! Yalnızca Linux'ta etkindir (`mmap` ile ayrılmış sanal aralık). Diğer platformlarda `enabled()` false döner ve
+//! Linux ve Android'de etkindir (`mmap` ile ayrılmış sanal aralık). Diğer platformlarda `enabled()` false döner ve
 //! `alloc_region` normal yığın tahsisine düşer; hiçbir davranış değişmez.
 
 use crate::rt::{Class, Obj, Ref};
@@ -26,7 +26,12 @@ pub const GC_FWD: u32 = 0x20;
 /// Başlıktaki bit: bu toplama döngüsünde ziyaret edildi (kutup `RSENSE` ile her döngüde döner).
 pub const GC_RVIS: u32 = 0x40;
 
-const RANGE: usize = 32 << 30; // 32 GiB sanal aralık; dokunulmayan sayfa bellek yemez
+// Sanal aralık; dokunulmayan sayfa bellek yemez. Android'de 8 GiB (telefon çekirdeklerinin sanal adres alanı daha dar
+// olabilir ve uygulamaların toplam sanal bellek sınırı vardır), masaüstünde 32 GiB.
+#[cfg(target_os = "android")]
+const RANGE: usize = 8 << 30;
+#[cfg(not(target_os = "android"))]
+const RANGE: usize = 32 << 30;
 const CHUNK: usize = 64 << 10;
 const NCHUNKS: usize = RANGE / CHUNK;
 const PREFIX: usize = 16;
@@ -56,14 +61,23 @@ thread_local! {
     static TL: Cell<(usize, usize, usize)> = const { Cell::new((0, 0, 0)) };
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 extern "C" {
     fn mmap(addr: *mut u8, len: usize, prot: i32, flags: i32, fd: i32, off: i64) -> *mut u8;
     fn madvise(addr: *mut u8, len: usize, advice: i32) -> i32;
+    fn mprotect(addr: *mut u8, len: usize, prot: i32) -> i32;
+}
+
+/// MONO_REGION_QUARANTINE=1 (tanı kipi): serbest bırakılan parça bir daha kullanılmaz ve erişime kapatılır (PROT_NONE).
+/// Bayat bir bölge referansı (parçası serbest bırakılmış nesne) kullanıldığı anda, kullanan kodun içinde SIGSEGV olur ve
+/// çökme raporundaki adres bölge aralığındadır; böylece referansı kimin tuttuğu bulunur. Kapalıyken davranış aynıdır.
+fn quarantine() -> bool {
+    static Q: OnceLock<bool> = OnceLock::new();
+    *Q.get_or_init(|| std::env::var("MONO_REGION_QUARANTINE").is_ok_and(|v| !v.is_empty() && v != "0"))
 }
 
 fn map_zeroed(len: usize) -> usize {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     unsafe {
         // PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE
         let p = mmap(std::ptr::null_mut(), len, 3, 0x2 | 0x20 | 0x4000, -1, 0);
@@ -72,7 +86,7 @@ fn map_zeroed(len: usize) -> usize {
         }
         p as usize
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     {
         let _ = len;
         0
@@ -321,7 +335,20 @@ pub fn cycle_end() {
         }
     }
     let nfreed = freed.len();
-    if !freed.is_empty() {
+    if quarantine() {
+        // tanı kipi: parçalar yeniden kullanılmaz; erişime kapatılır, belleği işletim sistemine geri verilir
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        for &i in &freed {
+            let base = LO.load(Ordering::Relaxed) + i * CHUNK;
+            unsafe {
+                // nesne bitleri silinir: yığında kalmış ölü bir kelime toplayıcıyı kapalı sayfaya götürmesin (yanlış alarm)
+                let (bp, _) = bit_ptr(base);
+                std::ptr::write_bytes(bp, 0, CHUNK / 16 / 8);
+                madvise(base as *mut u8, CHUNK, 4); // MADV_DONTNEED
+                mprotect(base as *mut u8, CHUNK, 0); // PROT_NONE
+            }
+        }
+    } else if !freed.is_empty() {
         FREE.lock().unwrap().extend(freed);
     }
     if std::env::var_os("MONO_GC_PHASES").is_some() {
