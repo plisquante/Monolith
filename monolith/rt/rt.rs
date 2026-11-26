@@ -238,6 +238,7 @@ pub fn init_hooks(h: Hooks) {
     // bilerek sızdırılır: kancalar süreç boyunca yaşar ve kilitsiz okunur
     HOOKS.store(Box::leak(Box::new(h)), std::sync::atomic::Ordering::Release);
     crate::prof::init();
+    crate::cpuprof::init();
     crate::crash::install();
     crate::ncount::install();
 }

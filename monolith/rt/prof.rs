@@ -347,7 +347,7 @@ fn write_class_list() {
 }
 
 /// Bu sürecin çalıştırılabilir eşlemeleri (başlangıç, bitiş, dosya ofseti, yol): rapor örnek adreslerini sembollere eşler.
-fn maps_json() -> String {
+pub(crate) fn maps_json() -> String {
     let mut out = String::from("[");
     if let Ok(txt) = std::fs::read_to_string("/proc/self/maps") {
         let mut first = true;

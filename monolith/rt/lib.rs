@@ -7,6 +7,7 @@ pub mod sync;
 pub mod vh;
 pub mod patch;
 pub mod prof;
+pub mod cpuprof;
 pub mod crash;
 pub mod ncount;
 pub mod signals;

@@ -352,6 +352,7 @@ pub fn start(t: Ref, stack: i64) -> Res<()> {
         set_current(t);
         crate::heap::set_thread_obj(t);
         apply_worker_nice(t);
+        crate::cpuprof::tag_thread(t);
         let _ = (rt::hooks().thread_run)(t);
         drop_tstate(addr);
     });
