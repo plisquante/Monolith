@@ -84,6 +84,9 @@ uv run tools/mcbuild_rust.py client.jar -o build/minecraft-26.3
 build/minecraft-26.3/run.sh
 ```
 
+Linux'ta oyun penceresi varsayılan olarak X11 ile açılır (`DISPLAY` varsa); yalnızca Wayland varsa Wayland kullanılır.
+Wayland'ı zorlamak için `MONO_DISPLAY_BACKEND=wayland`, X11'i zorlamak için `MONO_DISPLAY_BACKEND=x11` verin.
+
 Geliştirenler için: kod denetimi `uv run --group lint -m pyflakes monolith tools tests` ile yapılır (pyflakes yalnızca
 bu komutta kurulur).
 

@@ -507,3 +507,51 @@ MONO_NULL_ELIDE=1 MONO_LINE_LAZY=1`, bölge 5 sınıf (Vec3, AABB, Optional, Pai
 - GC duraklaması (79 toplama): ortanca 22,5 ms, %95 91,7 ms, en uzun 153 ms, ortalama 31,6 ms; süpürme ortanca 5,5 ms.
   Eskisi: durdur-süpür ~1 400 ms, yalnızca eşzamanlı işaretleme 270-350 ms. Canlı veri 256-293 MiB'de sabit.
 - Bölge: 268 milyon tahsis, 89 milyonu kalıcı alana kopyalandı.
+
+## 30. Wayland masaüstü yüzeyi (26 Kasım 2026)
+
+`monolith/rt/desk/` altına X11'in yanına Wayland eklendi. İki yüzey aynı sözleşmeyi sunar (`try_init`, `is_ready`, `size`,
+`set_grab`, `poll`, `take_text`, `swap`, `proc_address`; bkz. `desk/mod.rs`); `desk/linux.rs` çalışma zamanında birini seçer.
+
+**Dosyalar:** `wayland.rs` (yüzey), `linux.rs` (seçici), `mod.rs` (`available()` artık `WAYLAND_DISPLAY`'i de sayar),
+`x11.rs` (yalnızca iki tuş tablosu `pub(super)` oldu, davranış aynı), `tests/wayland/` (sınama).
+
+**Nasıl çalışır:**
+- Hiçbir kütüphane bağlanmaz, hepsi çalışma zamanında `dlopen` ile açılır: `libwayland-client` (zorunlu), `libwayland-egl`
+  (zorunlu), `libEGL` (zorunlu), `libxkbcommon` (yoksa yalnızca ABD düzeni), `libwayland-cursor` (yoksa imleç resmi ayarlanmaz).
+- Pencere: `xdg-shell` (`wl_surface` → `xdg_surface` → `xdg_toplevel`). xdg-shell ve eklenti protokollerinin arayüz tanımları
+  libwayland-client'ta bulunmadığı için çalışma zamanında elle kurulur (`mk`). Sunucu tarafı başlık çubuğu
+  `zxdg_decoration_manager_v1` ile istenir.
+- Çizim: EGL, OpenGL 3.3 core bağlamı, `wl_egl_window`. Alfa kanalsız ayar seçilir ve pencere opak işaretlenir.
+- Klavye: `xkbcommon` (Türkçe `ş ı ğ` gibi harfler), tuş tekrarını biz üretiriz (`repeat_info`), odak gidince basılı tuşlar bırakılır.
+  Oyun tuşu ve düzenleme tuşu tabloları X11 ile ortak (`x11::key_index`, `x11::edit_key`).
+- Fare: `zwp_relative_pointer` (göreli hareket) ve `zwp_pointer_constraints` (imleç kilidi) ile oyun bakışı. Bu protokoller yoksa
+  yakalama yalnızca imleci gizler ve mutlak hareketin farkını kullanır. İmleç resmi `libwayland-cursor` ile.
+- Aygıt takılıp sökülünce (koltuk yetenekleri değişince) nesneler bırakılır ve yeniden alınır.
+- Pencere kapatma isteği ve bağlantı kaybı `SIGTERM`'e çevrilir: oyun bunu temiz kapanış (dünya kaydı) olarak işler.
+- Eski libwayland (1.20 öncesi, `wl_proxy_marshal_flags` yok) için yedek yol var (`MONO_WAYLAND_LEGACY=1` onu zorlar).
+
+**Seçim:** `MONO_DISPLAY_BACKEND`: boş ya da `auto` iken `DISPLAY` varsa X11 (eski davranış), yalnızca `WAYLAND_DISPLAY` varsa
+Wayland; seçilen açılamazsa öbürü denenir. `x11` yalnızca X11, `wayland` yalnızca Wayland (açılamazsa neden stderr'e yazılır).
+**Varsayılan bilinçli olarak X11 kaldı** (eski kodu bozma): Wayland yüzeyi yeni. Gerçek masaüstlerinde denendikten sonra
+`linux.rs` içindeki `prefer_wayland` tek satırla Wayland'ı ilk sıraya alır. Hata ayıklama: `MONO_WAYLAND_DEBUG=1`.
+
+**Sınama (`tests/wayland/run.sh`, bu makinede 14/14 geçti):** başsız `sway` 1.9 (yazılım çizimi, Mesa llvmpipe), `wtype`
+(klavye), kalıcı sanal fare (`vptr.rs`, wlr-virtual-pointer). Denetlenenler: pencere açılıyor ve sway'in verdiği 1280x720'ye
+yeniden boyutlanıyor; OpenGL 4.5 core bağlamı, kırmızıya boyanan piksel okunuyor; mutlak fare konumu; sol ve sağ tuş;
+`şığ` ve `w`; yakalamada `LOOK dx=50 dy=50` ve imleç konumunun sabit kalması (kilit); imleç resminin gizlenip geri gelmesi;
+kapatma isteği → `SIGTERM` → çıkış kodu 143; eski libwayland yolu; seçici mantığı (X11 varsayılan, yalnızca Wayland varsa
+Wayland, bozuk `DISPLAY` olunca Wayland'a düşme, hiç ekran yoksa temiz başarısızlık).
+
+**Keşfedilen davranış:** sway, klavye aygıtı olmayan koltukta, imleç zaten pencerenin üstündeyken istenen kilidi etkinleştirmiyor
+(imleç pencereye girmeden istenirse ya da klavye varsa hemen veriyor). Gerçek sistemlerde klavye hep vardır; deneme ortamında
+kalıcı klavyeyle (`wtype -s ...`) doğrulandı.
+
+**Denenmedi:** GNOME (Mutter), KDE (KWin), gerçek ekran kartı, Minecraft'ın kendisi (yüzey yalnızca sınama programıyla denendi),
+yüksek çözünürlüklü ekran (ölçek 1: pencere yöneticisi büyütür, bulanık görünür), GNOME'da başlık çubuğu (sunucu tarafı yok:
+pencere çerçevesiz açılır; çözüm libdecor), ölü tuşlar/compose, büyük harf (Shift) yolu (`wtype` haritasında yok; xkbcommon
+çağrısı standart), dokunmatik ekran, panoya kopyalama.
+
+**clippy:** bu oturumda eklenen koddaki 14 uyarı giderildi. Kalan 24 hata eski: yorumlar Türkçeye çevrilirken `# Safety`
+başlıkları `# Güvenlik` olmuş, clippy `missing_safety_doc` bunları tanımıyor. CI'nin clippy adımı (`-D warnings`) bu yüzden
+zaten kırık olabilir; bu oturumdan bağımsız.
