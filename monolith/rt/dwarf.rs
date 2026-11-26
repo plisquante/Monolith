@@ -267,9 +267,19 @@ struct Unit {
     files: Vec<String>,
 }
 
-/// Programın bütün DWARF bilgisi, adres aramaya hazır.
-pub struct Dwarf {
-    units: Vec<Unit>,
+/// Bir birimin yalnızca başlığı: nerede başladığı ve hangi adresleri kapsadığı. Ayrıntılar (satır tablosu ve satır içi
+/// ağaç) ilk sorguda bir kez ayrıştırılır (`detail`). 600 MB'lık motorda her şeyi baştan okumak saniyeler ve yüzlerce MB
+/// bellek tutardı; böylece yalnızca yığın izinde gerçekten görünen birimler okunur.
+struct UnitHead {
+    off: usize,
+    ranges: Vec<(u64, u64)>,
+    detail: std::sync::OnceLock<Option<Unit>>,
+}
+
+/// Programın DWARF bilgisi, adres aramaya hazır.
+pub struct Dwarf<'a> {
+    sections: Sections<'a>,
+    units: Vec<UnitHead>,
 }
 
 fn read_ranges(ranges: &[u8], off: usize, base: u64) -> Option<Vec<(u64, u64)>> {
@@ -401,9 +411,9 @@ fn base_name(p: &[u8]) -> String {
     s.rsplit('/').next().unwrap_or("").to_string()
 }
 
-impl Dwarf {
-    /// Bütün derleme birimlerini ayrıştırır. Herhangi bir birim ayrıştırılamazsa o birim atlanır.
-    pub fn parse(s: &Sections) -> Dwarf {
+impl<'a> Dwarf<'a> {
+    /// Birim başlıklarını okur (her birimin yalnızca ilk girdisi: adres aralıkları). Ayrıştırılamayan birim atlanır.
+    pub fn parse(s: Sections<'a>) -> Dwarf<'a> {
         let mut units = Vec::new();
         let mut off = 0usize;
         while off + 11 <= s.info.len() {
@@ -413,12 +423,53 @@ impl Dwarf {
                 break;
             }
             let next = off + 4 + len as usize;
-            if let Some(u) = Self::parse_unit(s, off) {
-                units.push(u);
+            if let Some(ranges) = Self::unit_ranges(&s, off) {
+                if !ranges.is_empty() {
+                    units.push(UnitHead { off, ranges, detail: std::sync::OnceLock::new() });
+                }
             }
             off = next;
         }
-        Dwarf { units }
+        Dwarf { sections: s, units }
+    }
+
+    /// Birimin ilk girdisinden (derleme birimi) adres aralıklarını okur.
+    fn unit_ranges(s: &Sections, off: usize) -> Option<Vec<(u64, u64)>> {
+        let mut r = Rd::new(s.info, off);
+        r.u32()?;
+        let version = r.u16()?;
+        if version < 2 || version > 4 {
+            return None;
+        }
+        let abbr_off = r.u32()? as usize;
+        let addr_size = r.u8()? as usize;
+        let abbrevs = parse_abbrevs(s.abbrev, abbr_off)?;
+        let code = r.uleb()?;
+        let ab = abbrevs.get(&code)?;
+        if ab.tag != TAG_COMPILE_UNIT {
+            return None;
+        }
+        let (mut lo, mut hi, mut hi_is_off, mut rng) = (None, None, false, None);
+        for &(at, form, ic) in &ab.attrs {
+            if let Val::U(x) = read_form(&mut r, form, addr_size, ic, version)? {
+                match at {
+                    AT_LOW_PC => lo = Some(x),
+                    AT_HIGH_PC => {
+                        hi = Some(x);
+                        hi_is_off = form != 0x01;
+                    }
+                    AT_RANGES => rng = Some(x as usize),
+                    _ => {}
+                }
+            }
+        }
+        if let Some(o) = rng {
+            return read_ranges(s.ranges, o, lo.unwrap_or(0));
+        }
+        Some(match (lo, hi) {
+            (Some(l), Some(h)) => vec![(l, if hi_is_off { l + h } else { h })],
+            _ => Vec::new(),
+        })
     }
 
     fn parse_unit(s: &Sections, off: usize) -> Option<Unit> {
@@ -499,18 +550,17 @@ impl Dwarf {
         Some(unit)
     }
 
-    /// Tanı için: birim sayısı, satır sayısı, adres aralığı olan birimler.
+    /// Tanı için: adres aralığı olan birim sayısı ve ilk birimin ilk aralıkları.
     pub fn debug_summary(&self) -> String {
-        let with_rng = self.units.iter().filter(|u| !u.ranges.is_empty()).count();
-        let rows: usize = self.units.iter().map(|u| u.rows.len()).sum();
-        let first = self.units.iter().find(|u| !u.ranges.is_empty()).map(|u| format!("{:x?}", &u.ranges[..u.ranges.len().min(3)])).unwrap_or_default();
-        format!("units={} with_ranges={} rows={} first={}", self.units.len(), with_rng, rows, first)
+        let first = self.units.first().map(|u| format!("{:x?}", &u.ranges[..u.ranges.len().min(3)])).unwrap_or_default();
+        format!("units={} first={}", self.units.len(), first)
     }
 
     /// `pc` adresindeki kodun kaynak zinciri, en içten başlayarak: [(dosya adı, satır), ...].
     /// İlk halka satır tablosundan, sonrakiler satır içi çağrıların çağrı noktalarından gelir.
     pub fn locate(&self, pc: u64) -> Option<Vec<(&str, u32)>> {
-        let u = self.units.iter().find(|u| u.ranges.iter().any(|&(a, b)| pc >= a && pc < b))?;
+        let h = self.units.iter().find(|u| u.ranges.iter().any(|&(a, b)| pc >= a && pc < b))?;
+        let u = h.detail.get_or_init(|| Self::parse_unit(&self.sections, h.off)).as_ref()?;
         // satır tablosu: adresi pc'den küçük-eşit son satır (dizi sonu değilse)
         let i = u.rows.partition_point(|x| x.addr <= pc);
         if i == 0 {
