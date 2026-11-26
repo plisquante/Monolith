@@ -47,7 +47,7 @@ Durum: `bitti` / `sürüyor` / `bekliyor` / `ertelendi` / `yapılmayacak`.
 | C6 | Gereksiz sınıf başlatma denetimlerini kaldırmak | `MONO_INIT_ELIDE=1` | bitti (anahtarlı) |
 | C7 | Hafif kilit (`synchronized`) | - | bekliyor: önce oyundaki sıklığı ölçülecek |
 | C8 | Ayırma hızlı yolunu satır içine almak | - | yapılmayacak: kod şişer, kazanç küçük; asıl iş GC'de düz ayırma tamponu |
-| C9 | Defteri tamamen kaldırmak: yığın izi yalnızca hata anında, makine yığınından (çerçeve işaretçileri) + satır içine alınmış çağrı bilgisi (DWARF) + üretilen `.rs` satırı -> Java sınıf/metot/satır tablosuyla. HotSpot da böyle yapar. Ölçüm: defter yokken fib(40) opt 3 265 ms (HotSpot 401) | - | bekliyor: büyük iş, en büyük hız kalemi |
+| C9 | Defteri tamamen kaldırmak: yığın izi yalnızca hata anında, makine yığınından (çerçeve işaretçileri) + satır içine alınmış çağrı bilgisi (DWARF) + üretilen `.rs` satırı -> Java sınıf/metot/satır tablosuyla. HotSpot da böyle yapar. Ölçüm: defter yokken fib(40) opt 3 265 ms (HotSpot 401) | - | başladı: tasarım PIPELINE §27; Aşama 1 (çağrısız yapraklar) %2,8 kapsadığı için atlandı |
 | C10 | Paket bazlı parçalama + aynı parçada sınıflar arası doğrudan çağrı | `MONO_SHARD=pkg` | bitti (anahtarlı); test sürüyor |
 | C11 | Hedef işlemci ayarı (taban seviye ya da çalışma anında seçim) | - | bekliyor |
 | C12 | `--opt 3` + HotSpot ile yan yana hız ölçümü | - | bekliyor |

@@ -431,3 +431,39 @@ Kurulum (telefonda):
 
 Bilinmeyenler: Android 17'de çalışma (yalnızca hedef API ve 16 KB hizası denetlendi), S26 GPU sürücüsü, bellek (599 MiB kütüphane
 + oyun yığını), dokunmatik giriş. Sembol tabloları (`.symtab` 54 MiB, `.strtab` 62 MiB) bırakıldı: çökme raporlarında işlev adları için.
+
+## 27. C9 tasarımı: çağrı başına çerçeve kaydı olmadan yığın izi (26 Kasım 2026)
+
+Örnek: GraalVM Native Image. Çağrı sırasında hiçbir kayıt tutulmaz; hata anında makine yığını yürünür ve her dönüş adresi
+derleme anında üretilen bir tabloyla Java metoduna ve satırına çevrilir.
+
+**Neden aşamalı değil:** çağrı yapmayan ama hata fırlatabilen metotlar (çerçeve hata anında eklenebilirdi) Oop testinin
+4 666 metodunun yalnızca 130'u (%2,8). Çağrı yapan metotlar %88. Kazanç yalnızca genel çözümden gelir.
+
+**Bileşenler:**
+
+1. Derleme bayrakları: `-C force-frame-pointers=yes` (x86-64 `rbp`, ARM64 `x29` zinciri) ve `-C debuginfo=line-tables-only`
+   (satır tablosu ve satır içine alınmış çağrı zinciri: `DW_TAG_inlined_subroutine`, `call_file`, `call_line`).
+2. rustgen yan tablosu: üretilen her `.rs` dosyası için "Rust satır aralığı -> (Java sınıf, metot, tanımlayıcı, dosya,
+   Java satırı)". rustgen dosyayı kendisi yazdığı için satır numaralarını bilir; `set_line` noktaları Java satır sınırlarıdır.
+3. Çalışma zamanı:
+   - yığın yürütücü: çerçeve işaretçisi zinciri, her dönüş adresi için `pc - 1`;
+   - küçük bir DWARF okuyucu (üçüncü taraf kütüphane yok): `.debug_line` (v5), `.debug_info`/`.debug_abbrev`
+     (alt program ve satır içi alt program aralıkları, `.debug_rnglists`), `.debug_str`/`.debug_line_str`;
+   - her fiziksel çerçeve -> satır içi zincir -> yan tablo -> Java çerçeveleri (en içten başlayarak);
+   - çalışma zamanının kendi fonksiyonları (yerel çerçeveler) atlanır.
+4. `enter_frame_s`/`set_line_s` kalkar. Yığın taşması denetimi (`stack_check`) kalır; sonraki adım: koruma sayfası ve sinyal.
+5. Kullanıcılar: `Throwable.fillInStackTrace`, `Thread.getStackTrace`, `StackWalker`. `getCallerClass` zaten ayrı
+   (`set_caller`).
+
+**Riskler ve ölçülecekler:** ikili dosya boyutu (satır tabloları; 600 MB'lık motorda tahminen +%20-40, Android'de ayrı dosyaya
+alınabilir), çerçeve işaretçisi maliyeti (%1-2), hata anındaki yürütme süresi (önbellekli arama). Doğruluk: `Exceptions`,
+`StackWalk` ve tüm fark testleri birebir aynı izi vermeli.
+
+**İş sırası:**
+(a) fizibilite: test programını iki bayrakla derleyip `llvm-symbolizer --inlining` ile satır içi zincirin dönüş
+adreslerinden çözüldüğünü göstermek;
+(b) yan tablo;
+(c) DWARF okuyucu ve yürütücü (masaüstü x86-64);
+(d) ARM64;
+(e) anahtar `MONO_FRAMES=none`, fark testleri, oyun.
