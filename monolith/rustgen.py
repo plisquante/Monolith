@@ -270,6 +270,21 @@ class MethodGen:
             return False
         return False
 
+    def nonthrowing_field_op(self, ins, stk: list, out: list) -> bool:
+        """getfield/putfield, alıcı kesin null değilse hata fırlatamaz (alan çözümlemesi derleme anında yapılır).
+        MONO_LINE_LAZY bunun önünde bekleyen satırı yazmaz."""
+        if ins.op not in ("getfield", "putfield"):
+            return False
+        try:
+            self.field(ins.arg, static=False)  # çözülemeyen alan NoSuchFieldError fırlatır: o zaman satır yazılmalı
+        except LinkError:
+            return False
+        if ins.op == "getfield" and stk and stk[-1] == "A":
+            return self.known_nonnull(self.sname(len(stk) - 1, "A"), out)
+        if ins.op == "putfield" and len(stk) >= 2 and stk[-2] == "A":
+            return self.known_nonnull(self.sname(len(stk) - 2, "A"), out)
+        return False
+
     def nn_ptr(self, var: str, out: list) -> str:
         """Alıcının ham işaretçisi: kesin null değilse doğrudan, değilse rt::nn ile denetlenerek."""
         return f"{var}.0" if self.known_nonnull(var, out) else f"rt::nn({var})?"
@@ -967,13 +982,24 @@ class MethodGen:
             i = self.idx[bpc]
             succs: list = []
             line_at = dict(getattr(self.m.code, "line_numbers", None) or [])
+            pending_line = None
+            lazy = self.g.line_lazy
             while True:
                 ins = insns[i]
                 if handlers:
                     lines.append(f"pc = {ins.pc};")
                 if ins.pc in line_at:
                     # bu ifadenin kaynak satırı: yığın izleri, dışarıya çağrı yapan her çerçeve için bunu okur
-                    lines.append(f"rt::{self.g.set_line_fn}({line_at[ins.pc]});")
+                    if lazy:
+                        pending_line = line_at[ins.pc]
+                    else:
+                        lines.append(f"rt::{self.g.set_line_fn}({line_at[ins.pc]});")
+                if lazy and pending_line is not None and (ins.op not in LINE_PURE_OPS or ins.targets) \
+                        and not self.nonthrowing_field_op(ins, stk, lines):
+                    # MONO_LINE_LAZY: satır, hata fırlatabilen ya da çağrı yapan/dallanan ilk komuttan hemen önce yazılır.
+                    # Arada yalnızca hatasız komutlar (LINE_PURE_OPS) olduğundan yığın izinde görülen satır aynıdır.
+                    lines.append(f"rt::{self.g.set_line_fn}({pending_line});")
+                    pending_line = None
                 if ins.targets and any(t <= ins.pc for t in ins.targets):
                     has_sp = True
                     lines.append("_sp_tick = _sp_tick.wrapping_add(1); if (_sp_tick & 1023) == 0 { rt::gc_safepoint(); }")
@@ -991,6 +1017,10 @@ class MethodGen:
                     break
                 nxt = insns[i].pc
                 if nxt in leaders:
+                    if pending_line is not None:
+                        # bloktan çıkmadan önce bekleyen satır yazılır: sonraki blok bu değeri kalıtır
+                        lines.append(f"rt::{self.g.set_line_fn}({pending_line});")
+                        pending_line = None
                     lines.append(f"pc = {nxt}; continue;")
                     succs.append(nxt)
                     break
@@ -1303,6 +1333,19 @@ def _try_structure_cfg(blocks: dict[int, list[str]]) -> list[str] | None:
 
 
 I, J, F, D = "I", "J", "F", "D"
+# MONO_LINE_LAZY için: hiçbir zaman hata fırlatmayan, çağrı yapmayan ve dallanmayan komutlar. Bunların önünde bekleyen
+# satır numarası yazılmaz (bölme ve kalan ArithmeticException fırlatabildiği için listede yok; ldc sınıf sabiti
+# NoClassDefFoundError fırlatabildiği için yok).
+LINE_PURE_OPS = frozenset(
+    ["nop", "aconst_null", "bipush", "sipush", "iinc", "pop", "pop2", "dup", "dup_x1", "dup_x2", "dup2", "dup2_x1",
+     "dup2_x2", "swap", "iload", "lload", "fload", "dload", "aload", "istore", "lstore", "fstore", "dstore", "astore"]
+    + [f"iconst_{x}" for x in ("m1", "0", "1", "2", "3", "4", "5")] + ["lconst_0", "lconst_1", "fconst_0", "fconst_1",
+    "fconst_2", "dconst_0", "dconst_1"]
+    + ["dadd", "dmul", "drem", "dsub", "ddiv", "fadd", "fdiv", "fmul", "frem", "fsub", "iadd", "iand", "imul", "ior",
+       "ishl", "ishr", "isub", "iushr", "ixor", "ladd", "land", "lmul", "lor", "lshl", "lshr", "lsub", "lushr", "lxor",
+       "dneg", "fneg", "ineg", "lneg", "lcmp", "fcmpl", "fcmpg", "dcmpl", "dcmpg",
+       "i2l", "i2f", "i2d", "l2i", "l2f", "l2d", "f2i", "f2l", "f2d", "d2i", "d2l", "d2f", "i2b", "i2c", "i2s"])
+
 BINOPS = {
     "iadd": (I, "{a}.wrapping_add({b})"), "isub": (I, "{a}.wrapping_sub({b})"), "imul": (I, "{a}.wrapping_mul({b})"),
     "idiv": (I, "rt::idiv({a}, {b})?"), "irem": (I, "rt::irem({a}, {b})?"),
@@ -1405,6 +1448,9 @@ class Gen:
         # MONO_NULL_ELIDE=1: kesin null olmayan alıcılarda (hiç yeniden yazılmamış `this`, aynı blokta `new` ile ayrılmış
         # nesne) null denetimi üretilmez (MethodGen.known_nonnull). Varsayılan: eski yol (her erişimde rt::nn), değişmedi.
         self.null_elide = os.environ.get("MONO_NULL_ELIDE", "") == "1"
+        # MONO_LINE_LAZY=1: satır numarası yazımı blok içinde hata fırlatabilen ilk komuta ertelenir (MethodGen blok
+        # üretimi, LINE_PURE_OPS). Varsayılan: eski yol (her satır başında yazım), değişmedi.
+        self.line_lazy = os.environ.get("MONO_LINE_LAZY", "") == "1"
         # MONO_SHARD=pkg: sınıflar parçalara SHA1 ile rastgele değil, paketlerine göre dağıtılır ve AYNI PARÇADAKİ sınıflar
         # birbirini doğrudan (satır içine alınabilir `r_` fonksiyonuyla) çağırır (shard_of, rust_callable). Varsayılan: eski
         # yol (rastgele dağıtım, yalnızca aynı sınıfın metotları doğrudan), değişmedi.
