@@ -48,6 +48,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("profile")
     ap.add_argument("--exe", help="profili yazan çalıştırılabilir dosya (varsayılan: profilin bellek eşlemesinden)")
+    ap.add_argument("--lib", default="libminecraft_mono.so",
+                    help="telefondaki profilde --exe ile eşleştirilecek kütüphane adı (--exe dosyası başka adlıysa)")
     ap.add_argument("--md")
     ap.add_argument("--top", type=int, default=40)
     a = ap.parse_args()
@@ -59,6 +61,9 @@ def main() -> int:
     if not exe or not os.path.exists(exe):
         print("çalıştırılabilir dosya bulunamadı: --exe verin (profili yazan dosyanın aynısı)", file=sys.stderr)
         return 1
+    # Telefonda yazılan profilin eşleme yolları telefondaki yollardır (/data/user/0/.../libminecraft_mono.so): adı --exe
+    # ile aynı olanlar yerel dosyayla eşleştirilir (aksi halde tüm motor adresleri tek "kütüphane" olarak toplanırdı).
+    maps = [(lo, hi, off, exe if os.path.basename(path) in (os.path.basename(exe), a.lib) else path) for lo, hi, off, path in maps]
     sym = Symbols(exe, maps, all_classes)
 
     def lib_of(addr: int):

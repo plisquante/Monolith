@@ -2784,26 +2784,44 @@ def _copy_rt_sources(rt_dir: str, dest: str) -> None:
         shutil.copy(os.path.join(rt_dir, rel), d)
 
 
+def native_tls() -> bool:
+    """MONO_NATIVE_TLS=1: Android derlemesinde çerçeve yığını gerçek yerel TLS'te tutulur (varsayılan kapalı).
+
+    `std`'nin thread_local!'ı Android hedefinde pthread anahtarı kullanır (her erişim pthread_getspecific çağrısı; S26 CPU
+    profilinde çerçeve kaydı toplam CPU'nun yaklaşık %60'ı). `#[thread_local]` kararsız bir özellik: derleyiciye
+    RUSTC_BOOTSTRAP=1 verilir. initial-exec modeli: dlopen ile yüklenen kütüphanede en küçük erişim maliyeti (iş parçacığı
+    başına 40 bayt statik TLS; bionic API 29'dan beri dlopen'li kütüphanelerde TLS'i destekler)."""
+    return os.environ.get("MONO_NATIVE_TLS", "") == "1"
+
+
+def native_tls_flags() -> list:
+    return ["--cfg", "mono_native_tls", "-Z", "tls-model=initial-exec"] if native_tls() else []
+
+
 def _android_build(a, files, rt_dir) -> int:
     """rustc pipeline: mono_rt.rlib + shard objects + mc_main.rlib + link stub -> cdylib."""
     from concurrent.futures import ThreadPoolExecutor
     target = "aarch64-linux-android"
     clang = _find_ndk_clang(a.ndk, a.api)
     out = os.path.abspath(a.output)
-    base = ["rustc", "--target", target, "--edition", "2021", "-C", "panic=abort", "-C", f"linker={clang}", *c9_flags()]
+    base = ["rustc", "--target", target, "--edition", "2021", "-C", "panic=abort", "-C", f"linker={clang}", *c9_flags(),
+            *native_tls_flags()]
     rt_hasher = hashlib.sha256()
     for f in _rt_sources(rt_dir):
         rt_hasher.update(f.encode())
         rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
     rt_hasher.update(rt_deps_key().encode())
     rt_hasher.update(" ".join(c9_flags()).encode())  # C9 bayrakları: önbellekteki bayraksız derlemeyle karışmasın
+    rt_hasher.update(" ".join(native_tls_flags()).encode())  # yerel TLS: pthread anahtarlı önbellekle karışmasın
     rt_hash = rt_hasher.hexdigest()[:16]
     cache = os.path.join("/tmp", "monolith_shard_cache", "android")
     os.makedirs(cache, exist_ok=True)
     prune_shard_cache(os.path.dirname(cache))
 
+    run_env = dict(os.environ, RUSTC_BOOTSTRAP="1") if native_tls() else None  # yalnızca rustc alt süreçleri için
+
     def run(cmd, what):
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = subprocess.run(cmd, capture_output=True, text=True, env=run_env)
         if r.returncode:
             sys.stderr.write(f"monolith: {what} failed\n{r.stderr[-6000:]}")
         return r.returncode

@@ -1513,12 +1513,31 @@ thread_local! {
     static FAST_FREE: FastFree = const { FastFree };
 }
 
+/// Çerçeve yığınına erişim. Varsayılan: `thread_local!` (masaüstünde yerel TLS, tek adres hesabı). ANDROID'DE `std` yerel TLS
+/// kullanmaz: her erişim `pthread_getspecific` çağrısıdır (S26 CPU profili: set_line, çerçeve girişi/çıkışı ve libc'deki
+/// bu çağrı toplam CPU'nun yaklaşık %60'ı). `--cfg mono_native_tls` (MONO_NATIVE_TLS=1 ile Android derlemesi) ile gerçek
+/// yerel TLS (`#[thread_local]`, initial-exec modeli: `mrs tpidr_el0` + sabit kayma) kullanılır. Bayrak yoksa eski yol.
+#[cfg(not(mono_native_tls))]
+#[inline(always)]
+fn with_fast<R>(f: impl FnOnce(&mut FastStack) -> R) -> R {
+    FAST.with(|c| f(unsafe { &mut *c.get() }))
+}
+
+#[cfg(mono_native_tls)]
+#[thread_local]
+static mut FAST_NATIVE: FastStack = FastStack { p: std::ptr::null_mut(), len: 0, cap: 0, low: 0, in_overflow: false };
+
+#[cfg(mono_native_tls)]
+#[inline(always)]
+fn with_fast<R>(f: impl FnOnce(&mut FastStack) -> R) -> R {
+    f(unsafe { &mut *std::ptr::addr_of_mut!(FAST_NATIVE) })
+}
+
 struct FastFree;
 impl Drop for FastFree {
     fn drop(&mut self) {
         // FAST'in Drop'u olmadığı için bu noktada hâlâ erişilebilir.
-        FAST.with(|f| unsafe {
-            let f = &mut *f.get();
+        with_fast(|f| unsafe {
             if f.cap > 0 {
                 drop(Vec::from_raw_parts(f.p, 0, f.cap));
                 f.p = std::ptr::null_mut();
@@ -1557,9 +1576,9 @@ fn fast_low_init(f: &mut FastStack) {
 #[cold]
 #[inline(never)]
 fn fast_overflow() -> Res<FastGuard> {
-    FAST.with(|f| unsafe { (*f.get()).in_overflow = true });
+    with_fast(|f| f.in_overflow = true);
     let e = stack_overflow();
-    FAST.with(|f| unsafe { (*f.get()).in_overflow = false });
+    with_fast(|f| f.in_overflow = false);
     e
 }
 
@@ -1568,7 +1587,7 @@ pub struct FastGuard;
 impl Drop for FastGuard {
     #[inline(always)]
     fn drop(&mut self) {
-        FAST.with(|f| unsafe { (*f.get()).len -= 1 });
+        with_fast(|f| f.len -= 1);
     }
 }
 
@@ -1577,8 +1596,7 @@ impl Drop for FastGuard {
 pub fn enter_frame_s(info: &'static FrameInfo) -> Res<FastGuard> {
     let marker = 0u8;
     let sp = std::ptr::addr_of!(marker) as usize;
-    let over = FAST.with(|f| unsafe {
-        let f = &mut *f.get();
+    let over = with_fast(|f| unsafe {
         if f.low == 0 {
             fast_low_init(f);
         }
@@ -1601,8 +1619,7 @@ pub fn enter_frame_s(info: &'static FrameInfo) -> Res<FastGuard> {
 /// Hızlı yol: mevcut çerçevenin kaynak satırını işaretler.
 #[inline(always)]
 pub fn set_line_s(line: i32) {
-    FAST.with(|f| unsafe {
-        let f = &mut *f.get();
+    with_fast(|f| unsafe {
         if f.len > 0 {
             (*f.p.add(f.len - 1)).line = line;
         }
@@ -1614,8 +1631,8 @@ pub type FrameRow = (&'static str, &'static str, &'static str, &'static str, i32
 
 /// Hızlı yol kullanılıyorsa onun çerçeveleri (en içten başlayarak), yoksa None.
 fn fast_frames() -> Option<Vec<FrameRow>> {
-    FAST.with(|f| unsafe {
-        let f = &*f.get();
+    with_fast(|f| unsafe {
+        let f = &*f;
         if f.len == 0 {
             return None;
         }
