@@ -550,7 +550,14 @@ impl Drop for ScopedBlock {
             unsafe {
                 (*reg).blocked.fetch_sub(1, Ordering::SeqCst);
             }
-            if G.gc_stopping.load(Ordering::Acquire) != 0 {
+            // SeqCst ŞART (Acquire yetmez): bu, GC'nin `gc_stopping=1` yazıp `blocked` okumasıyla bir Dekker çiftidir.
+            // İki taraf da "önce kendi yazımı, sonra karşının değişkeni" yapar; ikisinin de 0 görmesi (GC: blocked hâlâ 1,
+            // biz: gc_stopping hâlâ 0) ancak yüklemeler SeqCst ise imkânsızdır. arm64'te Acquire yükleme LDAPR olabilir ve
+            // önceki STLR'nin önüne geçebilir: iş parçacığı GC "durdu" sanarken Java koduna döner, yığını ve yeni nesneleri
+            // taranmaz, canlı nesneler süpürülür, bellek başka nesneye verilir (S26'da aralıklı ClassCastException /
+            // AbstractMethodError: "java/lang/String has no method for selector 118"). x86'da kilitli işlem tam bariyer
+            // olduğu için masaüstünde hiç görülmedi.
+            if G.gc_stopping.load(Ordering::SeqCst) != 0 {
                 safepoint_slow();
             }
         }
@@ -1275,7 +1282,8 @@ fn collect_impl(begin_only: bool) {
                 continue;
             }
             unsafe {
-                if !(*tp).paused.load(Ordering::Acquire) && (*tp).blocked.load(Ordering::Acquire) == 0 {
+                // SeqCst: ScopedBlock::drop ile Dekker çifti (oradaki açıklamaya bakın)
+                if !(*tp).paused.load(Ordering::SeqCst) && (*tp).blocked.load(Ordering::SeqCst) == 0 {
                     all_ready = false;
                     break;
                 }
