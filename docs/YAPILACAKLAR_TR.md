@@ -3,6 +3,7 @@
 Kural: her iş bir anahtarla açılır, eski yol yerinde kalır. Test (JVM'e karşı) + oyun koşusu + ölçümü geçen iş `build.sh`'nin
 varsayılanı olur ve burada "varsayılan" diye işaretlenir. Her iş bütün platformlar için düşünülür (Linux, Windows, Android).
 Ölçümler ve ayrıntı: `docs/PIPELINE_VE_YOL_HARITASI_TR.md` §22-24.
+Tüm anahtarların listesi: `docs/ANAHTARLAR_TR.md`.
 
 Her büyük değişiklikten sonraki oyun derlemesinde ekran görüntüleri (`tools/headless_play.sh` -> `<build>/shots`: ana menü,
 dünyaya giriş, yürüyüş) kullanıcıya gönderilir.
