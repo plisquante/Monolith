@@ -157,32 +157,57 @@ public final class LauncherActivity extends Activity {
         startActivityForResult(intent, REQ_EXPORT_REPORTS);
     }
 
-    private void writeReportZip(Uri uri) {
-        int n = 0;
-        try (java.io.OutputStream os = getContentResolver().openOutputStream(uri);
-             java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(os)) {
-            if (os == null) throw new java.io.IOException("Hedef dosya acilamadi");
-            for (java.io.File f : config.reportFiles()) {
-                zip.putNextEntry(new java.util.zip.ZipEntry(f.getParentFile().getName() + "/" + f.getName()));
-                try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
-                    byte[] buf = new byte[16384];
-                    int r;
-                    while ((r = in.read(buf)) > 0) zip.write(buf, 0, r);
+    /**
+     * Writes the report zip on a background thread: the engine log, profiles and screenshots are several MB and the zip
+     * used to be written on the UI thread (the launcher froze while it was written).
+     */
+    private void writeReportZip(final Uri uri) {
+        final AlertDialog dlg = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Rapor")
+                .setMessage("Rapor hazırlanıyor...")
+                .setCancelable(false)
+                .show();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                int n = 0;
+                String error = null;
+                try (java.io.OutputStream os = getContentResolver().openOutputStream(uri);
+                     java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(os)) {
+                    if (os == null) throw new java.io.IOException("Hedef dosya acilamadi");
+                    for (java.io.File f : config.reportFiles()) {
+                        zip.putNextEntry(new java.util.zip.ZipEntry(f.getParentFile().getName() + "/" + f.getName()));
+                        try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+                            byte[] buf = new byte[65536];
+                            int r;
+                            while ((r = in.read(buf)) > 0) zip.write(buf, 0, r);
+                        }
+                        zip.closeEntry();
+                        n++;
+                    }
+                    zip.putNextEntry(new java.util.zip.ZipEntry("ozet.txt"));
+                    zip.write((NativeBridge.safeProbeHardware() + "\n\n" + config.readLastCrash()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    zip.closeEntry();
+                } catch (Throwable t) {
+                    error = String.valueOf(t.getMessage());
                 }
-                zip.closeEntry();
-                n++;
+                final int count = n;
+                final String err = error;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        dismissSafely(dlg);
+                        if (err == null) {
+                            Toast.makeText(LauncherActivity.this, count + " dosya disa aktarildi", Toast.LENGTH_LONG).show();
+                        } else {
+                            new AlertDialog.Builder(LauncherActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                    .setTitle("Disa aktarma basarisiz")
+                                    .setMessage(err)
+                                    .setPositiveButton("Tamam", null)
+                                    .show();
+                        }
+                    }
+                });
             }
-            zip.putNextEntry(new java.util.zip.ZipEntry("ozet.txt"));
-            zip.write((NativeBridge.safeProbeHardware() + "\n\n" + config.readLastCrash()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            zip.closeEntry();
-            Toast.makeText(this, n + " dosya disa aktarildi", Toast.LENGTH_LONG).show();
-        } catch (Throwable t) {
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("Disa aktarma basarisiz")
-                    .setMessage(String.valueOf(t.getMessage()))
-                    .setPositiveButton("Tamam", null)
-                    .show();
-        }
+        }, "report-zip").start();
     }
 
     @Override
@@ -527,7 +552,13 @@ public final class LauncherActivity extends Activity {
                 }
                 config.username = raw;
                 config.save();
-                if (config.extLibPath == null || config.extLibPath.trim().isEmpty()) {
+                if (config.extLibPath == null || config.extLibPath.trim().isEmpty() || NativeBridge.isEngineRunning()) {
+                    // the engine already runs in this process (back from the game): return to it as it is; preparing
+                    // resources and the environment again would change nothing for a running engine
+                    if (NativeBridge.isEngineRunning()) {
+                        Toast.makeText(LauncherActivity.this, "Oyuna dönülüyor (motor zaten çalışıyor; ayar değişiklikleri "
+                                + "için oyunu kapatıp yeniden açın).", Toast.LENGTH_SHORT).show();
+                    }
                     startActivity(new Intent(LauncherActivity.this, GameActivity.class));
                 } else {
                     prepareEngineThenLaunch();
@@ -1408,42 +1439,96 @@ public final class LauncherActivity extends Activity {
             return;
         }
         if (requestCode == REQ_PICK_SO && resultCode == RESULT_OK && data != null && data.getData() != null) {
-            Uri uri = data.getData();
-            File dst = config.getNativeImportTarget();
-            // copy to a temporary file and move it over the target at the end: a copy that stops half way must not leave a
-            // truncated library at the path that extLibPath may already point to (the next launch would load it)
-            File tmp = new File(dst.getParentFile(), dst.getName() + ".part");
-            try {
-                InputStream in = getContentResolver().openInputStream(uri);
-                if (in == null) throw new IllegalStateException("Dosya okunamadı");
+            importEngineLibrary(data.getData());
+        }
+    }
+
+    /**
+     * Copies the picked libminecraft_mono.so (about 600 MB) into the app on a background thread. The copy used to run on
+     * the UI thread: the launcher froze for many seconds and Android could offer to close it (ANR).
+     */
+    private void importEngineLibrary(final Uri uri) {
+        final File dst = config.getNativeImportTarget();
+        // copy to a temporary file and move it over the target at the end: a copy that stops half way must not leave a
+        // truncated library at the path that extLibPath may already point to (the next launch would load it)
+        final File tmp = new File(dst.getParentFile(), dst.getName() + ".part");
+        final boolean engineRunning = NativeBridge.isEngineRunning();
+        final AlertDialog dlg = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Motor içe aktarılıyor")
+                .setMessage("Kopyalanıyor...")
+                .setCancelable(false)
+                .show();
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String error = null;
                 try {
-                    FileOutputStream out = new FileOutputStream(tmp);
+                    InputStream in = getContentResolver().openInputStream(uri);
+                    if (in == null) throw new IllegalStateException("Dosya okunamadı");
+                    long copied = 0, lastShown = 0;
                     try {
-                        byte[] buf = new byte[16384];
-                        int n;
-                        while ((n = in.read(buf)) > 0) {
-                            out.write(buf, 0, n);
+                        FileOutputStream out = new FileOutputStream(tmp);
+                        try {
+                            byte[] buf = new byte[1 << 20];
+                            int n;
+                            while ((n = in.read(buf)) > 0) {
+                                out.write(buf, 0, n);
+                                copied += n;
+                                if (copied - lastShown >= (32L << 20)) {
+                                    lastShown = copied;
+                                    final long mb = copied >> 20;
+                                    runOnUiThread(new Runnable() {
+                                        @Override public void run() { dlg.setMessage("Kopyalanıyor... " + mb + " MB"); }
+                                    });
+                                }
+                            }
+                        } finally {
+                            out.close();
                         }
                     } finally {
-                        out.close();
+                        in.close();
                     }
-                } finally {
-                    in.close();
+                    if (tmp.length() == 0) throw new IllegalStateException("Dosya boş");
+                    if (dst.exists() && !dst.delete()) throw new IllegalStateException("Eski dosya silinemedi");
+                    if (!tmp.renameTo(dst)) throw new IllegalStateException("Dosya taşınamadı");
+                    dst.setReadable(true, false);
+                    dst.setExecutable(true, false);
+                } catch (Exception e) {
+                    tmp.delete(); // no half-copied file stays behind
+                    error = String.valueOf(e.getMessage());
                 }
-                if (tmp.length() == 0) throw new IllegalStateException("Dosya boş");
-                if (dst.exists() && !dst.delete()) throw new IllegalStateException("Eski dosya silinemedi");
-                if (!tmp.renameTo(dst)) throw new IllegalStateException("Dosya taşınamadı");
-                dst.setReadable(true, false);
-                dst.setExecutable(true, false);
-                config.extLibPath = dst.getAbsolutePath();
-                config.save();
-                refreshExtLibLabel();
-                validateUsernameUi(config.username);
-                Toast.makeText(this, "libminecraft_mono.so içe aktarıldı.", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                tmp.delete(); // no half-copied file stays behind
-                Toast.makeText(this, "Dosya kopyalama hatası: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                final String err = error;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        dismissSafely(dlg);
+                        if (err != null) {
+                            Toast.makeText(LauncherActivity.this, "Dosya kopyalama hatası: " + err, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        config.extLibPath = dst.getAbsolutePath();
+                        config.save();
+                        refreshExtLibLabel();
+                        validateUsernameUi(config.username);
+                        if (engineRunning) {
+                            // the running engine stays loaded until the process ends: the new file is used only after a restart
+                            new AlertDialog.Builder(LauncherActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                    .setTitle("Yeni motor içe aktarıldı")
+                                    .setMessage("Çalışan oyun eski motorla devam ediyor. Yeni motoru kullanmak için uygulama "
+                                            + "kapanıp yeniden açılmalı. Dünyayı kaydetmek için önce oyunda \"Save and Quit "
+                                            + "to Title\" yapın.\n\nŞimdi kapatılsın mı?")
+                                    .setPositiveButton("Kapat", new DialogInterface.OnClickListener() {
+                                        @Override public void onClick(DialogInterface d, int which) {
+                                            finishAffinity();
+                                            android.os.Process.killProcess(android.os.Process.myPid());
+                                        }
+                                    })
+                                    .setNegativeButton("Sonra", null)
+                                    .show();
+                        } else {
+                            Toast.makeText(LauncherActivity.this, "libminecraft_mono.so içe aktarıldı.", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
             }
-        }
+        }, "so-import").start();
     }
 }

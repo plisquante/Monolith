@@ -93,6 +93,29 @@ public final class NativeBridge {
     /** True while the game holds the mouse (playing); false while a screen shows its cursor. */
     public static native boolean nativeIsMouseGrabbed();
 
+    /** True once libminecraft_mono.so was started in this process: it runs until the process ends and cannot restart. */
+    public static native boolean nativeIsEngineLaunched();
+
+    /** {@link #nativeIsEngineLaunched()} that never throws (older native library, library not loaded). */
+    public static boolean isEngineRunning() {
+        if (!sLoaded) return false;
+        try {
+            return nativeIsEngineLaunched();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** {@link #nativeIsMouseGrabbed()} that never throws. */
+    public static boolean isMouseGrabbedSafe() {
+        if (!sLoaded) return false;
+        try {
+            return nativeIsMouseGrabbed();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     public static native void nativeUpdateRuntimeConfig(
             float sensitivity,
             boolean invertY,

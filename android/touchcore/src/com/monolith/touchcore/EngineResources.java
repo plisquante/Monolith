@@ -87,6 +87,17 @@ final class EngineResources {
             return;
         }
 
+        // The resource directory is wiped before every extraction, and it is an editable setting: a wrong path (the game
+        // directory with the worlds, shared storage) would be deleted. Only a directory inside the app's own monolith
+        // folder that is not the game directory may be wiped.
+        File appRoot = new File(ctx.getFilesDir(), "monolith").getCanonicalFile();
+        File canon = dir.getCanonicalFile();
+        File game = new File(cfg.gameDir == null ? "" : cfg.gameDir).getCanonicalFile();
+        if (!canon.getPath().startsWith(appRoot.getPath() + File.separator) || canon.equals(game)
+                || game.getPath().startsWith(canon.getPath() + File.separator)) {
+            throw new IOException("Kaynak dizini (" + dir + ") guvenli degil: her hazirlikta silinir. Uygulamanin kendi "
+                    + "klasorunde ayri bir dizin secin (varsayilan: " + new File(appRoot, "resources") + ").");
+        }
         if (progress != null) progress.status("Eski kaynaklar temizleniyor...");
         deleteRecursively(dir);
         if (!dir.mkdirs() && !dir.isDirectory()) {

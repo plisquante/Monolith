@@ -1564,10 +1564,13 @@ __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
         } else if (!egl_rebind_surface(&g_ext_gl, cur_win)) {
             /* Kullanılabilir bağlam yok (ilk pencere ya da bağlam kayboldu): tam yeniden başlatma */
             destroy_egl(&g_ext_gl);
-            if (load_gl_procs(&g_ext_gl) && !init_egl_surface(&g_ext_gl, cur_win)) {
+            if (!load_gl_procs(&g_ext_gl) || !init_egl_surface(&g_ext_gl, cur_win)) {
                 set_log("ERROR: EGL re-initialisation after Surface change failed");
+                fprintf(stderr, "monolith EGL: re-initialisation after Surface change failed\n");
             } else {
+                /* yeni bağlam: motorun eski GL nesneleri (doku, tampon, gölgelendirici) bu bağlamda yok */
                 reset_gl_state_for_engine(&g_ext_gl);
+                fprintf(stderr, "monolith EGL: context lost, re-created (engine GL objects are gone)\n");
             }
         }
     }
@@ -1579,8 +1582,9 @@ __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
         pthread_mutex_unlock(&g_lock);
     }
     if (!cur_win) {
-        /* Pencere yok (uygulama arka planda ya da ekran kapalı): kareler yüzeysiz bağlamda boşa dönmesin, pil harcamasın. */
-        usleep(33000);
+        /* Pencere yok (uygulama arka planda ya da ekran kapalı): kareler yüzeysiz bağlamda boşa dönmesin, pil harcamasın.
+         * Saniyede 10 kare: arka planda sürekli yüksek CPU, Android'in süreci "aşırı CPU" ile öldürmesine yol açıyordu. */
+        usleep(100000);
     }
     if (g_ext_gl.gl_ready && g_ext_gl.eglSwapBuffers && g_ext_gl.dpy != EGL_NO_DISPLAY && g_ext_gl.surf != EGL_NO_SURFACE) {
         gl_diag_capture(&g_ext_gl, g_egl_w > 0 ? g_egl_w : g_win_w, g_egl_h > 0 ? g_egl_h : g_win_h);
@@ -1654,6 +1658,16 @@ JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeTypeChar(J
 JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeEditKey(JNIEnv *env, jclass cls, jint sdlKeycode, jint action) {
     (void)env; (void)cls;
     tq_push(2, sdlKeycode, action);
+}
+
+/* Dış motor bu süreçte başlatıldı mı (bir kez başlar, durdurulamaz): başlatıcı buna göre "oyuna dön" der, ortamı yeniden
+ * yazmaz (setenv, motorun iş parçacıkları getenv çağırırken güvenli değil) ve yeni bir motor için yeniden başlatma ister. */
+JNIEXPORT jboolean JNICALL Java_com_monolith_touchcore_NativeBridge_nativeIsEngineLaunched(JNIEnv *env, jclass cls) {
+    (void)env; (void)cls;
+    pthread_mutex_lock(&g_lock);
+    bool launched = g_ext_launched;
+    pthread_mutex_unlock(&g_lock);
+    return launched ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jboolean JNICALL Java_com_monolith_touchcore_NativeBridge_nativeIsMouseGrabbed(JNIEnv *env, jclass cls) {
@@ -1915,7 +1929,11 @@ JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeShutdown(J
     pthread_mutex_unlock(&g_lock);
     if (join) pthread_join(th, NULL);
     pthread_mutex_lock(&g_lock);
-    if (g_ext_gl.lib_egl) destroy_egl(&g_ext_gl);
+    /* Dış motor (libminecraft_mono.so) bu süreçte durdurulamaz ve yeniden başlatılamaz: oyun ekranından çıkınca da
+     * çalışmayı sürdürür. EGL'i burada yok etmek, motor hâlâ GL çağırırken bağlamı elinden almaktı: oyuna dönüşte siyah
+     * ekran (yeniden bağlama lib_egl NULL olduğu için hiç denenmiyordu), bazen "Failed to map buffer". Motor çalışıyorsa
+     * EGL'e dokunulmaz; yüzey surfaceDestroyed ile bırakılır, oyuna dönünce aynı bağlama yeni yüzey bağlanır. */
+    if (g_ext_gl.lib_egl && !g_ext_launched) destroy_egl(&g_ext_gl);
     if (g_ext_handle && !g_ext_launched) {
         dlclose(g_ext_handle);
         g_ext_handle = NULL;

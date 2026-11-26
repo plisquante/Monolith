@@ -348,7 +348,16 @@ public final class LauncherConfig {
         load();
     }
 
-    public static void installCrashHandler(final Context ctx) {
+    private static boolean crashHandlerInstalled;
+
+    /**
+     * Installed once per process. It used to be installed again by every GameActivity: each call wrapped the previous
+     * handler (the crash file was written once per wrapper) and kept that activity alive through its context.
+     */
+    public static synchronized void installCrashHandler(Context activityCtx) {
+        if (crashHandlerInstalled) return;
+        crashHandlerInstalled = true;
+        final Context ctx = activityCtx.getApplicationContext();
         final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override

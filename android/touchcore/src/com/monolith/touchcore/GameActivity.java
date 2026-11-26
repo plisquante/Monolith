@@ -85,7 +85,9 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         }
 
         boolean extRequested = config.extLibPath != null && !config.extLibPath.trim().isEmpty();
-        if (extRequested) {
+        // The engine runs until the process ends: back in the game after "Başlatıcıya Dön" it is still running, and
+        // rewriting its environment then (setenv while its threads call getenv) is unsafe and changes nothing.
+        if (extRequested && !NativeBridge.isEngineRunning()) {
             try {
                 EngineResources.exportEnv(this, config);
             } catch (java.io.IOException e) {
@@ -294,8 +296,23 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         mainHandler.postDelayed(telemetryTick, 200);
     }
 
+    /**
+     * In a world (mouse grabbed): taps ESC so the game opens its pause menu, which also pauses a singleplayer world.
+     * Without it the world kept running while the app was in the background or the launcher was open (the SDL bridge
+     * never reports a focus loss), and the busy engine got the app killed for excessive CPU use.
+     */
+    private void pauseGameIfPlaying() {
+        if (!engineInitialized || initStatus != 1 || !NativeBridge.isMouseGrabbedSafe()) return;
+        NativeBridge.nativeSetKey(GlfwKeys.KEY_ESCAPE, true);
+        // held for a few frames: the engine samples keys once per frame
+        mainHandler.postDelayed(new Runnable() {
+            @Override public void run() { NativeBridge.nativeSetKey(GlfwKeys.KEY_ESCAPE, false); }
+        }, 80);
+    }
+
     @Override
     protected void onPause() {
+        pauseGameIfPlaying();
         mainHandler.removeCallbacks(telemetryTick);
         if (overlayView != null) {
             overlayView.releaseAllInputs();
@@ -306,6 +323,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     @Override
     protected void onDestroy() {
         mainHandler.removeCallbacks(telemetryTick);
+        if (samplerThread != null) samplerThread.quitSafely();
         if (engineInitialized && NativeBridge.isLoaded()) {
             NativeBridge.nativeShutdown();
             engineInitialized = false;
@@ -362,7 +380,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
                 String line = "+" + ((System.currentTimeMillis() - t0) / 1000) + " s: process memory " + pssMb
                         + " MB (native " + (mem[1] / 1024) + " MB), system free " + (sys.availMem >> 20)
                         + " MB, low-memory " + sys.lowMemory + ", limit " + limitMb + " MB";
-                writeDisplayInfo(line);
+                appendDisplayInfoLine(line);
                 // With the Shizuku setting the cached apps were stopped for the game: Android's low-memory flag then
                 // only means the game is using what was freed for it, so only the game's own limit stops it.
                 if (pssMb > limitMb || (sys.lowMemory && !(config.shizukuRam || config.debugMode))) {
@@ -478,6 +496,13 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         return -1;
     }
 
+    /** One line in <game dir>/display_info.txt (the sampler's memory line; the full block is written on surface changes). */
+    private void appendDisplayInfoLine(String line) {
+        try (java.io.FileOutputStream os = new java.io.FileOutputStream(new java.io.File(config.gameDir, "display_info.txt"), true)) {
+            os.write((line + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Throwable ignored) { }
+    }
+
     /** <game dir>/display_info.txt: every size involved, to compare when the picture does not fit the phone. */
     private void writeDisplayInfo(String why) {
         try {
@@ -502,7 +527,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             if (NativeBridge.isLoaded()) {
                 try {
                     int[] z = NativeBridge.nativeSurfaceSizes();
-                    if (z != null && z.length == 4) {
+                    if (z != null && z.length >= 4) {
                         sb.append("engine drawable ").append(z[0]).append('x').append(z[1]).append(", EGL surface ")
                                 .append(z[2]).append('x').append(z[3]).append('\n');
                     }
@@ -535,8 +560,8 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             handleTextKey(event);
             int mapped = mapAndroidKeyToGlfw(keyCode);
             if (mapped != 0) {
-                NativeBridge.nativeSetKey(mapped, true);
-                NativeBridge.nativeSetKey(mapped, false);
+                // down here, up in onKeyUp: pressing and releasing at once made a held key (W to walk) a series of taps
+                if (event.getRepeatCount() == 0) NativeBridge.nativeSetKey(mapped, true);
                 return true;
             }
         }
@@ -545,9 +570,18 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (engineInitialized && NativeBridge.isLoaded() && editKeyFor(keyCode) != 0) {
-            NativeBridge.nativeEditKey(editKeyFor(keyCode), 0);
-            return true;
+        if (engineInitialized && NativeBridge.isLoaded()) {
+            boolean handled = false;
+            if (editKeyFor(keyCode) != 0) {
+                NativeBridge.nativeEditKey(editKeyFor(keyCode), 0);
+                handled = true;
+            }
+            int mapped = mapAndroidKeyToGlfw(keyCode);
+            if (mapped != 0) {
+                NativeBridge.nativeSetKey(mapped, false);
+                handled = true;
+            }
+            if (handled) return true;
         }
         return super.onKeyUp(keyCode, event);
     }
@@ -660,6 +694,10 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         if (keyCode == KeyEvent.KEYCODE_DEL) return GlfwKeys.KEY_BACKSPACE;
         if (keyCode == KeyEvent.KEYCODE_ESCAPE) return GlfwKeys.KEY_ESCAPE;
         if (keyCode == KeyEvent.KEYCODE_TAB) return GlfwKeys.KEY_TAB;
+        if (keyCode == KeyEvent.KEYCODE_SHIFT_LEFT || keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT) return GlfwKeys.KEY_LEFT_SHIFT;
+        if (keyCode == KeyEvent.KEYCODE_CTRL_LEFT || keyCode == KeyEvent.KEYCODE_CTRL_RIGHT) return GlfwKeys.KEY_LEFT_CONTROL;
+        if (keyCode == KeyEvent.KEYCODE_F3) return GlfwKeys.KEY_F3;
+        if (keyCode == KeyEvent.KEYCODE_F5) return GlfwKeys.KEY_F5;
         return 0;
     }
 
@@ -673,7 +711,8 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
             "Tuş Düzeni Editörünü Aç",
             "Sohbet / Komut Gönder",
             "Native Motor Günlüğü",
-            "Başlatıcıya Dön (Çıkış)"
+            "Başlatıcıya Dön (oyun duraklar, arka planda bekler)",
+            "Oyunu Kapat (uygulama kapanır)"
         };
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("TouchCore — " + config.username + " • " + modeStr)
@@ -702,12 +741,35 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
                                         .show();
                                 break;
                             case 5:
+                                // onPause taps ESC: the world is paused while the launcher is open
                                 finish();
+                                break;
+                            case 6:
+                                confirmQuitGame();
                                 break;
                         }
                     }
                 })
                 .setNegativeButton("Devam Et", null)
+                .show();
+    }
+
+    /**
+     * The engine cannot be stopped and restarted inside the process, so closing the game ends the process. The launcher
+     * starts again on the next tap of its icon (a fresh engine, new settings applied).
+     */
+    private void confirmQuitGame() {
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Oyunu Kapat")
+                .setMessage("Uygulama tamamen kapanacak. Dünyanın son hali kaybolmasın diye önce oyun içi menüden "
+                        + "\"Save and Quit to Title\" ile çıkın.\n\nŞimdi kapatılsın mı?")
+                .setPositiveButton("Kapat", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                        finishAffinity();
+                        android.os.Process.killProcess(android.os.Process.myPid());
+                    }
+                })
+                .setNegativeButton("Vazgeç", null)
                 .show();
     }
 
@@ -737,21 +799,26 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
                 .setPositiveButton("Gönder", new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface dialog, int which) {
                         if (!NativeBridge.isLoaded()) return;
+                        final String msg = input.getText().toString();
+                        if (msg.isEmpty()) return;
+                        // T opens the chat (held for a few frames: the engine samples keys once per frame). The text goes
+                        // in as typed characters once the chat screen is open: it used to be sent as key presses, which
+                        // the chat box ignores (it reads characters), and "/" and lower case could not be sent at all.
                         NativeBridge.nativeSetKey(GlfwKeys.KEY_T, true);
-                        NativeBridge.nativeSetKey(GlfwKeys.KEY_T, false);
-                        String msg = input.getText().toString();
-                        for (int i = 0; i < msg.length(); i++) {
-                            char ch = Character.toUpperCase(msg.charAt(i));
-                            if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
-                                NativeBridge.nativeSetKey(ch, true);
-                                NativeBridge.nativeSetKey(ch, false);
-                            } else if (ch == ' ') {
-                                NativeBridge.nativeSetKey(GlfwKeys.KEY_SPACE, true);
-                                NativeBridge.nativeSetKey(GlfwKeys.KEY_SPACE, false);
+                        mainHandler.postDelayed(new Runnable() {
+                            @Override public void run() { NativeBridge.nativeSetKey(GlfwKeys.KEY_T, false); }
+                        }, 80);
+                        mainHandler.postDelayed(new Runnable() {
+                            @Override public void run() {
+                                for (int i = 0; i < msg.length(); ) {
+                                    int cp = msg.codePointAt(i);
+                                    i += Character.charCount(cp);
+                                    if (!Character.isISOControl(cp)) NativeBridge.nativeTypeChar(cp);
+                                }
+                                NativeBridge.nativeEditKey(13, 1); // Enter: send
+                                NativeBridge.nativeEditKey(13, 0);
                             }
-                        }
-                        NativeBridge.nativeSetKey(GlfwKeys.KEY_ENTER, true);
-                        NativeBridge.nativeSetKey(GlfwKeys.KEY_ENTER, false);
+                        }, 400);
                     }
                 })
                 .setNegativeButton("İptal", null)
