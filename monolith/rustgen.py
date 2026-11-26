@@ -2785,14 +2785,16 @@ def _copy_rt_sources(rt_dir: str, dest: str) -> None:
 
 
 def native_tls() -> bool:
-    """MONO_NATIVE_TLS=1: Android derlemesinde çerçeve yığını gerçek yerel TLS'te tutulur (varsayılan kapalı).
+    """Android derlemesinde çerçeve yığını gerçek yerel TLS'te tutulur. Varsayılan açık (27 Kasım 2026, S26 ölçümü: FPS
+    29,8 -> 60,8); MONO_NATIVE_TLS=0 eski yolu (std thread_local!, pthread anahtarı) geri getirir. Yerel TLS'li motor
+    yalnızca Android 10 (API 29) ve sonrasında yüklenir; daha eski cihaz için MONO_NATIVE_TLS=0 ile derlenmeli.
 
     `std`'nin thread_local!'ı Android hedefinde pthread anahtarı kullanır (her erişim pthread_getspecific çağrısı; S26 CPU
     profilinde çerçeve kaydı toplam CPU'nun yaklaşık %60'ı). `#[thread_local]` kararsız bir özellik: derleyiciye
     RUSTC_BOOTSTRAP=1 verilir. Model global-dynamic (TLSDESC): initial-exec denendi ve Android 17 bionic'te dlopen ile
     yüklenen kütüphaneyi reddediyor ("TLS symbol ... using IE access model", qemu + gerçek bağlayıcı ile doğrulandı).
     TLSDESC dlopen'li kütüphanede çalışır (API 29 ve sonrası; daha eskisinde yerel TLS yok)."""
-    return os.environ.get("MONO_NATIVE_TLS", "") == "1"
+    return os.environ.get("MONO_NATIVE_TLS", "1") != "0"
 
 
 def native_tls_flags() -> list:

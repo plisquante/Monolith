@@ -622,7 +622,7 @@ diğer Java %4. En çok CPU yiyenler:
 hedefinde yerel TLS kullanmıyor; her erişim `pthread_getspecific@plt` çağrısı (makine kodunda doğrulandı). Masaüstünde aynı erişim
 tek adres hesabı olduğu için orada görünmüyordu.
 
-**Düzeltme (anahtarlı, varsayılan kapalı):** `MONO_NATIVE_TLS=1` ile Android derlemesi `--cfg mono_native_tls` verir; `FAST` yığını
+**Düzeltme (27 Kasım 2026'dan beri Android'de varsayılan; `MONO_NATIVE_TLS=0` eski yol):** Android derlemesi `--cfg mono_native_tls` verir; `FAST` yığını
 `#[thread_local] static` olur (`RUSTC_BOOTSTRAP=1`, `-Z tls-model=global-dynamic`; initial-exec denendi, Android 17 bionic `dlopen`'da reddetti: "TLS symbol ... using IE access model"). Anahtar yoksa eski yol. Sınırlama: `dlopen` ile
 yüklenen kütüphanede yerel TLS Android 10 (API 29) ve sonrasında desteklenir. Beklenen kazanç ölçülmedi (v8 raporuyla ölçülecek).
 
