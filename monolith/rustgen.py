@@ -2684,6 +2684,13 @@ def _android_build(a, files, rt_dir) -> int:
                   "-L", f"dependency={out}", "-L", f"native={_android_libffi(clang, cache)}", *DEPS, "--extern", f"mono_rt={rlib}", "--extern", f"mc_main={mc_main}"]
     for o in objs:
         cmd += ["-C", f"link-arg={o}"]
+    # libffi (statik) kapanış kodu için __clear_cache çağırır. Bu işlev Android'in libc'sinde yoktur; NDK'nın
+    # derleyici çalışma zamanı kütüphanesinde (compiler-rt builtins) bulunur. Eklenmezse sembol çözülmeden kalır
+    # ve Android kütüphaneyi yüklerken "cannot locate symbol __clear_cache" hatasıyla reddeder.
+    builtins = subprocess.run([clang, "-rtlib=compiler-rt", "-print-libgcc-file-name"], capture_output=True, text=True).stdout.strip()
+    if not os.path.isfile(builtins):
+        raise SystemExit(f"monolith: NDK compiler-rt builtins not found ({builtins!r})")
+    cmd += ["-C", f"link-arg={builtins}"]
     if run(cmd + [stub, "-o", so], "link"):
         return 1
     sys.stderr.write(f"monolith: {so} ({os.path.getsize(so) >> 20} MiB)\n")

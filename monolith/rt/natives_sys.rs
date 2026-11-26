@@ -30,6 +30,8 @@ struct SysInfo {
 
 #[cfg_attr(unix, link(name = "c"))]
 extern "C" {
+    // glibc adı __errno_location; Android'in C kütüphanesi (bionic) aynı işlevi __errno adıyla verir.
+    #[cfg_attr(target_os = "android", link_name = "__errno")]
     fn __errno_location() -> *mut c_int;
     fn strerror(errnum: c_int) -> *const c_char;
     fn getpid() -> c_int;
@@ -40,6 +42,12 @@ extern "C" {
     fn pipe2(fds: *mut c_int, flags: c_int) -> c_int;
     fn close(fd: c_int) -> c_int;
     fn malloc(size: usize) -> *mut c_void;
+}
+
+// Süreç başlatma (posix_spawn ailesi). Masaüstünde doğrudan C kütüphanesinden bağlanır.
+#[cfg(not(target_os = "android"))]
+#[cfg_attr(unix, link(name = "c"))]
+extern "C" {
     fn posix_spawnp(
         pid: *mut c_int,
         file: *const c_char,
@@ -54,6 +62,43 @@ extern "C" {
     fn posix_spawn_file_actions_addclose(fa: *mut c_void, fd: c_int) -> c_int;
     fn posix_spawn_file_actions_addchdir_np(fa: *mut c_void, path: *const c_char) -> c_int;
 }
+
+// Android'de bu işlevler her sürümde yok: posix_spawn ailesi API 28 (Android 9) ile, addchdir_np API 34
+// (Android 14) ile geldi. Doğrudan bağlanırlarsa eski bir cihazda kütüphanenin TAMAMI yüklenemez
+// (Android her sembolü yükleme anında çözer). Bu yüzden çalışma anında dlsym ile aranırlar.
+// Bulunamazsa ENOSYS ("desteklenmiyor") döner; çağıran kod bunu bir hata olarak Java'ya iletir (sessizce
+// başarı numarası yapılmaz).
+#[cfg(target_os = "android")]
+mod spawn_dl {
+    use super::*;
+    const ENOSYS: c_int = 38;
+    // Android 64 bit'te RTLD_DEFAULT boş işaretçidir: yüklü tüm kütüphanelerde arar.
+    fn find(name: &[u8]) -> *mut c_void {
+        unsafe { dlsym(std::ptr::null_mut(), name.as_ptr() as *const c_char) }
+    }
+    // Her işlev için: adresi bul, varsa çağır, yoksa ENOSYS döndür.
+    macro_rules! dl_fn {
+        ($name:ident ( $($arg:ident : $ty:ty),* )) => {
+            pub unsafe fn $name($($arg: $ty),*) -> c_int {
+                let p = find(concat!(stringify!($name), "\0").as_bytes());
+                if p.is_null() {
+                    return ENOSYS;
+                }
+                let f: unsafe extern "C" fn($($ty),*) -> c_int = std::mem::transmute(p);
+                f($($arg),*)
+            }
+        };
+    }
+    dl_fn!(posix_spawnp(pid: *mut c_int, file: *const c_char, fa: *const c_void, attr: *const c_void,
+                        argv: *const *const c_char, envp: *const *const c_char));
+    dl_fn!(posix_spawn_file_actions_init(fa: *mut c_void));
+    dl_fn!(posix_spawn_file_actions_destroy(fa: *mut c_void));
+    dl_fn!(posix_spawn_file_actions_adddup2(fa: *mut c_void, fd: c_int, newfd: c_int));
+    dl_fn!(posix_spawn_file_actions_addclose(fa: *mut c_void, fd: c_int));
+    dl_fn!(posix_spawn_file_actions_addchdir_np(fa: *mut c_void, path: *const c_char));
+}
+#[cfg(target_os = "android")]
+use spawn_dl::*;
 
 #[cfg_attr(unix, link(name = "dl"))]
 extern "C" {

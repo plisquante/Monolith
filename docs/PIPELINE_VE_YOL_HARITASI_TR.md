@@ -361,13 +361,28 @@ Bu ortamda derlendi ve dosya düzeyinde doğrulandı; cihazda çalıştırılmad
 | parça | değer |
 |---|---|
 | araçlar | platform android-37.2 (API 37.2), build-tools 37.0.0, NDK r30 (30.0.16248370), R8 9.5.33, Rust hedefi `aarch64-linux-android` |
-| motor | `build/minecraft-26.3-android/rust/libminecraft_mono.so`: 599 MiB, ELF64 AArch64, LOAD hizası 0x4000 (16 KB sayfa), `mono_android_entry` dışa aktarılmış, NEEDED yalnızca `libc libdl libz libm` |
+| motor | `build/minecraft-26.3-android/rust/libminecraft_mono.so`: 598 MiB, ELF64 AArch64, LOAD hizası 0x4000 (16 KB sayfa), `mono_android_entry` dışa aktarılmış, NEEDED yalnızca `libc libdl libz libm` |
 | derleme komutu | `./build.sh build/client.jar --android --ndk <ndk r30> --api 26 --opt 3 --shards 32 --shard-jobs 2 -o build/minecraft-26.3-android` (varsayılan yol; hız anahtarları kapalı) |
 | başlatıcı | `Monolith.apk` 35,9 MiB: compileSdk 37, targetSdk 34, minSdk 26, `libtouchcore_mono.so` 0x4000 hizalı, `assets/engine_resources.zip` (4 604 dosya, 17 java.home dosyası, Android JNA kütüphanesi), `apksigner verify` geçti |
 | sıkıştırılmış motor | `.xz` 85 MiB, `.zip` (telefonda açmak için) |
 
 Düzeltme: `tools/build_touchcore_apk.py` java.home dosyalarını (`conf/`, `lib/tzdb.dat`) yalnızca `<çıktı>/` altında arıyordu; rustgen
 bunları `<çıktı>/rust/` altına kopyalıyor. Araç artık ikisine de bakıyor. Java'ya dokunulmadı.
+
+Yükleme denetimi (Android her sembolü kütüphane yüklenirken çözer; tek eksik sembol uygulamanın açılmasını engeller).
+Çözülmemiş zorunlu semboller NDK'nın API 26 kütüphanelerine karşı tek tek karşılaştırıldı; ilk derlemede iki kütüphanede de
+yükleme hatası çıkacaktı, düzeltildi:
+
+| kütüphane | eksik sembol | neden | düzeltme |
+|---|---|---|---|
+| `libminecraft_mono.so` | `__errno_location` | glibc adı; Android'de `__errno` | `monolith/rt/natives_{sys,net,nio,jni}.rs`: Android'de `link_name = "__errno"` |
+| `libminecraft_mono.so` | `posix_spawn*` | API 28'den (addchdir_np API 34'ten) önce yok | `natives_sys.rs`: Android'de çalışma anında `dlsym`; yoksa ENOSYS ile hata (sessiz başarı yok) |
+| `libminecraft_mono.so` | `__clear_cache` | libffi ister; NDK compiler-rt kütüphanesinde | `monolith/rustgen.py`: Android bağlamasına `libclang_rt.builtins` eklenir |
+| `libtouchcore_mono.so` | `glBindBuffer` vb. 11 `gl*` | Rust `#[link(name="GLESv3")]` statik kütüphaneden taşınmıyor | `tools/build_touchcore_apk.py`: bağlamaya `libGLESv3.so` |
+
+Düzeltmeden sonra: iki kütüphanede de zorunlu çözülmemiş sembol 0 (yalnızca isteğe bağlı zayıf `gettid`, `getrandom`,
+`copy_file_range`); PT_TLS yok, TEXTREL yok, BIND_NOW; APK `zipalign -c -P 16` geçti, `apksigner verify` geçti. Masaüstü testi
+`SignalExit` (süreç başlatma yolu) geçti.
 
 Kurulum (telefonda):
 1. Eski Monolith APK'sı farklı imzayla kuruluysa önce kaldırın (imza uyuşmazsa kurulum reddedilir).

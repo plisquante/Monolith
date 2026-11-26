@@ -147,6 +147,8 @@ struct SockUn {
 
 #[cfg_attr(unix, link(name = "c"))]
 extern "C" {
+    // glibc adı __errno_location; Android'in C kütüphanesi (bionic) aynı işlevi __errno adıyla verir.
+    #[cfg_attr(target_os = "android", link_name = "__errno")]
     fn __errno_location() -> *mut c_int;
     fn strerror(errnum: c_int) -> *const c_char;
     fn socket(domain: c_int, ty: c_int, protocol: c_int) -> c_int;

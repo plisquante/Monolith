@@ -228,6 +228,10 @@ def build_native_so(build_dir: Path, out_so: Path) -> None:
         str(core_lib),
         str(sys_lib_dir / "libandroid.so"),
         str(sys_lib_dir / "liblog.so"),
+        # Rust çekirdeği (gles.rs) gl* işlevlerini doğrudan çağırır. Rust'taki #[link(name = "GLESv3")] statik
+        # kütüphaneden (.a) bu bağlama taşınmaz; burada açıkça verilmezse libGLESv3 bağımlılık olarak yazılmaz ve
+        # Android kütüphaneyi "cannot locate symbol glBindBuffer" hatasıyla yüklemez.
+        str(sys_lib_dir / "libGLESv3.so"),
         str(sys_lib_dir / "libc.so"),
         str(sys_lib_dir / "libm.so"),
         str(sys_lib_dir / "libdl.so"),
