@@ -205,6 +205,13 @@ fn cur_reg() -> *mut ThreadReg {
     TLS_REG.with(|c| unsafe { *c.0.get() })
 }
 
+/// Bu iş parçacığının kayıtlı yığın üst sınırı (yığın aşağı doğru büyür; en yüksek adres). Kayıtlı değilse 0.
+/// C9 yığın yürütücüsü (jtrace.rs) çerçeve işaretçisi zincirini bu sınırın dışına çıkmadan izler.
+pub fn cur_stack_top() -> usize {
+    let r = cur_reg();
+    if r.is_null() { 0 } else { unsafe { (*r).stack_top } }
+}
+
 
 /// Referans yazma bariyeri (snapshot-at-the-beginning): işaretleme açıksa, yazılacak yerin eski değerini kaydeder.
 #[inline(always)]

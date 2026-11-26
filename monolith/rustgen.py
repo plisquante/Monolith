@@ -1434,7 +1434,9 @@ class Gen:
         # MONO_FRAMES=fast: hızlı gölge yığın (rt.rs `enter_frame_s`/`set_line_s`). Metot başına bir `static FI: FrameInfo`
         # üretilir, çağrıda yalnızca ona işaretçi itilir; yığın taşması denetimi de aynı adımda yapılır. Varsayılan: eski yol
         # (`stack_check` + `enter_frame` + `set_line`), değişmedi.
-        self.fast_frames = os.environ.get("MONO_FRAMES", "") == "fast"
+        # MONO_FRAMES=dwarf (C9): çerçeve bilgisi hızlı yoldaki gibi üretilir, sonra linetab.build ile çalışma anı kaydı
+        # koddan silinip yan tabloya taşınır (_apply_line_tables).
+        self.fast_frames = os.environ.get("MONO_FRAMES", "") in ("fast", "dwarf")
         self.set_line_fn = "set_line_s" if self.fast_frames else "set_line"
         # MONO_ICACHE=1: arayüz çağrısı, checkcast ve instanceof için çağrı yeri önbelleği (rt.rs `ICache`). Her çağrı yerine
         # kendi `static IC` önbelleği üretilir. Varsayılan: eski yol (`itab_find`/`checkcast`/`instance_of`), değişmedi.
@@ -2646,6 +2648,36 @@ def _to_library_entry(main_rs: str) -> str:
     return main_rs.replace(head, "pub fn mono_run() -> i32 {\n    rt::init_hooks", 1).replace(tail, "    code\n}\n", 1)
 
 
+def c9_mode() -> bool:
+    """MONO_FRAMES=dwarf: yığın izi çağrı başına kayıt yerine makine yığını + DWARF + yan tablodan (PIPELINE 27)."""
+    return os.environ.get("MONO_FRAMES", "") == "dwarf"
+
+
+def c9_flags() -> list:
+    """C9 kipinde her rustc çağrısına eklenen bayraklar: çerçeve işaretçisi zinciri ve satır tablosu (satır içi bilgisiyle)."""
+    return ["-C", "force-frame-pointers=yes", "-C", "debuginfo=line-tables-only"] if c9_mode() else []
+
+
+def _apply_line_tables(files: dict) -> dict:
+    """C9: her parçadan ve main.rs'den çalışma anı çerçeve kaydını siler, yan tabloyu çıkarır, main.rs'ye tabloları
+    kaydeden çağrıyı ekler. Döndürür: {"shard_05.lt": bayt, ...}. files yerinde değişir."""
+    from . import linetab
+    tables = {}
+    names = []
+    for fn in sorted(files):
+        if fn.startswith("shard_") and fn.endswith(".rs"):
+            files[fn], tables[fn[:-3] + ".lt"] = linetab.build(files[fn], strip=True)
+            names.append(fn)
+    names.append("main.rs")
+    reg = ", ".join(f'("{n}", include_bytes!("{n[:-3]}.lt"))' for n in names)
+    anchor = "    rt::init_hooks("
+    if anchor not in files["main.rs"]:
+        raise SystemExit("monolith: C9: main.rs has no rt::init_hooks call to register the line tables before")
+    files["main.rs"] = files["main.rs"].replace(anchor, f"    mono_rt::jtrace::register(&[{reg}]);\n" + anchor, 1)
+    files["main.rs"], tables["main.lt"] = linetab.build(files["main.rs"], strip=True)
+    return tables
+
+
 LINK_STUB = r"""#![allow(warnings)]
 //! Android host entry of the Monolith engine. The TouchCore launcher dlopens this library and calls
 //! `mono_android_entry(user, gameDir, assetsDir, input)`; the game runs on its own thread.
@@ -2758,12 +2790,13 @@ def _android_build(a, files, rt_dir) -> int:
     target = "aarch64-linux-android"
     clang = _find_ndk_clang(a.ndk, a.api)
     out = os.path.abspath(a.output)
-    base = ["rustc", "--target", target, "--edition", "2021", "-C", "panic=abort", "-C", f"linker={clang}"]
+    base = ["rustc", "--target", target, "--edition", "2021", "-C", "panic=abort", "-C", f"linker={clang}", *c9_flags()]
     rt_hasher = hashlib.sha256()
     for f in _rt_sources(rt_dir):
         rt_hasher.update(f.encode())
         rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
     rt_hasher.update(rt_deps_key().encode())
+    rt_hasher.update(" ".join(c9_flags()).encode())  # C9 bayrakları: önbellekteki bayraksız derlemeyle karışmasın
     rt_hash = rt_hasher.hexdigest()[:16]
     cache = os.path.join("/tmp", "monolith_shard_cache", "android")
     os.makedirs(cache, exist_ok=True)
@@ -2823,7 +2856,7 @@ def _android_build(a, files, rt_dir) -> int:
     open(stub, "w", encoding="utf-8").write(LINK_STUB)
     so = os.path.join(out, a.lib_name)
     cmd = base + ["-C", f"opt-level={a.opt}", "--crate-type", "cdylib", "-C", "link-arg=-fuse-ld=lld",
-                  "-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,--gc-sections", "-C", "strip=debuginfo",
+                  "-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,--gc-sections", *([] if c9_mode() else ["-C", "strip=debuginfo"]),
                   "-L", f"dependency={out}", "-L", f"native={_android_libffi(clang, cache)}", *DEPS, "--extern", f"mono_rt={rlib}", "--extern", f"mc_main={mc_main}"]
     for o in objs:
         cmd += ["-C", f"link-arg={o}"]
@@ -2889,7 +2922,7 @@ def build_runtime_rlib(target: str, dest: str, opt: str = "3") -> None:
     # çalışma zamanı, üretilen kodla aynı optimizasyon düzeyine sahip olmalı: share-generics ile (opt-level 0/1)
     # shard'lar yalnızca aynı düzeyde derlenmiş bir rlib'in dışa aktardığı jenerik örneklere başvurur
     r = subprocess.run(["cargo", "rustc", "--release", "--offline", "--lib", "--manifest-path", "check/Cargo.toml",
-                        "--target-dir", "target", "--message-format=json", *tgt, "--", "-C", f"opt-level={opt}"],
+                        "--target-dir", "target", "--message-format=json", *tgt, "--", "-C", f"opt-level={opt}", *c9_flags()],
                        cwd=RT_DEPS, capture_output=True, text=True)
     if r.returncode:
         raise SystemExit("monolith: runtime build failed (cargo build in rt_deps/check)\n" + r.stderr[-6000:])
@@ -2922,6 +2955,7 @@ def _host_build(a, files, rt_dir) -> int:
         rt_hasher.update(open(os.path.join(rt_dir, f), "rb").read())
     rt_hasher.update(rt_deps_key(target).encode())
     rt_hasher.update(target.encode())
+    rt_hasher.update(" ".join(c9_flags()).encode())  # C9 bayrakları: önbellekteki bayraksız derlemeyle karışmasın
     rt_hash = rt_hasher.hexdigest()[:16]
     cache_dir = os.path.join(tempfile.gettempdir(), "monolith_shard_cache")
     os.makedirs(cache_dir, exist_ok=True)
@@ -2965,7 +2999,7 @@ def _host_build(a, files, rt_dir) -> int:
                 _touch(cached_obj)
                 shutil.copy(cached_obj, obj)
                 return fn, obj, subprocess.CompletedProcess([], 0, "", "")
-            res = subprocess.run(["rustc", *TGT, *LNK, "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
+            res = subprocess.run(["rustc", *TGT, *LNK, *c9_flags(), "-C", f"opt-level={a.opt}", "--edition", "2021", "-C", "panic=abort",
                                   "--crate-type", "lib", "--crate-name", name, "--emit=obj",
                                   *DEPS, "--extern", f"mono_rt={rlib}",
                                   os.path.join(a.output, fn), "-o", obj], capture_output=True, text=True)
@@ -2983,7 +3017,7 @@ def _host_build(a, files, rt_dir) -> int:
     cgu_args = ["-C", "codegen-units=1"] if len(shard_files) >= 16 else []
     # ld.lld yalnızca Linux ana makinesinde (Mach-O ve PE, platformun kendi bağlayıcısıyla bağlanır)
     lld_args = ["-C", "link-arg=-fuse-ld=lld"] if (not target and sys.platform.startswith("linux") and shutil.which("ld.lld")) else []
-    r = subprocess.run(["rustc", *TGT, *LNK, "-C", f"opt-level={main_opt}", *cgu_args, "--edition", "2021", "-C", "panic=abort",
+    r = subprocess.run(["rustc", *TGT, *LNK, *c9_flags(), "-C", f"opt-level={main_opt}", *cgu_args, "--edition", "2021", "-C", "panic=abort",
                         *DEPS, "--extern", f"mono_rt={rlib}", *lld_args, *link_args,
                         os.path.join(a.output, "main.rs"), "-o", exe], capture_output=True, text=True)
     if r.returncode:
@@ -3057,10 +3091,14 @@ def main() -> int:
                                 use_escape=a.escape, escape_budget=a.escape_budget, use_inline=a.inline)
     if a.android:
         files["main.rs"] = _to_library_entry(files["main.rs"])
+    tables = _apply_line_tables(files) if c9_mode() else {}
     os.makedirs(a.output, exist_ok=True)
     for fn, src in files.items():
         with open(os.path.join(a.output, fn), "w", encoding="utf-8") as fh:
             fh.write(src)
+    for fn, b in tables.items():
+        with open(os.path.join(a.output, fn), "wb") as fh:
+            fh.write(b)
     _copy_rt_sources(rt_dir, a.output)
     from .classpath import jdk_home
     jh = jdk_home()

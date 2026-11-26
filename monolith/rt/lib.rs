@@ -23,3 +23,5 @@ pub mod audio_dev;
 pub mod audio_wasapi;
 pub mod desk;
 pub mod posix_win;
+pub mod dwarf;
+pub mod jtrace;

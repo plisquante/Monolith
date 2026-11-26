@@ -1624,6 +1624,10 @@ fn fast_frames() -> Option<Vec<(&'static str, &'static str, &'static str, &'stat
 
 /// Bu iş parçacığındaki her çerçeve, en içten başlayarak: (sınıf iç adı, metot, tanımlayıcı, kaynak dosya, satır).
 pub fn frames_snapshot() -> Vec<(&'static str, &'static str, &'static str, &'static str, i32)> {
+    // C9 kipi (MONO_FRAMES=dwarf ile üretilmiş program): çerçeveler makine yığınından çıkarılır (jtrace.rs)
+    if let Some(v) = crate::jtrace::frames() {
+        return v;
+    }
     if let Some(v) = fast_frames() {
         return v;
     }
