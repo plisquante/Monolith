@@ -27,6 +27,36 @@ fn trace_park() -> bool {
     *V.get_or_init(|| std::env::var_os("MONO_TRACE_PARK").is_some())
 }
 
+/// MONO_WORKER_NICE=<1..19> (yalnızca Android, varsayılan KAPALI): adı "Worker-" ile başlayan Java iş parçacıklarının (chunk
+/// üretimi, mesh oluşturma, ışık hesabı) işletim sistemi önceliğini düşürür (nice değeri artar). Amaç: arka plan işleri
+/// işlemciyi doldururken çizim ve sunucu iş parçacıklarının kare atlamaması. Değişken yoksa ya da geçersizse hiçbir şey
+/// yapılmaz (eski davranış). Bir kez okunur.
+fn worker_nice() -> Option<i32> {
+    static V: OnceLock<Option<i32>> = OnceLock::new();
+    *V.get_or_init(|| std::env::var("MONO_WORKER_NICE").ok().and_then(|s| s.trim().parse::<i32>().ok()).filter(|n| (1..=19).contains(n)))
+}
+
+/// Yeni başlayan Java iş parçacığının içinden çağrılır. Anahtar açıksa ilk 60 iş parçacığının adını ve sonucunu günlüğe yazar
+/// (adların gerçekten "Worker-" ile başlayıp başlamadığı görülebilsin).
+#[cfg(target_os = "android")]
+fn apply_worker_nice(t: Ref) {
+    let Some(nice) = worker_nice() else { return };
+    extern "C" {
+        fn gettid() -> i32;
+        fn setpriority(which: i32, who: u32, prio: i32) -> i32;
+    }
+    static SEEN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let name = rt::str_to_rust(rt::get_ref(t, "name"));
+    let matched = name.starts_with("Worker-");
+    // PRIO_PROCESS = 0; Linux'ta "who" yerine iş parçacığı kimliği verilirse yalnızca o iş parçacığı etkilenir
+    let rc = if matched { unsafe { setpriority(0, gettid() as u32, nice) } } else { 0 };
+    if SEEN.fetch_add(1, Ordering::Relaxed) < 60 {
+        eprintln!("[mono:thread] start name={} worker={} nice={} rc={}", name, matched, nice, rc);
+    }
+}
+#[cfg(not(target_os = "android"))]
+fn apply_worker_nice(_t: Ref) {}
+
 // ------------------------------------------------------------------ monitörler
 struct MonState {
     owner: u64,
@@ -321,6 +351,7 @@ pub fn start(t: Ref, stack: i64) -> Res<()> {
         let t = Ref(addr as *mut Obj);
         set_current(t);
         crate::heap::set_thread_obj(t);
+        apply_worker_nice(t);
         let _ = (rt::hooks().thread_run)(t);
         drop_tstate(addr);
     });

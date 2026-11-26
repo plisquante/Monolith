@@ -870,6 +870,12 @@ fn knobs() -> &'static Knobs {
 
 /// Açık/kapalı ortam değişkeni: tanımlı değilse `default`; boş ya da "0" kapalı; başka her değer açık.
 /// (Eskiden MONO_GC_CONCURRENT için "tanımlı olması" yetiyordu, "0" bile açıyordu; artık "0" kapatır.)
+/// Unix zamanı (ms). Toplama günlük satırlarına damga olarak yazılır; başlatıcının kare süresi dosyasıyla (frametime.csv, aynı
+/// saat) karşılaştırılıp her takılmanın toplamadan mı başka bir şeyden mi geldiği ayrılır.
+fn unix_ms() -> u128 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
+}
+
 fn env_switch(name: &str, default: bool) -> bool {
     match std::env::var_os(name) {
         None => default,
@@ -1317,7 +1323,7 @@ fn collect_impl(begin_only: bool) {
     }
     if new_cycle && phases_on() {
         // döngü başındaki işler (kalan tembel süpürme, boş dilim bırakma, bölge hazırlığı) kök taramadan önce, duraklamanın içindedir
-        eprintln!("[mono:gc_phases] pre gc={} finish_sweep_etc={}us", h.gc_count, t_pre.elapsed().as_micros());
+        eprintln!("[mono:gc_phases] pre gc={} finish_sweep_etc={}us t={}", h.gc_count, t_pre.elapsed().as_micros(), unix_ms());
     }
     h.slabs.sort_unstable();
     let slabs_snap = &h.slabs;
@@ -1470,7 +1476,7 @@ fn collect_impl(begin_only: bool) {
             large_max,
         };
         if phases_on {
-            eprintln!("[mono:gc_phases] begin gc={} roots={}us", h.gc_count, t_roots.as_micros());
+            eprintln!("[mono:gc_phases] begin gc={} roots={}us t={}", h.gc_count, t_roots.as_micros(), unix_ms());
         }
         *G.conc.lock().unwrap() = Some(cyc);
         G.satb_on.store(true, Ordering::Release);
@@ -1748,7 +1754,7 @@ fn collect_impl(begin_only: bool) {
             n_dead_large
         );
         let t_sweep = t_start.elapsed() - t_roots - t_mark;
-        eprintln!("[mono:gc_phases] gc={} wait={}us roots={}us mark={}us sweep={}us total={}us live={}B", h.gc_count, t_wait.as_micros(), t_roots.as_micros(), t_mark.as_micros(), t_sweep.as_micros(), t_entry.elapsed().as_micros(), new_live);
+        eprintln!("[mono:gc_phases] gc={} wait={}us roots={}us mark={}us sweep={}us total={}us live={}B t={}", h.gc_count, t_wait.as_micros(), t_roots.as_micros(), t_mark.as_micros(), t_sweep.as_micros(), t_entry.elapsed().as_micros(), new_live, unix_ms());
     }
     if let Some(c) = census.take() {
         c.finish(h.gc_count, new_live, h.heap_bytes, since_gc, stw_start);
