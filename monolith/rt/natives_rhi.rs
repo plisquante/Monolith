@@ -509,7 +509,8 @@ fn gl_diag() -> &'static GlDiag {
     static D: OnceLock<GlDiag> = OnceLock::new();
     D.get_or_init(|| {
         let on = |n: &str| std::env::var(n).is_ok_and(|v| !v.is_empty() && v != "0");
-        GlDiag { stats: on("MONO_GL_STATS"), check: on("MONO_GL_CHECK") }
+        // MONO_DIAG=1 (diag.rs) ikisini birden açar
+        GlDiag { stats: on("MONO_GL_STATS") || crate::diag::on(), check: on("MONO_GL_CHECK") || crate::diag::on() }
     })
 }
 static GS_FRAMES: AtomicU64 = AtomicU64::new(0);

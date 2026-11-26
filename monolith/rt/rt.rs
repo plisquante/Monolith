@@ -239,6 +239,7 @@ pub fn init_hooks(h: Hooks) {
     HOOKS.store(Box::leak(Box::new(h)), std::sync::atomic::Ordering::Release);
     crate::prof::init();
     crate::cpuprof::init();
+    crate::diag::init();
     crate::crash::install();
     crate::ncount::install();
 }

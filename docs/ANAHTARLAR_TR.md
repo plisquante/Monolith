@@ -74,6 +74,7 @@ MONO_SHARD=pkg MONO_CONCAT=exact MONO_NULL_ELIDE=1 MONO_LINE_LAZY=1 MONO_REGION_
 | `MONO_PATCH_VERIFY` | `1` | kapalı | yamalı metotlar orijinalle karşılaştırılır, ilk farkta durur | `patch.rs` |
 | `MONO_JNA_TRACE` | dolu = açık | kapalı | JNA çağrılarını yazar | `natives_jni.rs` |
 | `MONO_AUDIO_TRACE` | dolu = açık | kapalı | ses karıştırıcı günlüğü | `audio.rs` |
+| `MONO_DIAG` | `1` | kapalı | **tek anahtarla cihaz tanısı**: `[mono:mem]` (RSS, en yüksek RSS, GC yığını, canlı veri, bölge parçası, iş parçacığı sayısı, sistemin boş belleği) ve `[mono:threads]` (iş parçacığı başına CPU %, en çok yiyen 10; Java iş parçacıklarına işletim sistemi adı verilir) 2 sn'de bir; ayrıca `MONO_GL_STATS` + `MONO_GL_CHECK`. CPU profili için `MONO_CPU_PROFILE=1` ayrıca verilir | `diag.rs` |
 | `MONO_GL_STATS` | `1` | kapalı | saniyede bir `[mono:gl_stats]` satırı: kare, çizim çağrısı, indis, yüklenen KB, eşleme / başarısız eşleme, bozulmuş arabellek (unmap false), atlanan çizim, GL hata sayısı. Unix ms damgalı (frametime.csv ile aynı saat) | `natives_rhi.rs` |
 | `MONO_GL_CHECK` | `1` | kapalı | her çizim ve arabellek çağrısından sonra `glGetError`; hata çağrı adıyla yazılır (`[mono:gl]`, ilk 200) | `natives_rhi.rs` |
 | `MONO_CRASH_DIR` | dizin | - | yerel çökme raporunun yazılacağı yer (`mono-crash-<pid>.txt`) | `crash.rs` |
