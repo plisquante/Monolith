@@ -13,6 +13,37 @@ Minecraft Java 26.3 ilk hedef.
 
 Bu programı çalıştırmak için Java kurmak gerekmez.
 
+## Kendi Java kodunuzu Rust'a çevirmek
+
+Bu proje Java'dan Rust'a çeviriye yoğunlaşır. Minecraft yalnızca ilk hedeftir.
+
+Çevirici (`monolith/`) ve çalışma zamanı (`monolith/rt/`) Minecraft'a özel değildir. Java ile yazdığınız kendi
+programınızı da Rust'a çevirip Java olmadan çalışan bir programa dönüştürebilirsiniz.
+
+Amacınız buysa projenin bu bölümüne bakın:
+
+```sh
+javac -d classes Main.java
+python3 -m monolith.rustgen --cp classes --main Main -o out --shards 4 --compile
+out/prog
+```
+
+- `--cp`: derlenmiş `.class` dosyalarının klasörü
+- `--main`: `main` metodu olan sınıf
+- Sonuç: `out/` içinde üretilen Rust kodu ve `out/prog` programı
+
+Örnek programlar `tests/java/` klasöründedir. `python3 tests/run_tests.py` her birini hem Java ile hem çevrilmiş
+haliyle çalıştırır ve çıktıların aynı olduğunu denetler.
+
+Bilmeniz gerekenler:
+
+- Üretilen Rust kodu elle yazılmış gibi değildir. Java'nın davranışını (çöp toplama, null, hatalar, sanal çağrılar)
+  birebir korur.
+- Program bir bütün olarak çevrilir: çalışırken yeni sınıf yüklenemez.
+- Uygulamanın kendi JNI kütüphaneleri desteklenmez.
+- Gereksinimler aşağıdaki "Nasıl kullanılır?" bölümüyle aynıdır (JDK 25, Rust, Python). Küçük programlar dakikalar
+  içinde derlenir.
+
 ## Durum
 
 Proje henüz bitmiş değil.
