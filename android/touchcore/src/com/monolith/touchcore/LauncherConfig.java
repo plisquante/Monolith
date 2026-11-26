@@ -399,6 +399,14 @@ public final class LauncherConfig {
                 new File(appContext.getFilesDir(), "last_crash.txt")}) {
             if (f.isFile()) out.add(f);
         }
+        // allocation profile (debug setting): the engine writes it into the app's external files dir
+        File extDir = appContext.getExternalFilesDir(null);
+        if (extDir != null) {
+            for (String name : new String[] {"alloc_profile.json", "alloc_profile.json.classes"}) {
+                File f = new File(extDir, name);
+                if (f.isFile() && f.length() < 64L * 1024 * 1024) out.add(f);
+            }
+        }
         return out;
     }
 

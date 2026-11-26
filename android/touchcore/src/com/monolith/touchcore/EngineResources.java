@@ -105,8 +105,12 @@ final class EngineResources {
             if (cfg.debugMode && cfg.username != null) Os.setenv("MONO_DEBUG_USER", cfg.username, true);
             else Os.unsetenv("MONO_DEBUG_USER");
             // debug setting: the engine prints the top allocation sites with every collection (engine_log.txt)
-            if (cfg.debugMode) Os.setenv("MONO_ALLOC_PROFILE", "1", true);
-            else Os.unsetenv("MONO_ALLOC_PROFILE");
+            // The profile file goes to the app's external files dir (the system creates it; adb pull reaches it and the
+            // report zip carries it). Under files/monolith/game it sat in private storage that nobody could read.
+            if (cfg.debugMode) {
+                File extDir = ctx.getExternalFilesDir(null);
+                Os.setenv("MONO_ALLOC_PROFILE", extDir != null ? new File(extDir, "alloc_profile.json").getAbsolutePath() : "1", true);
+            } else Os.unsetenv("MONO_ALLOC_PROFILE");
             // debug setting: live bytes by class every 3rd collection (what the 1 GB of live data is made of)
             if (cfg.debugMode) Os.setenv("MONO_HEAP_CENSUS", "3", true);
             else Os.unsetenv("MONO_HEAP_CENSUS");
