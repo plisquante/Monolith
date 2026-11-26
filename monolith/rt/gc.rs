@@ -877,6 +877,14 @@ fn env_switch(name: &str, default: bool) -> bool {
     }
 }
 
+/// Toplama fazlarının günlüğü (MONO_GC_PHASES): her toplamada bir satır (duraklama süreleri, canlı veri). Android'de
+/// varsayılan AÇIK: telefondaki takılmaların nedeni cihaz raporunda görülebilsin diye (toplama başına bir satır, hacim düşük).
+/// Masaüstünde varsayılan kapalı (eski davranış). "0" her yerde kapatır. Bir kez okunur.
+pub fn phases_on() -> bool {
+    static P: OnceLock<bool> = OnceLock::new();
+    *P.get_or_init(|| env_switch("MONO_GC_PHASES", cfg!(target_os = "android")))
+}
+
 fn arena_enabled() -> bool {
     knobs().arena
 }
@@ -1307,7 +1315,7 @@ fn collect_impl(begin_only: bool) {
         SENSE.fetch_xor(GC_MARK, Ordering::Relaxed);
         MARKED_BYTES.store(0, Ordering::Relaxed);
     }
-    if new_cycle && std::env::var_os("MONO_GC_PHASES").is_some() {
+    if new_cycle && phases_on() {
         // döngü başındaki işler (kalan tembel süpürme, boş dilim bırakma, bölge hazırlığı) kök taramadan önce, duraklamanın içindedir
         eprintln!("[mono:gc_phases] pre gc={} finish_sweep_etc={}us", h.gc_count, t_pre.elapsed().as_micros());
     }
@@ -1329,7 +1337,7 @@ fn collect_impl(begin_only: bool) {
     }
 
     // Fazların süreleri (MONO_GC_PHASES): kökler, işaretleme, arena denetimi, süpürme.
-    let phases_on = std::env::var_os("MONO_GC_PHASES").is_some();
+    let phases_on = phases_on();
     let t_start = std::time::Instant::now();
     // 1. İş parçacığı yığınları, iş parçacığı arenaları ve Java Thread nesnesi kökleri
     for &tp in &h.threads {

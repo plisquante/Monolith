@@ -357,7 +357,7 @@ pub fn cycle_end() {
     } else if !freed.is_empty() {
         FREE.lock().unwrap().extend(freed);
     }
-    if std::env::var_os("MONO_GC_PHASES").is_some() {
+    if crate::gc::phases_on() {
         eprintln!("[mono:region] allocs={} promoted={} chunks_freed={} chunks_in_use={}", ALLOCS.load(Ordering::Relaxed), PROMOTED.load(Ordering::Relaxed), nfreed, chunks_in_use());
     }
     EPOCH.fetch_add(1, Ordering::AcqRel);
