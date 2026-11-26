@@ -19,6 +19,7 @@
 #include <ucontext.h>
 #include <unwind.h>
 #include <sys/prctl.h>
+#include <sys/stat.h>
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "Monolith", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "Monolith", __VA_ARGS__)
@@ -1632,6 +1633,22 @@ JNIEXPORT jint JNICALL Java_com_monolith_touchcore_NativeBridge_nativeInitEngine
         if (chdir(gd) != 0) LOGE("chdir('%s') failed: %s", gd, strerror(errno));
         install_crash_handler(gd);
         (*env)->ReleaseStringUTFChars(env, gameDir, gd);
+    }
+    /* Tahsis profili (hata ayıklama ayarı; Java MONO_ALLOC_PROFILE=1 koyar). Göreli "1" yolu oyun klasörüne, yani
+     * uygulamanın özel depolamasına (/data/data/com.monolith.touchcore/...) yazılırdı. Oraya root olmadan ulaşılamıyor.
+     * Bu yüzden profil uygulamanın harici dizinine yazdırılır: izin istemez, adb pull ile alınabilir. Sınıf listesi
+     * dosyası (.classes) da aynı dizine düşer. */
+    const char *ap = getenv("MONO_ALLOC_PROFILE");
+    if (ap && strcmp(ap, "1") == 0) {
+        const char *pkg_dir = "/storage/emulated/0/Android/data/com.monolith.touchcore";
+        char ext_dir[256];
+        snprintf(ext_dir, sizeof(ext_dir), "%s/files", pkg_dir);
+        mkdir(pkg_dir, 0775);
+        mkdir(ext_dir, 0775);
+        char prof[320];
+        snprintf(prof, sizeof(prof), "%s/alloc_profile.json", ext_dir);
+        setenv("MONO_ALLOC_PROFILE", prof, 1);
+        LOGI("allocation profile -> %s", prof);
     }
     const char *rd = resourcesDir ? (*env)->GetStringUTFChars(env, resourcesDir, NULL) : NULL;
     if (rd) { setenv("MONO_RESOURCES", rd, 1); (*env)->ReleaseStringUTFChars(env, resourcesDir, rd); }
