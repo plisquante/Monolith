@@ -1746,6 +1746,15 @@ JNIEXPORT jint JNICALL Java_com_monolith_touchcore_NativeBridge_nativeInitEngine
      * yalnızca yardımcıdır: kendi OpenGL arka ucu Android'de yoktur (onu istemek pencere açılmadan NativeRhi.init'i
      * başarısız kılıyordu), bu yüzden "GLES" ve "auto" onu ekransız çalıştırır; "Vulkan" Vulkan yardımcı aygıtını ekler. */
     setenv("MONO_RHI_BACKEND", backendPref == 1 ? "vulkan" : "headless", 1);
+    {
+        /* Etkin MONO_* anahtarlarını motor günlüğüne yaz: rapordan hangi anahtarların gerçekten açık olduğu görülsün
+         * ("Ek Ortam Değişkenleri" alanına yazılanlar dahil). */
+        extern char **environ;
+        for (char **e = environ; e && *e; e++) {
+            if (strncmp(*e, "MONO_", 5) == 0) fprintf(stderr, "[mono:env] %s\n", *e);
+        }
+        fflush(stderr);
+    }
 
     const char *lp = extLibPath ? (*env)->GetStringUTFChars(env, extLibPath, NULL) : NULL;
     bool ext_requested = (lp && lp[0] != '\0');

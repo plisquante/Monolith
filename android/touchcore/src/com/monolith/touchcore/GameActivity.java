@@ -330,6 +330,7 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     }
 
     private boolean samplerRunning;
+    private android.os.HandlerThread samplerThread;
 
     /**
      * Every 2 s: sizes (the EGL surface exists only after the engine's first swap) and memory of this process. If
@@ -340,22 +341,26 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
         if (samplerRunning || surfaceView == null) return;
         samplerRunning = true;
         final long t0 = System.currentTimeMillis();
-        surfaceView.post(new Runnable() {
+        // The sampler runs on its own thread: it used to run on the UI thread, where the two Debug.getMemoryInfo calls
+        // per tick (full /proc/self/smaps walk plus the memtrack HAL) froze input and the cursor for a moment every 2 s.
+        samplerThread = new android.os.HandlerThread("mono-sampler");
+        samplerThread.start();
+        final android.os.Handler samplerHandler = new android.os.Handler(samplerThread.getLooper());
+        samplerHandler.post(new Runnable() {
             // previous sample, for the per-interval CPU, FPS figures of metrics.csv
             long lastWallMs = -1, lastCpuTicks = -1;
             int lastSwaps = -1;
 
             @Override public void run() {
-                if (isFinishing() || surfaceView == null) { samplerRunning = false; return; }
+                if (isFinishing() || surfaceView == null) { samplerRunning = false; if (samplerThread != null) samplerThread.quit(); return; }
                 writeMetrics();
-                android.os.Debug.MemoryInfo mi = new android.os.Debug.MemoryInfo();
-                android.os.Debug.getMemoryInfo(mi);
+                long[] mem = readMemKb();
                 android.app.ActivityManager.MemoryInfo sys = new android.app.ActivityManager.MemoryInfo();
                 ((android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE)).getMemoryInfo(sys);
-                long pssMb = mi.getTotalPss() / 1024;
+                long pssMb = mem[0] / 1024;
                 long limitMb = (sys.totalMem >> 20) * Math.max(30, Math.min(80, config.memLimitPct)) / 100;
                 String line = "+" + ((System.currentTimeMillis() - t0) / 1000) + " s: process memory " + pssMb
-                        + " MB (native " + (mi.nativePss / 1024) + " MB), system free " + (sys.availMem >> 20)
+                        + " MB (native " + (mem[1] / 1024) + " MB), system free " + (sys.availMem >> 20)
                         + " MB, low-memory " + sys.lowMemory + ", limit " + limitMb + " MB";
                 writeDisplayInfo(line);
                 // With the Shizuku setting the cached apps were stopped for the game: Android's low-memory flag then
@@ -373,15 +378,14 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
                     android.os.Process.killProcess(android.os.Process.myPid());
                     return;
                 }
-                surfaceView.postDelayed(this, 2000);
+                samplerHandler.postDelayed(this, 2000);
             }
 
             /** One row of <game dir>/metrics.csv per sample: memory, process CPU, GPU load, frames per second. */
             private void writeMetrics() {
                 try {
                     long now = System.currentTimeMillis();
-                    android.os.Debug.MemoryInfo m = new android.os.Debug.MemoryInfo();
-                    android.os.Debug.getMemoryInfo(m);
+                    long[] mem = readMemKb();
                     android.app.ActivityManager.MemoryInfo s = new android.app.ActivityManager.MemoryInfo();
                     ((android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE)).getMemoryInfo(s);
                     long cpuTicks = processCpuTicks();
@@ -410,8 +414,8 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
                         if (config.debugMode) sb.append(" user ").append(config.username);
                         sb.append("\nt_s,pss_mb,native_mb,sys_free_mb,cpu_pct,gpu_pct,fps\n");
                     }
-                    sb.append((now - t0) / 1000).append(',').append(m.getTotalPss() / 1024).append(',')
-                      .append(m.nativePss / 1024).append(',').append(s.availMem >> 20).append(',')
+                    sb.append((now - t0) / 1000).append(',').append(mem[0] / 1024).append(',')
+                      .append(mem[1] / 1024).append(',').append(s.availMem >> 20).append(',')
                       .append(String.format(java.util.Locale.ROOT, "%.1f", cpuPct)).append(',').append(gpuBusyPct()).append(',')
                       .append(String.format(java.util.Locale.ROOT, "%.1f", fps)).append('\n');
                     os.write(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -424,6 +428,28 @@ public final class GameActivity extends Activity implements SurfaceHolder.Callba
     }
 
     /** utime + stime of this process in clock ticks (/proc/self/stat fields 14, 15), -1 if unreadable. */
+    /**
+     * {pss, pssAnon} in kB from /proc/self/smaps_rollup: a cheap kernel summary. Debug.getMemoryInfo walks the whole
+     * smaps (slow with thousands of mappings) and calls the memtrack HAL, which aborted the process on Android 17.
+     * pss is the process PSS without GPU-driver memory; pssAnon is anonymous memory (the engine's heap lives there).
+     */
+    private static long[] readMemKb() {
+        long pss = -1, anon = -1;
+        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader("/proc/self/smaps_rollup"))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                if (line.startsWith("Pss:")) pss = parseKb(line);
+                else if (line.startsWith("Pss_Anon:")) anon = parseKb(line);
+            }
+        } catch (Throwable ignored) { }
+        if (pss < 0) pss = android.os.Debug.getPss(); // fallback: also a kernel summary, no HAL
+        return new long[] {Math.max(pss, 0), Math.max(anon, 0)};
+    }
+
+    private static long parseKb(String line) {
+        try { return Long.parseLong(line.substring(line.indexOf(':') + 1).replace("kB", "").trim()); } catch (Throwable t) { return -1; }
+    }
+
     private static long processCpuTicks() {
         try {
             String st = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("/proc/self/stat")),
