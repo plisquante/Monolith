@@ -389,6 +389,7 @@ pub fn n_mono_rhi_NativeRhi__swapOsSurface0() -> Res<()> {
     // arabellek takası ekran tazelemesini (vsync) bekleyebilir; bu sırada GC bu iş parçacığını beklemesin (Java nesnesi kullanılmaz)
     let _blk = crate::heap::ScopedBlock::enter();
     let h = [tc_lib()];
+    gs_frame();
     if let Some(f) = sym_fn!(&h, "tc_android_swap_buffers", extern "C" fn()) {
         f();
         return Ok(());
@@ -491,6 +492,96 @@ fn gl_lib() -> (*mut c_void, bool) {
 }
 
 fn has_gl() -> bool { !gl_lib().0.is_null() }
+
+// ----- GPU tanı anahtarları (ikisi de varsayılan KAPALI; kapalıyken her çağrıda tek bir OnceLock okuması dışında iş yok)
+//
+// MONO_GL_STATS=1: saniyede bir `[mono:gl_stats]` satırı (unix ms damgalı; başlatıcının frametime.csv'siyle aynı saat):
+//   kare sayısı, çizim çağrısı, çizilen indis/köşe (örnek sayısıyla çarpılmış), yüklenen bayt (BufferData/SubData/Copy),
+//   eşleme (MapBufferRange) sayısı ve başarısız eşleme, içeriği bozulmuş arabellek (UnmapBuffer false: GLES'te veri tanımsız
+//   olur ve yeniden yüklenmesi gerekir), atlanan çizim (taban köşeli çizim işlevi yok ve taban köşe 0 değil), GL hata sayısı.
+//   Delik/eksik bölüm görülen anlarda çizim sayısı düşüyor mu, eşleme başarısız mı, bunu gösterir.
+// MONO_GL_CHECK=1: her çizim ve arabellek çağrısından sonra glGetError; hata veren çağrı adıyla yazılır (ilk 200 satır).
+struct GlDiag {
+    stats: bool,
+    check: bool,
+}
+fn gl_diag() -> &'static GlDiag {
+    static D: OnceLock<GlDiag> = OnceLock::new();
+    D.get_or_init(|| {
+        let on = |n: &str| std::env::var(n).is_ok_and(|v| !v.is_empty() && v != "0");
+        GlDiag { stats: on("MONO_GL_STATS"), check: on("MONO_GL_CHECK") }
+    })
+}
+static GS_FRAMES: AtomicU64 = AtomicU64::new(0);
+static GS_DRAWS: AtomicU64 = AtomicU64::new(0);
+static GS_ELEMS: AtomicU64 = AtomicU64::new(0);
+static GS_UPLOAD: AtomicU64 = AtomicU64::new(0);
+static GS_MAPS: AtomicU64 = AtomicU64::new(0);
+static GS_MAP_FAIL: AtomicU64 = AtomicU64::new(0);
+static GS_UNMAP_LOST: AtomicU64 = AtomicU64::new(0);
+static GS_SKIPPED: AtomicU64 = AtomicU64::new(0);
+static GS_ERRORS: AtomicU64 = AtomicU64::new(0);
+static GS_LAST_MS: AtomicU64 = AtomicU64::new(0);
+
+#[inline]
+fn gs_add(c: &AtomicU64, n: u64) {
+    if gl_diag().stats {
+        c.fetch_add(n, Ordering::Relaxed);
+    }
+}
+#[inline]
+fn gs_draw(count: i32, inst: i32) {
+    if gl_diag().stats {
+        GS_DRAWS.fetch_add(1, Ordering::Relaxed);
+        GS_ELEMS.fetch_add(count.max(0) as u64 * inst.max(1) as u64, Ordering::Relaxed);
+    }
+}
+/// MONO_GL_CHECK açıksa bekleyen GL hatalarını okur ve `what` adıyla yazar.
+#[inline]
+fn gl_check(what: &str) {
+    if !gl_diag().check {
+        return;
+    }
+    let libs = [gl_lib().0];
+    if let Some(f) = sym_fn!(&libs, "glGetError", extern "C" fn() -> u32) {
+        for _ in 0..8 {
+            let e = f();
+            if e == 0 {
+                break;
+            }
+            let n = GS_ERRORS.fetch_add(1, Ordering::Relaxed);
+            if n < 200 {
+                eprintln!("[mono:gl] {what}: error 0x{e:04x}");
+            }
+        }
+    }
+}
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+/// Her arabellek takasında: kare sayar, saniyede bir satır yazar ve sayaçları sıfırlar.
+fn gs_frame() {
+    if !gl_diag().stats {
+        return;
+    }
+    GS_FRAMES.fetch_add(1, Ordering::Relaxed);
+    let now = now_ms();
+    let last = GS_LAST_MS.load(Ordering::Relaxed);
+    if last == 0 {
+        GS_LAST_MS.store(now, Ordering::Relaxed);
+        return;
+    }
+    if now.saturating_sub(last) < 1000 {
+        return;
+    }
+    GS_LAST_MS.store(now, Ordering::Relaxed);
+    let t = |c: &AtomicU64| c.swap(0, Ordering::Relaxed);
+    eprintln!(
+        "[mono:gl_stats] t={now} frames={} draws={} elems={} upload_kb={} maps={} map_fail={} unmap_lost={} skipped={} gl_err={}",
+        t(&GS_FRAMES), t(&GS_DRAWS), t(&GS_ELEMS), t(&GS_UPLOAD) / 1024, t(&GS_MAPS), t(&GS_MAP_FAIL), t(&GS_UNMAP_LOST),
+        t(&GS_SKIPPED), t(&GS_ERRORS)
+    );
+}
 
 pub fn n_mono_rhi_NativeRhi__glViewport0(x: i32, y: i32, w: i32, h: i32) -> Res<()> {
     {
@@ -620,19 +711,23 @@ pub fn n_mono_rhi_NativeRhi__glBindBuffer0(t: i32, id: i32) -> Res<()> {
     Ok(())
 }
 pub fn n_mono_rhi_NativeRhi__glBufferData0(t: i32, addr: i64, sz: i64, usage: i32) -> Res<()> {
+    gs_add(&GS_UPLOAD, if addr != 0 { sz.max(0) as u64 } else { 0 });
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glBufferData", extern "C" fn(u32, isize, *const c_void, u32)) {
         f(t as u32, sz.max(0) as isize, addr as usize as *const c_void, usage as u32);
     }
+    gl_check("glBufferData");
     Ok(())
 }
 pub fn n_mono_rhi_NativeRhi__glBufferSubData0(t: i32, off: i64, addr: i64, sz: i64) -> Res<()> {
+    gs_add(&GS_UPLOAD, sz.max(0) as u64);
     let libs = [gl_lib().0];
     if addr != 0 {
         if let Some(f) = sym_fn!(&libs, "glBufferSubData", extern "C" fn(u32, isize, isize, *const c_void)) {
             f(t as u32, off as isize, sz.max(0) as isize, addr as usize as *const c_void);
         }
     }
+    gl_check("glBufferSubData");
     Ok(())
 }
 
@@ -869,37 +964,49 @@ pub fn n_mono_rhi_NativeRhi__glCheckFramebufferStatus0(t: i32) -> Res<i32> {
 }
 
 pub fn n_mono_rhi_NativeRhi__glDrawArrays0(m: i32, first: i32, count: i32) -> Res<()> {
+    gs_draw(count, 1);
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glDrawArrays", extern "C" fn(u32, i32, i32)) { f(m as u32, first, count); }
+    gl_check("glDrawArrays");
     Ok(())
 }
 pub fn n_mono_rhi_NativeRhi__glDrawElements0(m: i32, count: i32, typ: i32, off: i64) -> Res<()> {
+    gs_draw(count, 1);
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glDrawElements", extern "C" fn(u32, i32, u32, *const c_void)) {
         f(m as u32, count, typ as u32, off as usize as *const c_void);
     }
+    gl_check("glDrawElements");
     Ok(())
 }
 pub fn n_mono_rhi_NativeRhi__glDrawElementsInstanced0(m: i32, count: i32, typ: i32, off: i64, icount: i32) -> Res<()> {
+    gs_draw(count, icount);
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glDrawElementsInstanced", extern "C" fn(u32, i32, u32, *const c_void, i32)) {
         f(m as u32, count, typ as u32, off as usize as *const c_void, icount);
     }
+    gl_check("glDrawElementsInstanced");
     Ok(())
 }
 pub fn n_mono_rhi_NativeRhi__glDrawArraysInstanced0(m: i32, first: i32, count: i32, icount: i32) -> Res<()> {
+    gs_draw(count, icount);
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glDrawArraysInstanced", extern "C" fn(u32, i32, i32, i32)) {
         f(m as u32, first, count, icount);
     }
+    gl_check("glDrawArraysInstanced");
     Ok(())
 }
 pub fn n_mono_rhi_NativeRhi__glDrawElementsInstancedBaseVertex0(m: i32, count: i32, typ: i32, off: i64, icount: i32, bv: i32) -> Res<()> {
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glDrawElementsInstancedBaseVertex", extern "C" fn(u32, i32, u32, *const c_void, i32, i32)) {
+        gs_draw(count, icount);
         f(m as u32, count, typ as u32, off as usize as *const c_void, icount, bv);
+        gl_check("glDrawElementsInstancedBaseVertex");
     } else if bv == 0 {
         n_mono_rhi_NativeRhi__glDrawElementsInstanced0(m, count, typ, off, icount)?;
+    } else {
+        gs_add(&GS_SKIPPED, 1); // işlev yok ve taban köşe 0 değil: çizilemez (MONO_GL_STATS'ta sayılır)
     }
     Ok(())
 }
@@ -927,22 +1034,35 @@ pub fn n_mono_rhi_NativeRhi__glBindBufferRange0(t: i32, idx: i32, buf: i32, off:
     Ok(())
 }
 pub fn n_mono_rhi_NativeRhi__glCopyBufferSubData0(rtgt: i32, wtgt: i32, roff: i64, woff: i64, sz: i64) -> Res<()> {
+    gs_add(&GS_UPLOAD, sz.max(0) as u64);
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glCopyBufferSubData", extern "C" fn(u32, u32, isize, isize, isize)) {
         f(rtgt as u32, wtgt as u32, roff as isize, woff as isize, sz as isize);
     }
+    gl_check("glCopyBufferSubData");
     Ok(())
 }
 pub fn n_mono_rhi_NativeRhi__glMapBufferRange0(t: i32, off: i64, len: i64, access: i32) -> Res<i64> {
     let libs = [gl_lib().0];
     if let Some(f) = sym_fn!(&libs, "glMapBufferRange", extern "C" fn(u32, isize, isize, u32) -> *mut c_void) {
-        return Ok(f(t as u32, off as isize, len.max(0) as isize, access as u32) as usize as i64);
+        let p = f(t as u32, off as isize, len.max(0) as isize, access as u32) as usize as i64;
+        gs_add(&GS_MAPS, 1);
+        if p == 0 {
+            gs_add(&GS_MAP_FAIL, 1);
+        }
+        gl_check("glMapBufferRange");
+        return Ok(p);
     }
     Ok(0)
 }
 pub fn n_mono_rhi_NativeRhi__glUnmapBuffer0(t: i32) -> Res<i32> {
     let libs = [gl_lib().0];
-    Ok(sym_fn!(&libs, "glUnmapBuffer", extern "C" fn(u32) -> u8).map(|f| (f(t as u32) != 0) as i32).unwrap_or(1))
+    let r = sym_fn!(&libs, "glUnmapBuffer", extern "C" fn(u32) -> u8).map(|f| (f(t as u32) != 0) as i32).unwrap_or(1);
+    if r == 0 {
+        gs_add(&GS_UNMAP_LOST, 1);
+    }
+    gl_check("glUnmapBuffer");
+    Ok(r)
 }
 pub fn n_mono_rhi_NativeRhi__glFlushMappedBufferRange0(t: i32, off: i64, len: i64) -> Res<()> {
     let libs = [gl_lib().0];
