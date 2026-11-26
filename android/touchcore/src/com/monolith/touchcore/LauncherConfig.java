@@ -391,7 +391,8 @@ public final class LauncherConfig {
         }
         File[] shots = gd.listFiles();
         if (shots != null) for (File f : shots) if (f.isFile() && f.getName().startsWith("frame_") && f.getName().endsWith(".png")) out.add(f);
-        for (File f : new File[] {new File(gd, "engine_log.txt"), new File(gd, "native_crash.txt"), new File(gd, "display_info.txt"),
+        for (File f : new File[] {new File(gd, "engine_log.txt"), new File(gd, "engine_log_prev.txt"), new File(gd, "engine_log_prev2.txt"),
+                new File(gd, "native_crash.txt"), new File(gd, "display_info.txt"),
                 new File(gd, "memory_limit.txt"),
                 new File(gd, "shizuku.txt"),
                 new File(gd, "metrics.csv"),

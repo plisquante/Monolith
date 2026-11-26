@@ -1081,6 +1081,13 @@ static void install_crash_handler(const char *game_dir) {
     char logp[512];
     snprintf(logp, sizeof(logp), "%s/engine_log.txt", game_dir);
     if (g_engine_log_fd < 0) {
+        /* Önceki iki koşunun günlüğünü sakla: engine_log.txt her açılışta sıfırlanıyordu, bir rapor birden fazla koşuyu
+         * kapsadığında yalnızca sonuncusu görünüyordu. engine_log.txt -> engine_log_prev.txt -> engine_log_prev2.txt */
+        char p1[512], p2[512];
+        snprintf(p1, sizeof(p1), "%s/engine_log_prev.txt", game_dir);
+        snprintf(p2, sizeof(p2), "%s/engine_log_prev2.txt", game_dir);
+        (void)rename(p1, p2);
+        (void)rename(logp, p1);
         g_engine_log_fd = open(logp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
         /* başlatıcı hata ayıklama ayarı: oyuncunun adını günlüğün başına yaz (hangi raporu kim gönderdi) */
         const char *dbg_user = getenv("MONO_DEBUG_USER");
