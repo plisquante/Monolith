@@ -473,3 +473,23 @@ en içte yığın yürütücü) `-C opt-level=3 -C force-frame-pointers=yes -C d
 işaretçisi zinciriyle toplanan dönüş adresleri `llvm-symbolizer --inlining` ile satır içi zincirin tamamına çözüldü (ilk
 fiziksel çerçeve -> `fp.rs:27` -> `:34` -> `:39`, ardından `main` `:46`). Aynı sonuç x86-64 Linux'ta ve ARM64 Android'de
 (Android 17 bionic, qemu) alındı. Fonksiyon adları gerekmiyor: Java çerçevesi dosya ve satırdan yan tabloyla bulunacak.
+
+## 28. R8 ile Java'dan Java'ya en iyileştirme denemesi (26 Kasım 2026)
+
+R8 9.5.33 (`--classfile --release`), program girdisi Minecraft istemci arşivi, kütüphaneler sınıf yolu, JDK 25 `--lib`. Silme
+kapalı (`-dontshrink`), ad değiştirme kapalı, satır numaraları korunuyor. Süre yaklaşık 2 dk, bellek 5 GB sınırla.
+
+- `BlockStateData` (dünya dönüştürme sabit verisi) R8'in yeniden yazımıyla 64 KB metot sınırını aşıyor (67 161 bayt);
+  koruma kuralı yetmiyor, sınıf programdan çıkarılıp yalnızca sınıf yolu olarak veriliyor ve çıktıya orijinali konuyor.
+- Statik sonuç (yalnızca `net/minecraft`):
+
+| ayar | bytecode | tahsis yeri | çağrı | sanal çağrı |
+|---|---|---|---|---|
+| her şey korunuyor (`-keep,allowoptimization`) | −%0,9 | +%6,3 | −%3,8 | arayüz +%12,8 |
+| yalnızca adlar korunuyor (`-keepnames`) | −%3,5 | −%5,7 | −%5,0 | −%2,3 |
+
+- Sonuç: tam korumayla kazanç önemsiz (LLVM statik çağrıları zaten içe alıyor). Yalnızca adlar korunduğunda orta kazanç var,
+  ama R8 metot imzalarını ve sınıf yapısını değiştirebildiği için yansıma kullanan kodun bozulmadığı oyunda gösterilmeli.
+  Çalışma zamanı karşılaştırması (aynı ayarlarda iki masaüstü derleme, 180 sn, tahsis profili) sıraya alındı.
+- Betik ve kurallar scratchpad `r8/` altında (`rules2.pro`, `r8test.sh`). Depoya Mojang kodu girmez; R8 kullanıcının
+  arşivi üzerinde yerelde çalışır.
