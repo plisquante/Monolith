@@ -493,3 +493,17 @@ kapalı (`-dontshrink`), ad değiştirme kapalı, satır numaraları korunuyor. 
   Çalışma zamanı karşılaştırması (aynı ayarlarda iki masaüstü derleme, 180 sn, tahsis profili) sıraya alındı.
 - Betik ve kurallar scratchpad `r8/` altında (`rules2.pro`, `r8test.sh`). Depoya Mojang kodu girmez; R8 kullanıcının
   arşivi üzerinde yerelde çalışır.
+
+## 29. Doğrulama: bütün hız ayarları + eşzamanlı/tembel GC (26 Kasım 2026)
+
+Ayarlar: `MONO_FRAMES=fast MONO_ICACHE=1 MONO_INTRINSICS=1 MONO_INIT_ELIDE=1 MONO_SHARD=pkg MONO_CONCAT=exact
+MONO_NULL_ELIDE=1 MONO_LINE_LAZY=1`, bölge 5 sınıf (Vec3, AABB, Optional, Pair, DataResult$Success); çalışma anında
+`MONO_GC_CONCURRENT=1 MONO_GC_LAZY=1`.
+
+- Fark testleri: hepsi geçti. `--escape --inline` eklenince 4 test bozuluyor (`LazyLeaf`, `StackWalk` yığın izi ve
+  `getCallerClass`, `GcStress` zayıf referans; `IoZip` ise çalışma zamanı dosyaları düzenlenirken derlendiği için). Bu iki
+  seçenek kapalı tutuluyor; içe alınan metotların yığın izi C9 yan tablosuyla çözülecek.
+- Oyun: 1 800 sn, çökme yok, temiz çıkış, dünya kaydedildi.
+- GC duraklaması (79 toplama): ortanca 22,5 ms, %95 91,7 ms, en uzun 153 ms, ortalama 31,6 ms; süpürme ortanca 5,5 ms.
+  Eskisi: durdur-süpür ~1 400 ms, yalnızca eşzamanlı işaretleme 270-350 ms. Canlı veri 256-293 MiB'de sabit.
+- Bölge: 268 milyon tahsis, 89 milyonu kalıcı alana kopyalandı.
