@@ -2802,6 +2802,8 @@ def native_tls_flags() -> list:
         return []
     # MONO_TLS_SLOT=1 (varsayılan kapalı): çerçeve yığınının adresi bionic'in TLS_SLOT_APP yuvasında (rt.rs with_fast)
     slot = ["--cfg", "mono_tls_slot"] if os.environ.get("MONO_TLS_SLOT", "") == "1" else []
+    # MONO_SYM_CACHE=1 (varsayılan kapalı): GL/TouchCore işlev adresleri çağrı yeri başına bir kez aranır (desk/mod.rs sym_fn!)
+    slot += ["--cfg", "mono_sym_cache"] if os.environ.get("MONO_SYM_CACHE", "") == "1" else []
     return ["--cfg", "mono_native_tls", "-Z", "tls-model=global-dynamic", *slot]
 
 

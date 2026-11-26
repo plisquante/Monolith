@@ -140,8 +140,29 @@ pub fn dl_sym(libs: &[*mut c_void], name: &[u8]) -> *const c_void {
 }
 
 /// Kütüphanelerde bir sembol arar; `sym_fn!(&[lib], "ad", extern "C" fn(...) -> ...)` tipli işaretçi verir.
+///
+/// `--cfg mono_sym_cache` (Android derlemesinde MONO_SYM_CACHE=1, varsayılan kapalı): her çağrı yeri bulduğu adresi kendi
+/// `static`'inde saklar. Eski yol her çağrıda `dlsym` yapar; GL dağıtımında (natives_rhi.rs) bu her GL çağrısı demektir ve
+/// S26 v9 CPU profilinde bağlayıcıdaki `do_dlsym` CPU'nun %7,5'iydi. Yalnızca bulunan (boş olmayan) adres saklanır: henüz
+/// bulunamayan sembol sonraki çağrıda yine aranır. Bir çağrı yeri hep aynı kütüphane(ler)le çağrılır (OnceLock tutamaçları),
+/// yani saklanan adres bayatlamaz.
 macro_rules! sym_fn {
     ($libs:expr, $name:literal, $ty:ty) => {{
+        #[cfg(mono_sym_cache)]
+        let p = {
+            static C: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let c = C.load(std::sync::atomic::Ordering::Relaxed);
+            if c != 0 {
+                c as *const c_void
+            } else {
+                let p = dl_sym($libs, concat!($name, "\0").as_bytes());
+                if !p.is_null() {
+                    C.store(p as usize, std::sync::atomic::Ordering::Relaxed);
+                }
+                p
+            }
+        };
+        #[cfg(not(mono_sym_cache))]
         let p = dl_sym($libs, concat!($name, "\0").as_bytes());
         if p.is_null() { None } else { Some(unsafe { std::mem::transmute::<*const c_void, $ty>(p) }) }
     }};
