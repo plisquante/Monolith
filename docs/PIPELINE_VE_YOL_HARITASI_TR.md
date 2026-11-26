@@ -467,3 +467,9 @@ adreslerinden çözüldüğünü göstermek;
 (c) DWARF okuyucu ve yürütücü (masaüstü x86-64);
 (d) ARM64;
 (e) anahtar `MONO_FRAMES=none`, fark testleri, oyun.
+
+**(a) sonucu: olumlu.** Bağımsız bir deneme programı (`inline(never)` dış fonksiyon, içine satır içi alınmış iki fonksiyon,
+en içte yığın yürütücü) `-C opt-level=3 -C force-frame-pointers=yes -C debuginfo=line-tables-only` ile derlendi. Çerçeve
+işaretçisi zinciriyle toplanan dönüş adresleri `llvm-symbolizer --inlining` ile satır içi zincirin tamamına çözüldü (ilk
+fiziksel çerçeve -> `fp.rs:27` -> `:34` -> `:39`, ardından `main` `:46`). Aynı sonuç x86-64 Linux'ta ve ARM64 Android'de
+(Android 17 bionic, qemu) alındı. Fonksiyon adları gerekmiyor: Java çerçevesi dosya ve satırdan yan tabloyla bulunacak.
