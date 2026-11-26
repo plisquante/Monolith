@@ -19,6 +19,7 @@ import argparse
 import fnmatch
 import hashlib
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -220,6 +221,63 @@ class MethodGen:
         self.noescape = gen.noescape_sites(ci.name, m.key)
         self.has_arena = False
         self.stack_slots: dict[int, tuple] = {}   # `new` sites kept in this function's frame: pc -> (variable, struct)
+
+    # ---------------------------------------------------------------- null denetimi eleme (MONO_NULL_ELIDE)
+    _ALLOC_PREFIXES = ("rt::alloc(", "rt::alloc_recyclable(", "rt::alloc_region(", "rt::new_array(", "rt::new_array_arena(",
+                       "unsafe { rt::stack_obj(")
+
+    def this_stable(self) -> bool:
+        """`this` (yerel 0) metot boyunca hiç yeniden yazılmıyor mu? O zaman l0a her yerde null olmayan alıcıdır
+        (Java bir metodu null bir alıcı üzerinde asla çağırmaz)."""
+        if not hasattr(self, "_this_stable"):
+            self._this_stable = (not self.m.is_static) and not any(
+                x.op == "astore" and x.arg == 0 for x in self.insns)
+        return self._this_stable
+
+    def known_nonnull(self, var: str, out: list, end: int | None = None) -> bool:
+        """`var` (yığın ya da yerel değişkeni) bu noktada kesin null değil mi? Yalnızca AYNI bloğun üretilmiş satırlarına
+        geriye doğru bakılır: değişkene son yazılan değer hiç yeniden yazılmamış `this` ya da bir tahsis (`new`, `newarray`)
+        ise evet. Başka her durumda (blok dışından gelen değer, çağrı sonucu, satır biçimi tanınmıyor) hayır: denetim kalır."""
+        if not self.g.null_elide:
+            return False
+        if var == "l0a" and self.this_stable():
+            return True
+        write = re.compile(r"(^|[;{]\s*)" + re.escape(var) + r"\s*=(?!=)")
+        i = len(out) if end is None else end
+        while i > 0:
+            i -= 1
+            line = out[i].strip()
+            if not write.search(line):
+                continue
+            if not line.startswith(var + " = ") or not line.endswith(";"):
+                return False  # tanınmayan yazım biçimi: güvenli tarafta kal
+            rhs = line[len(var) + 3:-1].strip()
+            if rhs == "l0a":
+                return self.this_stable()
+            if rhs.startswith(self._ALLOC_PREFIXES):
+                return True
+            m = re.fullmatch(r"_t\d+", rhs)
+            if m:
+                # dup/swap: "{ let _tN = X; ..." satırında _tN'nin kaynağı X; X'in o andaki değerine bak
+                let = re.compile(r"\blet " + rhs + r" = ([A-Za-z0-9_]+);")
+                j = i
+                while j > 0:
+                    j -= 1
+                    lm = let.search(out[j])
+                    if lm:
+                        return self.known_nonnull(lm.group(1), out, j)
+                return False
+            return False
+        return False
+
+    def nn_ptr(self, var: str, out: list) -> str:
+        """Alıcının ham işaretçisi: kesin null değilse doğrudan, değilse rt::nn ile denetlenerek."""
+        return f"{var}.0" if self.known_nonnull(var, out) else f"rt::nn({var})?"
+
+    def nn_check(self, var: str, out: list):
+        """Yalnızca null denetimi deyimi (çağrıdan önce); kesin null değilse hiç üretilmez."""
+        if not self.known_nonnull(var, out):
+            out.append(f"rt::nn({var})?;")
 
     # ---------------------------------------------------------------- yardımcılar
     def err(self, msg: str):
@@ -593,7 +651,7 @@ class MethodGen:
                 return None
             o = pop()
             push(self.kind_of_field(f.desc),
-                 self.from_field(f.desc, f"unsafe {{ (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)} }}"))
+                 self.from_field(f.desc, f"unsafe {{ (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)} }}"))
         elif op == "putfield":
             try:
                 dc, f = self.field(a, static=False)
@@ -605,9 +663,9 @@ class MethodGen:
             o = pop()
             if f.desc[0] in "L[":
                 # referans yazımı: SATB yazma bariyeri (rt::satb_store); işaretleme etkin değilken işlem yapmaz
-                e(f"unsafe {{ rt::{'satb_store_r' if self.g.region_classes else 'satb_store'}(&raw mut (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)}, {v}); }}")
+                e(f"unsafe {{ rt::{'satb_store_r' if self.g.region_classes else 'satb_store'}(&raw mut (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)}, {v}); }}")
             else:
-                e(f"unsafe {{ (*(rt::nn({o})? as *mut {st_name})).{self.g.field_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
+                e(f"unsafe {{ (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
         elif op == "new":
             try:
                 ci2 = self.app_class(a.name)
@@ -733,7 +791,7 @@ class MethodGen:
                 for _ in range(len(args)):
                     pop()
                 recv = pop()
-                e(f"rt::nn({recv})?;")
+                self.nn_check(recv, out)
             else:
                 try:
                     dc, m2 = self.resolve(a, special=True)
@@ -767,11 +825,11 @@ class MethodGen:
             obj_slot = self.w.vindex(self.w.req("java/lang/Object")).get(m2.name + m2.desc)
             if m2.is_private:
                 self.g.need_method(dc, m2)
-                e(f"rt::nn({recv})?;")
+                self.nn_check(recv, out)
                 call = self.g.call_direct(self.ci.name, dc, m2, [recv] + vals)
             elif obj_slot is not None:
                 if (m2.access & 0x0010):
-                    e(f"rt::nn({recv})?;")
+                    self.nn_check(recv, out)
                     call = self.g.call_direct(self.ci.name, dc, m2, [recv] + vals)
                 else:
                     fp = f"unsafe {{ std::mem::transmute::<*const (), extern \"C\" fn({', '.join(ptypes)}) -> {cret}>((*(*rt::nn({recv})?).class).vtable[{obj_slot}].0) }}"
@@ -783,7 +841,7 @@ class MethodGen:
                     tdc, tm2 = dv[1]
                     self.g.need_class(tdc.name)
                     self.g.need_method(tdc, tm2)
-                    e(f"rt::nn({recv})?;")
+                    self.nn_check(recv, out)
                     call = self.g.call_direct(self.ci.name, tdc, tm2, [recv] + vals)
                 elif dv is not None and dv[0] == "poly" and not any(self.g.caller_sensitive(x[1], x[2]) for x in dv[1]):
                     arms_code = []
@@ -832,7 +890,7 @@ class MethodGen:
             if self.g.caller_sensitive(dc, m2):
                 e(f"rt::set_caller({self.cref(self.ci.name)});")
             if m2.is_private or (m2.access & 0x0010) or (dc.cf.access & 0x0010):
-                e(f"rt::nn({recv})?;")
+                self.nn_check(recv, out)
                 call = self.g.call_direct(self.ci.name, dc, m2, [recv] + vals)
             else:
                 dv = None if self.g.caller_sensitive(dc, m2) else self.g.devirt_targets(owner, m2.name, m2.desc)
@@ -840,7 +898,7 @@ class MethodGen:
                     tdc, tm2 = dv[1]
                     self.g.need_class(tdc.name)
                     self.g.need_method(tdc, tm2)
-                    e(f"rt::nn({recv})?;")
+                    self.nn_check(recv, out)
                     call = self.g.call_direct(self.ci.name, tdc, tm2, [recv] + vals)
                 else:
                     slot = (self.w.vindex(self.w.req("java/lang/Object")).get(m2.name + m2.desc)
@@ -1344,6 +1402,9 @@ class Gen:
         # MONO_INIT_ELIDE=1: bir metodun içinde kendi sınıfının ve üst sınıflarının başlatma denetimi üretilmez (gerekçe:
         # MethodGen.init_class). Varsayılan: eski yol (her statik erişimde denetim), değişmedi.
         self.init_elide = os.environ.get("MONO_INIT_ELIDE", "") == "1"
+        # MONO_NULL_ELIDE=1: kesin null olmayan alıcılarda (hiç yeniden yazılmamış `this`, aynı blokta `new` ile ayrılmış
+        # nesne) null denetimi üretilmez (MethodGen.known_nonnull). Varsayılan: eski yol (her erişimde rt::nn), değişmedi.
+        self.null_elide = os.environ.get("MONO_NULL_ELIDE", "") == "1"
         # MONO_SHARD=pkg: sınıflar parçalara SHA1 ile rastgele değil, paketlerine göre dağıtılır ve AYNI PARÇADAKİ sınıflar
         # birbirini doğrudan (satır içine alınabilir `r_` fonksiyonuyla) çağırır (shard_of, rust_callable). Varsayılan: eski
         # yol (rastgele dağıtım, yalnızca aynı sınıfın metotları doğrudan), değişmedi.
