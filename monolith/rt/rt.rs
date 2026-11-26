@@ -1516,7 +1516,7 @@ thread_local! {
 /// Çerçeve yığınına erişim. Varsayılan: `thread_local!` (masaüstünde yerel TLS, tek adres hesabı). ANDROID'DE `std` yerel TLS
 /// kullanmaz: her erişim `pthread_getspecific` çağrısıdır (S26 CPU profili: set_line, çerçeve girişi/çıkışı ve libc'deki
 /// bu çağrı toplam CPU'nun yaklaşık %60'ı). `--cfg mono_native_tls` (MONO_NATIVE_TLS=1 ile Android derlemesi) ile gerçek
-/// yerel TLS (`#[thread_local]`, initial-exec modeli: `mrs tpidr_el0` + sabit kayma) kullanılır. Bayrak yoksa eski yol.
+/// yerel TLS (`#[thread_local]`, global-dynamic/TLSDESC modeli) kullanılır. Bayrak yoksa eski yol.
 #[cfg(not(mono_native_tls))]
 #[inline(always)]
 fn with_fast<R>(f: impl FnOnce(&mut FastStack) -> R) -> R {
@@ -1527,10 +1527,45 @@ fn with_fast<R>(f: impl FnOnce(&mut FastStack) -> R) -> R {
 #[thread_local]
 static mut FAST_NATIVE: FastStack = FastStack { p: std::ptr::null_mut(), len: 0, cap: 0, low: 0, in_overflow: false };
 
-#[cfg(mono_native_tls)]
+#[cfg(all(mono_native_tls, not(all(mono_tls_slot, target_arch = "aarch64"))))]
 #[inline(always)]
 fn with_fast<R>(f: impl FnOnce(&mut FastStack) -> R) -> R {
     f(unsafe { &mut *std::ptr::addr_of_mut!(FAST_NATIVE) })
+}
+
+/// `--cfg mono_tls_slot` (MONO_TLS_SLOT=1, varsayılan kapalı): dlopen ile yüklenen kütüphanede `#[thread_local]` erişimi
+/// TLSDESC dinamik çözücüsüne giden bir çağrıdır (S26 v8 profili: `[linker64]` CPU'nun %10,6'sı, her Java çağrısında bir
+/// kez). Bionic, iş parçacığı denetim bloğunda uygulamalara bir yuva ayırır: `TLS_SLOT_APP` = 2, arm64'te
+/// `tpidr_el0 + 2*8`, API 29 ve sonrası ("Available for use by apps in API level 29 and later", bionic
+/// libc/platform/bionic/tls_defines.h). Yuvaya bu iş parçacığının `FAST_NATIVE` adresi bir kez yazılır; sonraki erişimler
+/// `mrs` + `ldr` (çağrı yok). Varsayım: süreçteki başka kod bu yuvayı kullanmıyor; boşsa (0) biz doldururuz, doluysa onu
+/// kendi adresimiz sayarız. Bu yüzden anahtar arkasında.
+#[cfg(all(mono_native_tls, mono_tls_slot, target_arch = "aarch64"))]
+const TLS_SLOT_APP: usize = 2;
+
+#[cfg(all(mono_native_tls, mono_tls_slot, target_arch = "aarch64"))]
+#[cold]
+#[inline(never)]
+unsafe fn fast_slot_init(slot: *mut *mut FastStack) -> *mut FastStack {
+    let p = std::ptr::addr_of_mut!(FAST_NATIVE);
+    *slot = p;
+    p
+}
+
+#[cfg(all(mono_native_tls, mono_tls_slot, target_arch = "aarch64"))]
+#[inline(always)]
+fn with_fast<R>(f: impl FnOnce(&mut FastStack) -> R) -> R {
+    unsafe {
+        let tp: *mut *mut FastStack;
+        // tpidr_el0 iş parçacığı boyunca değişmez: pure + nomem, derleyici aynı işlevde tekrar okumayı birleştirebilir
+        std::arch::asm!("mrs {}, tpidr_el0", out(reg) tp, options(pure, nomem, nostack, preserves_flags));
+        let slot = tp.add(TLS_SLOT_APP);
+        let mut p = *slot;
+        if p.is_null() {
+            p = fast_slot_init(slot);
+        }
+        f(&mut *p)
+    }
 }
 
 struct FastFree;

@@ -2798,7 +2798,11 @@ def native_tls() -> bool:
 
 
 def native_tls_flags() -> list:
-    return ["--cfg", "mono_native_tls", "-Z", "tls-model=global-dynamic"] if native_tls() else []
+    if not native_tls():
+        return []
+    # MONO_TLS_SLOT=1 (varsayılan kapalı): çerçeve yığınının adresi bionic'in TLS_SLOT_APP yuvasında (rt.rs with_fast)
+    slot = ["--cfg", "mono_tls_slot"] if os.environ.get("MONO_TLS_SLOT", "") == "1" else []
+    return ["--cfg", "mono_native_tls", "-Z", "tls-model=global-dynamic", *slot]
 
 
 def _android_build(a, files, rt_dir) -> int:
