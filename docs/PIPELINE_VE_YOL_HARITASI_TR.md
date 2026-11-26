@@ -384,6 +384,21 @@ Düzeltmeden sonra: iki kütüphanede de zorunlu çözülmemiş sembol 0 (yalnı
 `copy_file_range`); PT_TLS yok, TEXTREL yok, BIND_NOW; APK `zipalign -c -P 16` geçti, `apksigner verify` geçti. Masaüstü testi
 `SignalExit` (süreç başlatma yolu) geçti.
 
+Android 17 bionic üzerinde deneme (qemu, cihazsız). Resmi Android 17 ARM64 sistem görüntüsü (`sys-img/android/arm64-v8a-37.0_r06.zip`,
+SHA-1 `f94cb780...` doğrulandı) açıldı: `super` bölümünden system, APEX'lerden bionic (libc, linker64) ve diğer kütüphaneler çıkarıldı.
+NDK ile derlenen küçük bir ARM64 programı, Android 17'nin kendi bağlayıcısıyla `qemu-aarch64-static` altında çalıştırıldı:
+
+| deneme | sonuç |
+|---|---|
+| denetim: `__errno_location` isteyen kütüphane | yüklenmedi: `cannot locate symbol "__errno_location"` (eski motor böyle düşecekti) |
+| denetim: `libGLESv3` bağımlılığı olmadan `glBindBuffer` | yüklenmedi: `cannot locate symbol "glBindBuffer"` (eski başlatıcı böyle düşecekti) |
+| `libtouchcore_mono.so` + `libminecraft_mono.so` (düzeltilmiş) | ikisi de yüklendi; `JNI_OnLoad` ve `mono_android_entry` bulundu |
+| `mono_android_entry` çağrısı, başlatıcının ortam değişkenleri ve kaynak düzeniyle | 0 döndü; oyun çalışma zamanını başlattı, Bootstrap, kayıtlar, dil dosyaları ve veri yüklemesini geçip pencere oluşturmaya kadar geldi. Orada beklendiği gibi durdu: `requires an attached ANativeWindow/EGL surface` (qemu'da ekran yüzeyi yok; telefonda başlatıcı verir) |
+
+Not: ilk çağrı denemesinde `Language.loadFromJson` boş kaynak hatası, test düzeninde oyun jar'ının kaynaklarının açılmamasındandı;
+başlatıcı (`EngineResources.prepare`) bunları açar. Aynı düzen elle kurulunca hata kalktı. Cihazda sınanmayan: EGL/GLES çizimi,
+dokunmatik, ses, gerçek bellek ve hız.
+
 Kurulum (telefonda):
 1. Eski Monolith APK'sı farklı imzayla kuruluysa önce kaldırın (imza uyuşmazsa kurulum reddedilir).
 2. `Monolith.apk` kurun (bilinmeyen kaynaklara izin).
