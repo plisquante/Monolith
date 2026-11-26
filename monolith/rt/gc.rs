@@ -1582,6 +1582,9 @@ fn collect_impl(begin_only: bool) {
     });
     let t_mark = t_start.elapsed() - t_roots;
     // 5. Dilimleri süpür
+    // Süpürme bölümünün alt faz sayaçları (MONO_GC_PHASES açıkken `sweep_detail` satırına yazılır): hangi adımın duraklamada
+    // uzun sürdüğünü ayırmak için. Anahtar kapalıyken sonuçlar kullanılmaz; her biri tek bir saat okumasıdır.
+    let t_sw0 = std::time::Instant::now();
     let since_gc = G.bytes_since_gc.load(Ordering::Relaxed);
     let mut census = crate::prof::sweep_begin();
     for sc in 0..NUM_CLASSES {
@@ -1603,6 +1606,7 @@ fn collect_impl(begin_only: bool) {
             h.unswept[sc].push(b as *mut Slab);
         }
     }
+    let t_sw1 = std::time::Instant::now(); // sınıf listeleri ve tembel süpürme listesi hazır
     let slabs_old = if defer { Vec::new() } else { std::mem::take(&mut h.slabs) };
     let mut new_live = 0usize;
     let mut new_slabs = Vec::with_capacity(slabs_old.len());
@@ -1697,10 +1701,12 @@ fn collect_impl(begin_only: bool) {
     if !defer {
         h.slabs = new_slabs;
     }
+    let t_sw2 = std::time::Instant::now(); // dilim süpürme döngüsü bitti (tembel kipte boş)
     for base in to_dealloc {
         unsafe { dealloc(base as *mut u8, Layout::from_size_align(SLAB_SIZE, SLAB_SIZE).unwrap()) };
     }
 
+    let t_sw3 = std::time::Instant::now(); // boş dilimlerin iadesi bitti
     // 6. Büyük nesneleri süpür
     let mut dead_large = Vec::new();
     // büyük nesnelerin gerçek `free` çağrıları (munmap) duraklama içinde değil, dünya yeniden başladıktan sonra yapılır
@@ -1720,6 +1726,7 @@ fn collect_impl(begin_only: bool) {
             }
         }
     }
+    let n_dead_large = dead_large.len();
     for (addr, sz) in dead_large {
         h.large.remove(&addr);
         h.heap_bytes = h.heap_bytes.saturating_sub(sz);
@@ -1727,6 +1734,19 @@ fn collect_impl(begin_only: bool) {
     }
 
     if phases_on {
+        // Süpürme bölümünün alt fazları: liste kurma, dilim süpürme (tembel kipte boş), boş dilim iadesi, büyük nesneler.
+        eprintln!(
+            "[mono:gc_phases] sweep_detail gc={} defer={} list={}us slabs={}us dealloc={}us large={}us slab_count={} large_count={} dead_large={}",
+            h.gc_count,
+            defer as u8,
+            (t_sw1 - t_sw0).as_micros(),
+            (t_sw2 - t_sw1).as_micros(),
+            (t_sw3 - t_sw2).as_micros(),
+            t_sw3.elapsed().as_micros(),
+            h.slabs.len(),
+            h.large.len(),
+            n_dead_large
+        );
         let t_sweep = t_start.elapsed() - t_roots - t_mark;
         eprintln!("[mono:gc_phases] gc={} wait={}us roots={}us mark={}us sweep={}us total={}us live={}B", h.gc_count, t_wait.as_micros(), t_roots.as_micros(), t_mark.as_micros(), t_sweep.as_micros(), t_entry.elapsed().as_micros(), new_live);
     }
