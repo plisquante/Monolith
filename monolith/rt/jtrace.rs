@@ -91,7 +91,8 @@ struct DlInfo {
 
 extern "C" {
     fn dladdr(addr: *const c_void, info: *mut DlInfo) -> c_int;
-    fn mmap(addr: *mut c_void, len: usize, prot: c_int, flags: c_int, fd: c_int, off: i64) -> *mut c_void;
+    // region.rs ile aynı imza (-1 adresi hata demektir)
+    fn mmap(addr: *mut u8, len: usize, prot: i32, flags: i32, fd: i32, off: i64) -> *mut u8;
 }
 
 struct Image {
@@ -175,7 +176,7 @@ fn return_addresses(max: usize) -> Vec<usize> {
 
 /// Java çerçeveleri, en içten başlayarak: (sınıf iç adı, metot, tanımlayıcı, kaynak dosya, satır).
 /// Kip kapalıysa ya da program kendi DWARF bilgisini okuyamıyorsa None (çağıran eski yola döner).
-pub fn frames() -> Option<Vec<(&'static str, &'static str, &'static str, &'static str, i32)>> {
+pub fn frames() -> Option<Vec<crate::rt::FrameRow>> {
     if !enabled() {
         return None;
     }

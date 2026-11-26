@@ -311,7 +311,7 @@ fn parse_line_program(b: &[u8], off: usize) -> Option<(Vec<Row>, Vec<String>)> {
     }
     let end = r.p + unit_len;
     let version = r.u16()?;
-    if version < 2 || version > 4 {
+    if !(2..=4).contains(&version) {
         return None;
     }
     let hdr_len = r.u32()? as usize;
@@ -325,8 +325,8 @@ fn parse_line_program(b: &[u8], off: usize) -> Option<(Vec<Row>, Vec<String>)> {
     let line_range = r.u8()? as u64;
     let opcode_base = r.u8()?;
     let mut std_lens = vec![0u8; opcode_base as usize];
-    for i in 1..opcode_base as usize {
-        std_lens[i] = r.u8()?;
+    for slot in std_lens.iter_mut().skip(1) {
+        *slot = r.u8()?;
     }
     // klasör listesi (kullanılmıyor, yalnızca atlanır)
     loop {
@@ -438,7 +438,7 @@ impl<'a> Dwarf<'a> {
         let mut r = Rd::new(s.info, off);
         r.u32()?;
         let version = r.u16()?;
-        if version < 2 || version > 4 {
+        if !(2..=4).contains(&version) {
             return None;
         }
         let abbr_off = r.u32()? as usize;
@@ -477,7 +477,7 @@ impl<'a> Dwarf<'a> {
         let len = r.u32()? as usize;
         let end = off + 4 + len;
         let version = r.u16()?;
-        if version < 2 || version > 4 {
+        if !(2..=4).contains(&version) {
             return None;
         }
         let abbr_off = r.u32()? as usize;

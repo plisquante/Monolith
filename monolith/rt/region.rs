@@ -205,6 +205,9 @@ pub fn alloc_region(class: &'static Class) -> Ref {
 }
 
 /// İletme işaretçisini izler: `p` yığına kopyalandıysa kopyayı, aksi halde `p`'yi döndürür.
+///
+/// # Safety
+/// `p` geçerli, hizalı bir nesne işaretçisi olmalıdır (bölge ya da yığın nesnesi).
 #[inline(always)]
 pub unsafe fn canon(p: *mut Obj) -> *mut Obj {
     if in_region(p as usize) && (*p).gc & GC_FWD != 0 {
@@ -214,6 +217,9 @@ pub unsafe fn canon(p: *mut Obj) -> *mut Obj {
 }
 
 /// Kalıcı bir yere yazılacak bölge nesnesini yığına kopyalar (derin) ve kopyayı döndürür. Aynı nesne tekrar gelirse aynı kopya.
+///
+/// # Safety
+/// `p` canlı bir bölge nesnesini göstermelidir; çağıran bu sırada toplayıcının nesnenin parçasını boşaltmadığından emin olmalıdır.
 #[cold]
 pub unsafe fn promote(p: *mut Obj) -> *mut Obj {
     if (*p).gc & GC_FWD != 0 {

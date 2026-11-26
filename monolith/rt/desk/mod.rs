@@ -10,7 +10,8 @@
 //!   swap()                      arka tamponu gösterir
 //!   proc_address(name)          geçerli bağlamın OpenGL giriş noktası (yoksa null)
 //!
-//! Linux: x11.rs (X11 + GLX, kütüphaneler çalışma zamanında açılır). Windows: win32.rs (Win32 + WGL, sistem DLL'leri).
+//! Linux: x11.rs (X11 + GLX) ya da wayland.rs (Wayland + EGL); linux.rs çalışma zamanında seçer (kütüphaneler çalışma
+//! zamanında açılır). Windows: win32.rs (Win32 + WGL, sistem DLL'leri).
 //! Diğer hedeflerde pencere yoktur (try_init false döner).
 //! Oyun bu durumda yüzeysiz çalışır; yerel katman bunu oyuna dürüstçe bildirir.
 
@@ -152,7 +153,11 @@ pub(crate) use sym_fn;
 #[cfg(target_os = "linux")]
 mod x11;
 #[cfg(target_os = "linux")]
-pub use x11::*;
+mod wayland;
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+pub use linux::*;
 
 #[cfg(windows)]
 mod win32;
@@ -175,10 +180,11 @@ mod none {
 #[cfg(not(any(target_os = "linux", windows)))]
 pub use none::*;
 
-/// Bu süreçte pencere açılıp açılamayacağı: Linux'ta ekran gerekir; Windows'ta her zaman vardır.
+/// Bu süreçte pencere açılıp açılamayacağı: Linux'ta ekran gerekir (X11 için DISPLAY, Wayland için WAYLAND_DISPLAY);
+/// Windows'ta her zaman vardır.
 pub fn available() -> bool {
     if cfg!(target_os = "linux") {
-        return std::env::var_os("DISPLAY").is_some();
+        return std::env::var_os("DISPLAY").is_some() || std::env::var_os("WAYLAND_DISPLAY").is_some();
     }
     cfg!(windows)
 }

@@ -56,7 +56,8 @@ static INPUT: Mutex<Input> = Mutex::new(Input {
 });
 
 // keysym -> anlık görüntü tuş indeksi (SDLEvents.BTN_KEYCODE ile aynı sıra; 7 ve 8 fare tuşlarıdır)
-fn key_index(ks: u64) -> Option<usize> {
+// pub(super): wayland.rs aynı tabloyu kullanır (klavye anlamı iki yüzeyde aynı kalsın)
+pub(super) fn key_index(ks: u64) -> Option<usize> {
     Some(match ks {
         0x77 | 0x57 => 0, 0x61 | 0x41 => 1, 0x73 | 0x53 => 2, 0x64 | 0x44 => 3, // w a s d
         0x20 => 4, 0xffe1 | 0xffe2 => 5, 0xffe3 | 0xffe4 => 6,                       // space shift ctrl
@@ -66,7 +67,7 @@ fn key_index(ks: u64) -> Option<usize> {
     })
 }
 // keysym -> oyunun metin kuyruğu üzerinden okuduğu düzenleme tuşlarının SDL tuş kodu
-fn edit_key(ks: u64) -> Option<i32> {
+pub(super) fn edit_key(ks: u64) -> Option<i32> {
     Some(match ks {
         0xff08 => 8, 0xff0d | 0xff8d => 13, 0xffff => 127,
         0xff53 => 0x4000004F, 0xff51 => 0x40000050, 0xff54 => 0x40000051, 0xff52 => 0x40000052,

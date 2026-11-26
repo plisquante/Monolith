@@ -547,6 +547,11 @@ pub struct ICEntry {
     class: *const Class,
     val: *const (),
 }
+impl Default for ICache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl ICache {
     pub const fn new() -> Self {
         ICache(std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()))
@@ -921,8 +926,9 @@ pub unsafe fn satb_store(slot: *mut Ref, v: Ref) {
 
 /// Bölge farkında referans yazımı: `slot` bölge nesnesinin içindeyse değer olduğu gibi (kurucu), değilse bölge nesnesi yığına
 /// kopyalanıp kopya yazılır (docs/PIPELINE_VE_YOL_HARITASI_TR.md bölüm 18). Üretilen kod bunu yalnızca bölge sınıfı seçilince kullanır.
-/// # Güvenlik
-/// `satb_store` ile aynı sözleşme.
+///
+/// # Safety
+/// `satb_store` ile aynı sözleşme (clippy yalnızca İngilizce "Safety" başlığını tanır).
 #[inline(always)]
 pub unsafe fn satb_store_r(slot: *mut Ref, v: Ref) {
     crate::heap::satb_store(slot, crate::region::guard_into(slot as usize, v))
@@ -1602,8 +1608,11 @@ pub fn set_line_s(line: i32) {
     });
 }
 
+/// Bir Java çerçevesi: (sınıf iç adı, metot, tanımlayıcı, kaynak dosya, satır).
+pub type FrameRow = (&'static str, &'static str, &'static str, &'static str, i32);
+
 /// Hızlı yol kullanılıyorsa onun çerçeveleri (en içten başlayarak), yoksa None.
-fn fast_frames() -> Option<Vec<(&'static str, &'static str, &'static str, &'static str, i32)>> {
+fn fast_frames() -> Option<Vec<FrameRow>> {
     FAST.with(|f| unsafe {
         let f = &*f.get();
         if f.len == 0 {
@@ -1623,7 +1632,7 @@ fn fast_frames() -> Option<Vec<(&'static str, &'static str, &'static str, &'stat
 }
 
 /// Bu iş parçacığındaki her çerçeve, en içten başlayarak: (sınıf iç adı, metot, tanımlayıcı, kaynak dosya, satır).
-pub fn frames_snapshot() -> Vec<(&'static str, &'static str, &'static str, &'static str, i32)> {
+pub fn frames_snapshot() -> Vec<FrameRow> {
     // C9 kipi (MONO_FRAMES=dwarf ile üretilmiş program): çerçeveler makine yığınından çıkarılır (jtrace.rs)
     if let Some(v) = crate::jtrace::frames() {
         return v;
