@@ -587,3 +587,48 @@ büyüklüğü kesin değildir.
 
 **Sonraki adım:** Android'de `MONO_GC_PHASES` varsayılan açık (az satır: toplama başına bir), böylece sonraki raporda duraklamalar ve
 canlı veri görülür; ardından uzun bir koşu (5 dk+) ile düşüşün zamanla sürüp sürmediği ölçülür.
+
+## 32. S26 ölçümleri v4-v10 ve CPU profili (26 Kasım 2026)
+
+Bu bölüm, 26 Kasım akşamı Cem'in S26'sında (SM-S942B, Android 17) alınan raporlardan çıkan bulguları toplar. Her madde hangi raporlara
+dayandığını yazar; kanıtı olmayan neden "tahmin" diye işaretlidir.
+
+**1. GC duraklamaları (debug kapalı, v7, 3 koşu).** GC ortalama 14-17 ms, en uzun 32 ms (bir koşuda 132 ms). Debug ayarı açıkken tahsis
+profilcisi toplamayı her nesneyi sayarak duraklamanın içinde süpürtüyor (`defer=0`): v4/v5 raporlarındaki 200+ ms duraklamalar
+profilcinin yüküydü. Donmaların nedeni GC değil: 100 ms üstü karelerin yalnızca beşte biri bir GC bitişiyle çakışıyor.
+
+**2. Arayüz iş parçacığındaki bellek ölçümü (v8 ile düzeldi).** Başlatıcının örnekleyicisi arayüz iş parçacığında 2 sn'de iki kez
+`Debug.getMemoryInfo` çağırıyordu (tüm `smaps` yürüyüşü ve memtrack HAL). Etkileri: fare/girdi takılması, Android 17'de
+`memtrack_proc_get` içinde `SIGABRT` (raporda `native_crash.txt`), ve (tahmin: çekirdeğin bellek tablosu kilidi `mmap`/`munmap`'u
+beklettiği için) motorun kendi donmaları. Örnekleyici ayrı iş parçacığına alınıp bellek `/proc/self/smaps_rollup`'tan okununca
+60. sn sonrası 100 ms üstü kare gören pencere oranı 21/80 ve 13/61'den 0/91'e, en uzun kare 1 440-2 952 ms'den 94 ms'ye indi.
+Dünya yükleme (ilk ~55 sn) hâlâ yavaş: 1,7-1,85 sn'lik donmalar ve 6-8 FPS'lik bölümler.
+
+**3. CPU profili (v10, `MONO_CPU_PROFILE=1`, 221 sn, 64 672 örnek, ortalama 2,93 çekirdek).** İşçi %45, ana (çizim) %37, sunucu %14,
+diğer Java %4. En çok CPU yiyenler:
+
+| pay | işlev |
+|---|---|
+| %24,6 | `set_line_s` (satır işaretleme) |
+| %17,8 | `libc.so`: tek sıcak döngü, `pthread_getspecific` |
+| %11,0 | `enter_frame_s` (çerçeve girişi) |
+| %6,3 | `FastGuard::drop` (çerçeve çıkışı) |
+| %3,0 | `linker64` |
+| %2,3 | `itab_find_ic_slow` (arayüz çağrısı, önbellek ıskası) |
+| %1,8 | `init_enter` (sınıf başlatma denetimi) |
+| %1,2 | `gc::marker_main` |
+
+Çerçeve kaydı toplam CPU'nun yaklaşık %60'ı ve üç iş parçacığı türünde de aynı. Neden: çerçeve yığını `thread_local!`, `std` Android
+hedefinde yerel TLS kullanmıyor; her erişim `pthread_getspecific@plt` çağrısı (makine kodunda doğrulandı). Masaüstünde aynı erişim
+tek adres hesabı olduğu için orada görünmüyordu.
+
+**Düzeltme (anahtarlı, varsayılan kapalı):** `MONO_NATIVE_TLS=1` ile Android derlemesi `--cfg mono_native_tls` verir; `FAST` yığını
+`#[thread_local] static` olur (`RUSTC_BOOTSTRAP=1`, `-Z tls-model=initial-exec`). Anahtar yoksa eski yol. Sınırlama: `dlopen` ile
+yüklenen kütüphanede yerel TLS Android 10 (API 29) ve sonrasında desteklenir. Beklenen kazanç ölçülmedi (v8 raporuyla ölçülecek).
+
+**Sıradaki hedefler (profilden):** `itab_find_ic_slow` (arayüz çağrısı önbelleği), `init_enter`, `mono_rt::rt::is_subclass`,
+sonra Java tarafı: `DensityBuffer.get/set`, `OreFeature.doPlace`, `Beardifier`, `PalettedContainer.get` (dünya üretimi).
+
+**Araçlar:** `tools/cpu_report.py` (CPU profili özeti; telefondaki profil için motorun yerel kopyası `--exe`), `tools/alloc_report.py`
+(tahsis profili). Başlatıcıdaki "Ek Ortam Değişkenleri" alanına `MONO_CPU_PROFILE=1` yazılırsa profil `files/cpu_profile.json` olarak rapor
+zip'ine girer; alan yazdıkça kaydedilir.
