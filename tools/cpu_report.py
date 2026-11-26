@@ -50,6 +50,10 @@ def main() -> int:
     ap.add_argument("--exe", help="profili yazan çalıştırılabilir dosya (varsayılan: profilin bellek eşlemesinden)")
     ap.add_argument("--lib", default="libminecraft_mono.so",
                     help="telefondaki profilde --exe ile eşleştirilecek kütüphane adı (--exe dosyası başka adlıysa)")
+    ap.add_argument("--slow", metavar="FRAMETIME_CSV",
+                    help="yalnızca yavaş anları çözümle: başlatıcının frametime.csv'sinde FPS'i --fps altında kalan 2 sn'lik "
+                         "pencerelere düşen örnekler (profil sürüm 2: saniyelik pencereler)")
+    ap.add_argument("--fps", type=float, default=30.0, help="--slow eşiği (varsayılan 30)")
     ap.add_argument("--md")
     ap.add_argument("--top", type=int, default=40)
     a = ap.parse_args()
@@ -72,13 +76,37 @@ def main() -> int:
                 return os.path.basename(path)
         return None
 
+    rows = P["hist"]
+    title = "CPU profili"
+    if a.slow:
+        if "win" not in P:
+            print("profil saniyelik pencere içermiyor (sürüm 2 gerekli)", file=sys.stderr)
+            return 1
+        import csv
+        slow = []
+        for r in csv.DictReader(open(a.slow)):
+            if int(r["frames"]) / 2.0 < a.fps:
+                t = int(r["t_unix_ms"])
+                slow.append((t - 2000, t))
+        agg = collections.Counter()
+        secs = set()
+        for t0, kind, pc, cnt in P["win"]:
+            if any(lo <= t0 < hi for lo, hi in slow):
+                agg[(kind, pc)] += cnt
+                secs.add(t0)
+        rows = [(k, pc, c) for (k, pc), c in agg.items()]
+        P["elapsed_ms"] = len(secs) * 1000  # süre satırı yalnızca seçilen saniyeleri saysın
+        title = f"CPU profili: yalnızca yavaş anlar (FPS < {a.fps:g}: {len(slow)} pencere, {len(secs)} sn örnek)"
+        if not rows:
+            print("eşleşen yavaş an yok", file=sys.stderr)
+            return 1
     total = 0
     by_kind = collections.Counter()
     by_func = collections.Counter()
     by_func_kind = collections.defaultdict(collections.Counter)
     by_cat = collections.Counter()
     by_class = collections.Counter()
-    for kind, pc, cnt in P["hist"]:
+    for kind, pc, cnt in rows:
         name = sym.name(pc)
         lib = lib_of(pc)
         if name.startswith("0x"):
@@ -93,7 +121,7 @@ def main() -> int:
     hz = P["hz"]
     out: list[str] = []
     w = out.append
-    w("# CPU profili\n")
+    w(f"# {title}\n")
     w(f"- süre {P['elapsed_ms'] / 1000:.0f} sn, örnek {total} ({hz} Hz), toplam CPU süresi yaklaşık {total / hz:.0f} sn "
       f"(ortalama {total / hz / max(P['elapsed_ms'] / 1000, 0.001):.2f} çekirdek)\n")
     w("## İş parçacığı türüne göre\n")

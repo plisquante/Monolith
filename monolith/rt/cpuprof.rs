@@ -166,15 +166,37 @@ mod imp {
         }
         ON.store(true, Ordering::Release);
         let secs = std::env::var("MONO_CPU_DUMP_SECS").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(10).max(1);
-        let _ = std::thread::Builder::new().name("mono-cpuprof".into()).spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_secs(secs));
-            dump();
+        mark();
+        let _ = std::thread::Builder::new().name("mono-cpuprof".into()).spawn(move || {
+            let mut t = 0u64;
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                mark();
+                t += 1;
+                if t % secs == 0 {
+                    dump();
+                }
+            }
         });
         eprintln!("[mono:cpuprof] cpu profile -> {} ({} Hz)", PATH.get().unwrap(), hz);
     }
 
     extern "C" fn at_exit() {
+        mark();
         dump();
+    }
+
+    /// Zaman işaretleri: saniyede bir (unix ms, o ana kadarki örnek sayısı). Örnekler tampona sırayla yazıldığı için iki işaret
+    /// arasındaki örnekler o saniyeye aittir; rapor aracı böylece yalnızca yavaş karelerin olduğu anları (başlatıcının
+    /// frametime.csv'si, aynı saat) ayrı çözümleyebilir.
+    static MARKS: std::sync::Mutex<Vec<(u128, usize)>> = std::sync::Mutex::new(Vec::new());
+
+    fn mark() {
+        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+        let n = N.load(Ordering::Relaxed).min(CAP);
+        if let Ok(mut m) = MARKS.lock() {
+            m.push((t, n));
+        }
     }
 
     fn write_class_list() {
@@ -200,7 +222,7 @@ mod imp {
         rows.sort_unstable_by(|a, b| b.1.cmp(&a.1));
         let mut j = String::with_capacity(rows.len() * 28 + 4096);
         j.push_str(&format!(
-            "{{\"version\":1,\"hz\":{},\"elapsed_ms\":{},\"samples\":{},\"maps\":{},\"hist\":[",
+            "{{\"version\":2,\"hz\":{},\"elapsed_ms\":{},\"samples\":{},\"maps\":{},\"hist\":[",
             HZ.load(Ordering::Relaxed),
             elapsed,
             n,
@@ -211,6 +233,35 @@ mod imp {
                 j.push(',');
             }
             j.push_str(&format!("[{},{},{}]", k >> 56, k & 0x00FF_FFFF_FFFF_FFFF, c));
+        }
+        // saniyelik pencereler: [başlangıç unix ms, tür, adres, sayı] (sürüm 2)
+        j.push_str("],\"marks\":[");
+        let marks = MARKS.lock().map(|m| m.clone()).unwrap_or_default();
+        for (i, (t, m)) in marks.iter().enumerate() {
+            if i > 0 {
+                j.push(',');
+            }
+            j.push_str(&format!("[{t},{m}]"));
+        }
+        j.push_str("],\"win\":[");
+        let mut first = true;
+        for w in marks.windows(2) {
+            let (t0, a) = w[0];
+            let b = w[1].1.min(n);
+            if a >= b {
+                continue;
+            }
+            let mut h: HashMap<u64, u32> = HashMap::new();
+            for slot in BUF.iter().take(b).skip(a) {
+                *h.entry(slot.load(Ordering::Relaxed)).or_insert(0) += 1;
+            }
+            for (k, c) in h {
+                if !first {
+                    j.push(',');
+                }
+                first = false;
+                j.push_str(&format!("[{},{},{},{}]", t0, k >> 56, k & 0x00FF_FFFF_FFFF_FFFF, c));
+            }
         }
         j.push_str("]}");
         let tmp = format!("{path}.tmp");
