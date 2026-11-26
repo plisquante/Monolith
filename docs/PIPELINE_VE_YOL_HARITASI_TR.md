@@ -353,3 +353,28 @@ Sonuç: en büyük iki kalem R1 (çağrı başına defter) ve R3 (GC tahsis yolu
 | Q9 native sayacı (90 sn, hız anahtarlı derleme) | 2 çağrı, ikisi Flite; atlandı (kullanıcı kararı) |
 | Q10 envanter | değişmedi: K2 232 dosya (Java kuralı) |
 | Dünya kaydı (taze dünya) | ilk koşu: temiz çıkış, dünya kaydedildi. İkinci koşu (aynı dünyayı yükler): temiz çıkış (143) ama çıkışta yeni dosya yazılmadı. Bölge dosyaları yüklemeden 8-17 sn sonra yazılmış, kapanışa kadar değişmemiş: oyuncu yeni yongaya gitmediyse kaydedilecek değişiklik yoktur. Ölçüt yanılgısı olabilir, kesin doğrulanmadı |
+
+## 26. Android 17 / Samsung S26 derlemesi (26 Kasım 2026)
+
+Bu ortamda derlendi ve dosya düzeyinde doğrulandı; cihazda çalıştırılmadı (cihaz testi kullanıcıda).
+
+| parça | değer |
+|---|---|
+| araçlar | platform android-37.2 (API 37.2), build-tools 37.0.0, NDK r30 (30.0.16248370), R8 9.5.33, Rust hedefi `aarch64-linux-android` |
+| motor | `build/minecraft-26.3-android/rust/libminecraft_mono.so`: 599 MiB, ELF64 AArch64, LOAD hizası 0x4000 (16 KB sayfa), `mono_android_entry` dışa aktarılmış, NEEDED yalnızca `libc libdl libz libm` |
+| derleme komutu | `./build.sh build/client.jar --android --ndk <ndk r30> --api 26 --opt 3 --shards 32 --shard-jobs 2 -o build/minecraft-26.3-android` (varsayılan yol; hız anahtarları kapalı) |
+| başlatıcı | `Monolith.apk` 35,9 MiB: compileSdk 37, targetSdk 34, minSdk 26, `libtouchcore_mono.so` 0x4000 hizalı, `assets/engine_resources.zip` (4 604 dosya, 17 java.home dosyası, Android JNA kütüphanesi), `apksigner verify` geçti |
+| sıkıştırılmış motor | `.xz` 85 MiB, `.zip` (telefonda açmak için) |
+
+Düzeltme: `tools/build_touchcore_apk.py` java.home dosyalarını (`conf/`, `lib/tzdb.dat`) yalnızca `<çıktı>/` altında arıyordu; rustgen
+bunları `<çıktı>/rust/` altına kopyalıyor. Araç artık ikisine de bakıyor. Java'ya dokunulmadı.
+
+Kurulum (telefonda):
+1. Eski Monolith APK'sı farklı imzayla kuruluysa önce kaldırın (imza uyuşmazsa kurulum reddedilir).
+2. `Monolith.apk` kurun (bilinmeyen kaynaklara izin).
+3. `libminecraft_mono.so.zip` dosyasını Dosyalarım ile açın; çıkan `libminecraft_mono.so` dosyasını başlatıcının motor içe aktarma
+   düğmesiyle seçin (hedef: uygulama içi `files/monolith/native/libminecraft_mono.so`). `client.jar` da içe aktarılır.
+4. Hata olursa `adb logcat -s Monolith MonolithEngine` ve başlatıcının rapor zip'i (`monolith-rapor-*.zip`).
+
+Bilinmeyenler: Android 17'de çalışma (yalnızca hedef API ve 16 KB hizası denetlendi), S26 GPU sürücüsü, bellek (599 MiB kütüphane
++ oyun yığını), dokunmatik giriş. Sembol tabloları (`.symtab` 54 MiB, `.strtab` 62 MiB) bırakıldı: çökme raporlarında işlev adları için.

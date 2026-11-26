@@ -64,7 +64,7 @@ Durum: `bitti` / `sürüyor` / `bekliyor` / `ertelendi` / `yapılmayacak`.
 | D3 | Bağlantı hatası sayacını sıfırlamak | yapılmayacak: kazancı yok |
 | D4 | `String` tek baytlık sıkıştırılmış dizgi | yapılmayacak: Java kaplaması değişikliği gerektirir (Java kuralı) |
 | D5 | Q9 (Flite) ve Q10 (Java kuralı) kararları | kullanıcıda |
-| D6 | Samsung S26 / Android başlangıcı | bekliyor (gün sonu) |
+| D6 | Samsung S26 / Android başlangıcı | derlendi ve dosya düzeyinde doğrulandı (API 37 araçları, NDK r30, 16 KB hiza); cihaz testi kullanıcıda. Ayrıntı: PIPELINE §26 |
 | D7 | Geçen anahtarları `build.sh` varsayılanı yapmak | her iş geçtikçe |
 | D8 | Ana menü sarı yazısı "işiniz rust gitsin :)" geçici: geri almak için `git revert 5689ba5` (tek dosya, `tools/mcbuild_common.py` `SPLASH_TEXT`); özgün yazılar jar'da duruyor, sonraki derlemede geri gelir | geri alınacak |
 | D9 | Ana menü telif satırı "mojang yaptı, cemo ve plisquante modladı" geçici: geri almak için `git revert 1dd65a1` ve kısaltma commit'i (`tools/mcbuild_common.py` `CREDITS_TEXT`); özgün metin jar'daki dil dosyalarında duruyor, sonraki derlemede geri gelir | geri alınacak |

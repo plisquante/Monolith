@@ -362,7 +362,11 @@ def make_engine_resources_zip(res_dir: Path, client_jar: Path, dest: Path) -> in
         zf.writestr("com/sun/jna/linux-aarch64/libjnidispatch.so", jna_android_dispatch_lib())
         count += 1
         # motorun java.home'u: motor derlemesinin kaynaklarının yanında JDK'nın conf/ ağacı ve lib/tzdb.dat
+        # Derleyici (rustgen) bu dosyaları <çıktı>/rust/ altına kopyalar; eski düzende <çıktı>/ altındaydı.
+        # İkisine de bakılır: önce <çıktı>/, yoksa <çıktı>/rust/.
         jhome = res_dir.parent
+        if not (jhome / "conf" / "security" / "java.security").is_file() and (jhome / "rust" / "conf").is_dir():
+            jhome = jhome / "rust"
         jfiles = [p for p in sorted((jhome / "conf").rglob("*")) if p.is_file()] + [jhome / "lib" / "tzdb.dat"]
         if not (jhome / "conf" / "security" / "java.security").is_file() or not (jhome / "lib" / "tzdb.dat").is_file():
             raise SystemExit(f"engine build {jhome} has no conf/security/java.security or lib/tzdb.dat (java.home files)")
