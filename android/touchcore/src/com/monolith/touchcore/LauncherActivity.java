@@ -1039,6 +1039,16 @@ public final class LauncherActivity extends Activity {
         final EditText resDirEt = makePathField(pathCard, "Kaynak Dizini (MONO_RESOURCES)", config.resourcesDir);
         final EditText assetsDirEt = makePathField(pathCard, "Assets Dizini (MC_ASSETS_DIR)", config.assetsDir);
         final EditText envEt = makePathField(pathCard, "Ek Ortam Değişkenleri (KEY=VAL;...)", config.extraEnv);
+        // The field used to be saved only by "Yolları Kaydet": typed text was lost when the tab changed (onResume reloads the
+        // saved config), so the engine kept running with the old switches. It is now saved while typing.
+        envEt.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+            @Override public void afterTextChanged(android.text.Editable e) {
+                config.extraEnv = e.toString().trim();
+                config.save();
+            }
+        });
 
         Button savePathsBtn = makeStyledBtn("Yolları Kaydet", 0xFF15803D, COL_ACCENT);
         LinearLayout.LayoutParams spLp = new LinearLayout.LayoutParams(
