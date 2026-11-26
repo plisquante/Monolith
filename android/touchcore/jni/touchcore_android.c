@@ -239,6 +239,12 @@ static pthread_t g_render_thread;
 static bool g_thread_running = false;
 static volatile bool g_stop_req = false;
 static volatile bool g_surface_dirty = false;
+/* Yüzey bırakma el sıkışması: UI iş parçacığı (surfaceDestroyed) bırakma ister ve render iş parçacığının onu işlemesini
+ * (EGL yüzeyini yok etmesini) bekler. Android pencereyi surfaceDestroyed dönünce geçersiz kılar; beklenmezse render
+ * iş parçacığı kareyi geçersiz pencerede bitirir (ANGLE "A surface is no longer available") ve oyun çöker.
+ * İkisi de g_lock ile korunur. */
+static pthread_cond_t g_surface_cv = PTHREAD_COND_INITIALIZER;
+static unsigned g_detach_req = 0, g_detach_ack = 0;
 static ANativeWindow *g_window = NULL;
 static ANativeWindow *g_pending_window = NULL;
 static int g_win_w = 1280;
@@ -1453,7 +1459,13 @@ __attribute__((visibility("default"))) int32_t tc_android_init_egl(int32_t *out_
  * oluşturduğu her GL nesnesini koru, yalnızca pencere yüzeyini değiştir. */
 static void egl_drop_surface(GlState *g) {
     if (g->dpy == EGL_NO_DISPLAY || g->surf == EGL_NO_SURFACE) return;
-    if (g->eglMakeCurrent) g->eglMakeCurrent(g->dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    if (g->eglMakeCurrent) {
+        /* Bağlamı yüzeysiz (surfaceless) bağlı tut: yüzey yokken oyun kare çizmeyi sürdürür (GL tamponları, doku yükleme,
+         * eşleme). Bağlam tamamen ayrılırsa her GL çağrısı başarısız olur ve "Failed to map buffer" ile oyun çöker.
+         * Yüzeysiz bağlam desteklenmiyorsa eski davranışa (bağlamı ayır) düşer. */
+        if (g->ctx == EGL_NO_CONTEXT || !g->eglMakeCurrent(g->dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, g->ctx))
+            g->eglMakeCurrent(g->dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    }
     if (g->eglDestroySurface) g->eglDestroySurface(g->dpy, g->surf);
     g->surf = EGL_NO_SURFACE;
 }
@@ -1475,6 +1487,7 @@ static bool egl_rebind_surface(GlState *g, ANativeWindow *win) {
 __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
     pthread_mutex_lock(&g_lock);
     bool dirty = g_surface_dirty;
+    unsigned seen_req = g_detach_req; /* bu işlemeyle karşılanan bırakma isteği sayısı (dirty ile aynı kilit altında okunur) */
     ANativeWindow *pending = g_pending_window;
     if (dirty) {
         g_surface_dirty = false;
@@ -1497,6 +1510,17 @@ __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
                 reset_gl_state_for_engine(&g_ext_gl);
             }
         }
+    }
+    if (dirty) {
+        /* Yüzey değişikliği işlendi (eski EGL yüzeyi yok edildi): surfaceDestroyed'da bekleyen UI iş parçacığını uyandır. */
+        pthread_mutex_lock(&g_lock);
+        g_detach_ack = seen_req;
+        pthread_cond_broadcast(&g_surface_cv);
+        pthread_mutex_unlock(&g_lock);
+    }
+    if (!cur_win) {
+        /* Pencere yok (uygulama arka planda ya da ekran kapalı): kareler yüzeysiz bağlamda boşa dönmesin, pil harcamasın. */
+        usleep(33000);
     }
     if (g_ext_gl.gl_ready && g_ext_gl.eglSwapBuffers && g_ext_gl.dpy != EGL_NO_DISPLAY && g_ext_gl.surf != EGL_NO_SURFACE) {
         gl_diag_capture(&g_ext_gl, g_egl_w > 0 ? g_egl_w : g_win_w, g_egl_h > 0 ? g_egl_h : g_win_h);
@@ -1791,6 +1815,19 @@ JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativeDetachSurf
     pthread_mutex_lock(&g_lock);
     if (g_pending_window) { ANativeWindow_release(g_pending_window); g_pending_window = NULL; }
     g_surface_dirty = true;
+    unsigned want = ++g_detach_req;
+    if (g_ext_launched) {
+        /* Render iş parçacığı yüzeyi bırakana kadar bekle (en çok 700 ms): Android pencereyi bu çağrı dönünce geçersiz
+         * kılar, o zamana dek render iş parçacığı yüzeyi bırakmış olmalı. Zaman aşımı arayüzü (ANR) kilitlemesin diye. */
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_nsec += 700L * 1000000L;
+        ts.tv_sec += ts.tv_nsec / 1000000000L;
+        ts.tv_nsec %= 1000000000L;
+        while ((int)(g_detach_ack - want) < 0) {
+            if (pthread_cond_timedwait(&g_surface_cv, &g_lock, &ts) == ETIMEDOUT) break;
+        }
+    }
     pthread_mutex_unlock(&g_lock);
 }
 
