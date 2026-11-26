@@ -1,0 +1,3 @@
+16bc6ba933a643bdfbeb6e12681c8aee56a7d4949d0538592d3a01885d628f41  Monolith.apk
+d65a46a4f5ef157ff7f369d4a5493132ad359fb94499ae52591a5e8f8e8f94bf  libminecraft_mono.so.xz.00
+113fddca70f9cbdea7f3f181918e507d1ac6c18d7ecc7fb6e8385e192fbe2b62  libminecraft_mono.so.xz.01
