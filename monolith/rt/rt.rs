@@ -1200,11 +1200,18 @@ fn init_lock() -> &'static (std::sync::Mutex<()>, std::sync::Condvar) {
     L.get_or_init(|| (std::sync::Mutex::new(()), std::sync::Condvar::new()))
 }
 /// Ok(true) dönerse çağıran başlatıcıyı çalıştırmalıdır. Ok(false) ise başlatma bitmiştir ya da bu iş parçacığı tarafından çalıştırılıyordur.
+/// Hızlı yol (başlatma bitmiş) çağıranın içine alınır: S26 v8 CPU profilinde `init_enter` kendi süresi %3,3'tü ve neredeyse
+/// tamamı bu yükle + karşılaştırma için yapılan çapraz crate çağrısıydı. Davranış aynı; geri kalanı `init_enter_slow`.
+#[inline(always)]
 pub fn init_enter(st: &AtomicU64, name: &str) -> Res<bool> {
-    let v = st.load(Ordering::Acquire);
-    if v == ST_DONE {
+    if st.load(Ordering::Acquire) == ST_DONE {
         return Ok(false);
     }
+    init_enter_slow(st, name)
+}
+#[cold]
+#[inline(never)]
+fn init_enter_slow(st: &AtomicU64, name: &str) -> Res<bool> {
     let me = crate::sync::tid() * 4 + 1;
     let _blk = crate::heap::ScopedBlock::enter();
     let (m, cv) = init_lock();
