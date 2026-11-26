@@ -245,6 +245,7 @@ static volatile bool g_surface_dirty = false;
  * İkisi de g_lock ile korunur. */
 static pthread_cond_t g_surface_cv = PTHREAD_COND_INITIALIZER;
 static unsigned g_detach_req = 0, g_detach_ack = 0;
+static char g_game_dir[512]; /* oyun dizini (install_crash_handler'da yazılır): kare süresi dosyası oraya gider */
 static ANativeWindow *g_window = NULL;
 static ANativeWindow *g_pending_window = NULL;
 static int g_win_w = 1280;
@@ -1077,6 +1078,7 @@ static void crash_handler(int sig, siginfo_t *si, void *ucv) {
 }
 
 static void install_crash_handler(const char *game_dir) {
+    snprintf(g_game_dir, sizeof(g_game_dir), "%s", game_dir);
     snprintf(g_crash_path, sizeof(g_crash_path), "%s/native_crash.txt", game_dir);
     char logp[512];
     snprintf(logp, sizeof(logp), "%s/engine_log.txt", game_dir);
@@ -1491,6 +1493,57 @@ static bool egl_rebind_surface(GlState *g, ANativeWindow *win) {
     return true;
 }
 
+/* Kare süresi ölçümü: her 2 sn'de bir satır, <oyun dizini>/frametime.csv (önceki koşu frametime_prev.csv). Sütunlar: unix
+ * zamanı (ms), kare sayısı, ortalama kare süresi (ms), en uzun kare (ms), 50 ms ve 100 ms üstü kare sayısı. Unix zamanı,
+ * motor günlüğündeki [mono:gc_phases] t= damgasıyla aynı saattir: her takılma toplamayla eşleştirilebilir. metrics.csv'nin
+ * FPS'i 2 sn'lik ortalamadır, 200-500 ms'lik donmaları göstermez. Yalnızca render iş parçacığından çağrılır. */
+static void ft_frame(void) {
+    static int fd = -2;
+    static long long last_ns = 0, win_ns = 0;
+    static int frames = 0, over50 = 0, over100 = 0;
+    static double sum_ms = 0.0, max_ms = 0.0;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    long long now_ns = (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+    if (fd == -2) {
+        fd = -1;
+        if (g_game_dir[0]) {
+            char p[600], pp[600];
+            snprintf(p, sizeof(p), "%s/frametime.csv", g_game_dir);
+            snprintf(pp, sizeof(pp), "%s/frametime_prev.csv", g_game_dir);
+            (void)rename(p, pp);
+            fd = open(p, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+            if (fd >= 0) {
+                static const char hdr[] = "t_unix_ms,frames,avg_ms,max_ms,over50,over100\n";
+                (void)!write(fd, hdr, sizeof(hdr) - 1);
+            }
+        }
+    }
+    if (last_ns != 0) {
+        double dt = (double)(now_ns - last_ns) / 1e6;
+        frames++;
+        sum_ms += dt;
+        if (dt > max_ms) max_ms = dt;
+        if (dt > 50.0) over50++;
+        if (dt > 100.0) over100++;
+    }
+    last_ns = now_ns;
+    if (win_ns == 0) win_ns = now_ns;
+    if (now_ns - win_ns >= 2000000000LL) {
+        if (fd >= 0 && frames > 0) {
+            struct timespec rt;
+            clock_gettime(CLOCK_REALTIME, &rt);
+            long long unix_ms = (long long)rt.tv_sec * 1000LL + rt.tv_nsec / 1000000;
+            char line[160];
+            int n = snprintf(line, sizeof(line), "%lld,%d,%.1f,%.1f,%d,%d\n", unix_ms, frames, sum_ms / frames, max_ms, over50, over100);
+            if (n > 0) (void)!write(fd, line, (size_t)n);
+        }
+        win_ns = now_ns;
+        frames = over50 = over100 = 0;
+        sum_ms = max_ms = 0.0;
+    }
+}
+
 __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
     pthread_mutex_lock(&g_lock);
     bool dirty = g_surface_dirty;
@@ -1533,6 +1586,7 @@ __attribute__((visibility("default"))) void tc_android_swap_buffers(void) {
         gl_diag_capture(&g_ext_gl, g_egl_w > 0 ? g_egl_w : g_win_w, g_egl_h > 0 ? g_egl_h : g_win_h);
         g_ext_gl.eglSwapBuffers(g_ext_gl.dpy, g_ext_gl.surf);
         __atomic_add_fetch(&g_swap_count, 1, __ATOMIC_RELAXED);
+        ft_frame();
         gl_diag_frame(&g_ext_gl);
         /* Oyunun çizeceği boyut, içine çizdiği çizim yüzeyinin boyutudur. Java, Surface boyutunu geri çağrılarla bildirir;
          * bunlar geride kalabilir ya da çelişebilir (döndürme, sistem çubukları, sabit tampon boyutu). Bu yüzden EGL

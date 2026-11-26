@@ -43,6 +43,31 @@ final class EngineResources {
     private EngineResources() {}
 
     /** Extracts the resource tree when it is missing or stale. Throws with a user-readable message when it cannot. */
+    /** MONO_* names applied from the "Ek Ortam Degiskenleri" setting on the previous run (so removed entries are unset again). */
+    private static final java.util.Set<String> extraEnvApplied = new java.util.HashSet<>();
+
+    /**
+     * Applies the launcher setting "Ek Ortam Degiskenleri" (KEY=VAL;KEY2=VAL2): engine switches can be changed without a
+     * new engine build. The setting was saved but never reached the engine before. Only MONO_* names are accepted.
+     */
+    private static void applyExtraEnv(String spec) throws android.system.ErrnoException {
+        java.util.Set<String> now = new java.util.HashSet<>();
+        if (spec != null) {
+            for (String part : spec.split("[;\\n]")) {
+                int eq = part.indexOf('=');
+                if (eq <= 0) continue;
+                String key = part.substring(0, eq).trim();
+                String val = part.substring(eq + 1).trim();
+                if (!key.matches("MONO_[A-Z0-9_]+")) continue;
+                Os.setenv(key, val, true);
+                now.add(key);
+            }
+        }
+        for (String old : extraEnvApplied) if (!now.contains(old)) Os.unsetenv(old);
+        extraEnvApplied.clear();
+        extraEnvApplied.addAll(now);
+    }
+
     static void prepare(Context ctx, LauncherConfig cfg, Progress progress) throws IOException {
         File jar = new File(cfg.clientJarPath == null ? "" : cfg.clientJarPath);
         if (!jar.isFile()) {
@@ -138,6 +163,8 @@ final class EngineResources {
             Os.setenv("MONO_GC_MAX_GARBAGE_MB", Long.toString(garbageMb), true);
             // one line per collection in engine_log.txt (live heap, pause parts)
             Os.setenv("MONO_GC_VERBOSE", "1", true);
+            // user-defined engine switches, applied last so they override the defaults above
+            applyExtraEnv(cfg.extraEnv);
             Os.setenv("TMPDIR", tmp.getAbsolutePath(), true);
             File jar = new File(cfg.clientJarPath == null ? "" : cfg.clientJarPath);
             File verDir = jar.getParentFile();
