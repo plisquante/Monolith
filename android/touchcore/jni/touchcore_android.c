@@ -1940,8 +1940,31 @@ JNIEXPORT void JNICALL Java_com_monolith_touchcore_NativeBridge_nativePollTeleme
     jsize n = (*env)->GetArrayLength(env, outArr);
     if (n < 16) return;
     jlong buf[16] = {0};
+    /* Dışarıdaki oyun motoru (libminecraft_mono.so) çalışırken g_fps hep 0'dır: onu yalnızca yerleşik demo hesaplar. Bu
+     * yüzden ekrandaki sayaç 0.0 FPS gösteriyordu. Motorun sunduğu kare sayısından (g_swap_count) en az 0,5 sn'lik
+     * pencerelerle hesaplanır; bu işlev yalnızca arayüz iş parçacığından çağrılır. */
+    static int32_t ext_last_swaps = 0;
+    static struct timespec ext_last_ts;
+    static float ext_fps = 0.0f;
+    {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        int32_t swaps = __atomic_load_n(&g_swap_count, __ATOMIC_RELAXED);
+        if (ext_last_ts.tv_sec == 0 && ext_last_ts.tv_nsec == 0) {
+            ext_last_ts = now;
+            ext_last_swaps = swaps;
+        } else {
+            double dt = (double)(now.tv_sec - ext_last_ts.tv_sec) + (double)(now.tv_nsec - ext_last_ts.tv_nsec) / 1e9;
+            if (dt >= 0.5) {
+                ext_fps = (float)((double)(swaps - ext_last_swaps) / dt);
+                if (ext_fps < 0.0f) ext_fps = 0.0f; /* sayaç sıfırlanırsa (yeniden başlatma) */
+                ext_last_swaps = swaps;
+                ext_last_ts = now;
+            }
+        }
+    }
     pthread_mutex_lock(&g_lock);
-    buf[0] = (jlong)(g_fps * 10.0f);
+    buf[0] = (jlong)((g_fps > 0.0f ? g_fps : ext_fps) * 10.0f);
     buf[1] = (jlong)g_tel.frame_epoch;
     buf[2] = (jlong)g_tel.arena_bytes;
     buf[3] = (jlong)g_tel.slab_committed_bytes;
