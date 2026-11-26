@@ -455,6 +455,20 @@ pub fn n_java_lang_System__userProps0() -> Res<Ref> {
     rt::string_array(&rt::user_props())
 }
 pub fn n_java_lang_Runtime__halt0(status: i32) -> Res<()> {
+    // Android'de motor, başlatıcı uygulamanın SÜRECİ içinde çalışır. C'nin exit() işlevi statik nesneleri
+    // (C++ kütüphanelerindeki kilitler dahil) yok eder; bu sırada başlatıcının arayüz iş parçacığı hâlâ yazı
+    // çiziyorsa yok edilmiş bir kilide dokunur ve süreç "FORTIFY: pthread_mutex_lock called on a destroyed mutex"
+    // ile çöker (S26 raporunda görüldü). Java'nın halt anlamı zaten "kapanış işi yapmadan bitir"dir: Android'de
+    // çıktılar boşaltılıp _exit ile çıkılır. Diğer platformlarda davranış değişmez.
+    #[cfg(target_os = "android")]
+    {
+        use std::io::Write;
+        extern "C" { fn _exit(status: i32) -> !; }
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+        unsafe { _exit(status) }
+    }
+    #[cfg(not(target_os = "android"))]
     std::process::exit(status)
 }
 pub fn n_java_lang_Runtime__freeMemory(this: Ref) -> Res<i64> {

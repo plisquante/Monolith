@@ -1335,7 +1335,15 @@ fn shader_libs() -> [*mut c_void; 3] {
 
 pub fn n_org_lwjgl_util_MonoShader__scCompilerInit() -> Res<i64> {
     let libs = shader_libs();
-    Ok(sym_fn!(&libs, "shaderc_compiler_initialize", extern "C" fn() -> usize).map(|f| f() as i64).unwrap_or(0))
+    // Gölgelendirici derleyicisi (shaderc) bulunamazsa sessizce 0 döndürmek, oyunda boş mesajlı bir
+    // "Couldn't parse GLSL:" hatasına dönüşüyordu (Android'de APK'ya libmonoshader.so konmadığında görüldü).
+    // Bunun yerine hangi kütüphanenin eksik olduğunu söyleyen açık bir hata fırlatılır.
+    match sym_fn!(&libs, "shaderc_compiler_initialize", extern "C" fn() -> usize) {
+        Some(f) => Ok(f() as i64),
+        None => rt::throw("java/lang/UnsatisfiedLinkError",
+            "shaderc not found: libmonoshader.so (Android: packaged in the APK via build_touchcore_apk.py --shader-lib), \
+             or libshaderc.so / libshaderc_shared.so.1 on the library path".to_string()),
+    }
 }
 pub fn n_org_lwjgl_util_MonoShader__scCompilerRelease(c: i64) -> Res<()> {
     let libs = shader_libs();

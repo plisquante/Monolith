@@ -88,6 +88,19 @@ pub fn dl_open_any(names: &[&str]) -> *mut c_void {
             }
         }
     }
+    // MONO_NATIVES: başlatıcının yerel kütüphane klasörü (Android'de uygulamanın nativeLibraryDir'i;
+    // libmonoshader.so orada). Başlatıcı bu değişkeni ayarlar; tanımlı değilse (masaüstü) atlanır.
+    if let Some(dir) = std::env::var_os("MONO_NATIVES") {
+        for &n in names {
+            let p = std::path::Path::new(&dir).join(n);
+            if let Ok(cs) = CString::new(p.to_string_lossy().as_bytes()) {
+                let h = unsafe { loader::open(&cs) };
+                if !h.is_null() {
+                    return h;
+                }
+            }
+        }
+    }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             for &n in names {
