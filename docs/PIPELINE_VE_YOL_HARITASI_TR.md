@@ -399,6 +399,29 @@ Not: ilk çağrı denemesinde `Language.loadFromJson` boş kaynak hatası, test 
 başlatıcı (`EngineResources.prepare`) bunları açar. Aynı düzen elle kurulunca hata kalktı. Cihazda sınanmayan: EGL/GLES çizimi,
 dokunmatik, ses, gerçek bellek ve hız.
 
+### 26.1 İlk S26 raporu (`monolith-rapor-20261126-081253.zip`)
+
+Cihaz: Galaxy S26 (SM-S942B), GPU Samsung Xclipse 960, GLES 3.2 (ANGLE, Vulkan 1.4.304 üzerinde). Motor yüklendi, çalışma
+zamanı ve Minecraft başlatması geçti, GLES bağlamı açıldı. Oyun ilk gölgelendiricide düştü:
+
+```
+Couldn't compile pipeline (minecraft:pipeline/gui): ShaderCompileException: Couldn't parse GLSL:
+IllegalStateException: Failed to find or load pipeline minecraft:pipeline/gui
+FORTIFY: pthread_mutex_lock called on a destroyed mutex
+```
+
+| bulgu | neden | düzeltme |
+|---|---|---|
+| gölgelendirici derlenmedi, hata metni boş | APK'da `libmonoshader.so` (shaderc + SPIRV-Cross) yoktu; `scCompilerInit` sessizce 0 döndürüyordu | `tools/build_shader_lib.py` ile NDK r30'dan derlendi, APK'ya `--shader-lib` ile kondu; araç artık motor kaynaklarıyla birlikte bu kütüphaneyi zorunlu tutar; `natives_rhi.rs` kütüphane yoksa `UnsatisfiedLinkError` fırlatır |
+| çıkışta FORTIFY çökmesi (başlatıcının arayüz iş parçacığı, `libminikin`) | `Runtime.halt` C `exit()` çağırıyordu; statik nesneler (kilitler) yok edilirken arayüz yazı çiziyordu | `natives.rs`: Android'de çıktılar boşaltılıp `_exit` (Java halt anlamı); masaüstü aynı |
+| `MONO_NATIVES` okunmuyordu | başlatıcı ayarlıyor, motor kullanmıyordu | `desk/mod.rs` `dl_open_any`: önce `MONO_NATIVES` klasörü |
+
+Doğrulama (cihazsız): `libmonoshader.so` 16 KB hizalı, NEEDED `liblog libc libm libdl`; Android 17 bionic üzerinde qemu ile
+yüklenip GLSL 450 köşe gölgelendiricisini SPIR-V'ye derledi (durum 0, 892 bayt).
+
+Ayrıca raporda zararsız GL uyarıları: `glEnable` 0x884F (seamless cube map; GLES 3'te zaten açık), 0x8642 (program point size;
+GLES'te her zaman açık) ve 12 kez "Invalid or unsupported texture target". Son kalem oyun ilerledikçe izlenecek.
+
 Kurulum (telefonda):
 1. Eski Monolith APK'sı farklı imzayla kuruluysa önce kaldırın (imza uyuşmazsa kurulum reddedilir).
 2. `Monolith.apk` kurun (bilinmeyen kaynaklara izin).
