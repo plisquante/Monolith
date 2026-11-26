@@ -665,8 +665,11 @@ class MethodGen:
                 self.emit_link_err(e, "java/lang/NoSuchFieldError", str(le), stk, 1, a.desc)
                 return None
             o = pop()
-            push(self.kind_of_field(f.desc),
-                 self.from_field(f.desc, f"unsafe {{ (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)} }}"))
+            rd = f"unsafe {{ (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)} }}"
+            if dc.name == "java/lang/ref/Reference" and f.name == "referent":
+                # zayıf referans okuma bariyeri: eşzamanlı işaretleme sürerken okunan hedef canlı tutulur (gc.rs weak_read)
+                rd = f"rt::weak_read({rd})"
+            push(self.kind_of_field(f.desc), self.from_field(f.desc, rd))
         elif op == "putfield":
             try:
                 dc, f = self.field(a, static=False)

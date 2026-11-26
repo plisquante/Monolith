@@ -304,6 +304,20 @@ pub unsafe fn satb_overwrite(slot: *mut *mut Obj) {
     }
 }
 
+/// Zayıf referans okuma bariyeri: `Reference.referent` okunurken (Reference.get) işaretleme açıksa okunan nesne SATB
+/// günlüğüne gider ve canlı sayılır. Gerekçe: işaretleyici `referent`'i izlemez. Anlık görüntüde yalnızca zayıf yoldan
+/// erişilen bir nesne işaretleme sürerken `get()` ile alınıp güçlü bir yere (zaten taranmış bir nesnenin alanına) yazılırsa,
+/// yazma bariyeri yalnızca ESKİ değeri kaydettiği için bu nesne hiç işaretlenmez; süpürülür, yeri başka nesneye verilir ve
+/// güçlü referans bayat kalır (S26'da açılışta `ModelDiscovery`: "Integer / Lists$RandomAccessReverseList cannot be cast to
+/// Identifier"). HotSpot'ta da eşzamanlı toplayıcılar Reference.get için aynı "canlı tut" bariyerini kullanır.
+#[inline(always)]
+pub fn weak_read(r: Ref) -> Ref {
+    if G.satb_on.load(Ordering::Relaxed) {
+        satb_log(r.0 as usize);
+    }
+    r
+}
+
 #[cold]
 #[inline(never)]
 fn satb_log(old: usize) {

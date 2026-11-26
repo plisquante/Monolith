@@ -455,6 +455,7 @@ pub fn c_str_arg(s: Ref) -> Res<std::ffi::CString> {
 }
 
 pub use crate::heap::{recycle as recycle_scope, safepoint as gc_safepoint, ArenaGuard, ThreadGuard};
+pub use crate::heap::weak_read;
 
 #[inline(always)]
 pub fn gc_thread_guard() -> ThreadGuard {
