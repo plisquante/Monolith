@@ -2789,13 +2789,14 @@ def native_tls() -> bool:
 
     `std`'nin thread_local!'ı Android hedefinde pthread anahtarı kullanır (her erişim pthread_getspecific çağrısı; S26 CPU
     profilinde çerçeve kaydı toplam CPU'nun yaklaşık %60'ı). `#[thread_local]` kararsız bir özellik: derleyiciye
-    RUSTC_BOOTSTRAP=1 verilir. initial-exec modeli: dlopen ile yüklenen kütüphanede en küçük erişim maliyeti (iş parçacığı
-    başına 40 bayt statik TLS; bionic API 29'dan beri dlopen'li kütüphanelerde TLS'i destekler)."""
+    RUSTC_BOOTSTRAP=1 verilir. Model global-dynamic (TLSDESC): initial-exec denendi ve Android 17 bionic'te dlopen ile
+    yüklenen kütüphaneyi reddediyor ("TLS symbol ... using IE access model", qemu + gerçek bağlayıcı ile doğrulandı).
+    TLSDESC dlopen'li kütüphanede çalışır (API 29 ve sonrası; daha eskisinde yerel TLS yok)."""
     return os.environ.get("MONO_NATIVE_TLS", "") == "1"
 
 
 def native_tls_flags() -> list:
-    return ["--cfg", "mono_native_tls", "-Z", "tls-model=initial-exec"] if native_tls() else []
+    return ["--cfg", "mono_native_tls", "-Z", "tls-model=global-dynamic"] if native_tls() else []
 
 
 def _android_build(a, files, rt_dir) -> int:
