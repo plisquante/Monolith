@@ -555,3 +555,35 @@ pencere çerçevesiz açılır; çözüm libdecor), ölü tuşlar/compose, büy�
 **clippy:** bu oturumda eklenen koddaki 14 uyarı giderildi. Kalan 24 hata eski: yorumlar Türkçeye çevrilirken `# Safety`
 başlıkları `# Güvenlik` olmuş, clippy `missing_safety_doc` bunları tanımıyor. CI'nin clippy adımı (`-D warnings`) bu yüzden
 zaten kırık olabilir; bu oturumdan bağımsız.
+
+## 31. S26'da v3 motoru: ilk ölçüm (26 Kasım 2026, `monolith-rapor-20261126-163957.zip`)
+
+Cihaz Galaxy S26 (SM-S942B, Android 17). Motor v3 (622 042 248 bayt): altı hız anahtarı, null eleme, satır erteleme,
+Android'de varsayılan eşzamanlı işaretleme ve tembel süpürme, 5 sınıflı bölge. Koşu 147 sn: menü, yeni dünya oluşturma, oynanış.
+Karşılaştırma: önceki rapor `095403` (altı hız anahtarlı motor, çöp toplayıcı varsayılanları ve bölge yok, 209 sn).
+
+| | önceki (095403) | v3 (163957) |
+|---|---|---|
+| FPS, 20. sn sonrası, ortalama | 12,1 | 45,6 |
+| FPS, 20. sn sonrası, ortanca | 3,9 | 43,8 |
+| 15 FPS altındaki örnekler | %78 | %18 |
+| 50 FPS ve üstü örnekler | %10 | %40 |
+| en yüksek PSS | 2 575 MB | 2 860 MB |
+
+v3 koşusunun 10 sn'lik dilimleri (FPS ortanca): 10-30 sn menü 58-59; 30-60 sn dünya oluşturma ve yükleme 7-22 (işlemci %50);
+60-100 sn oynanış 65-89; 100-150 sn 24-43 (düşüş). Önceki raporda dünya yükleme aşaması yaklaşık 110 sn sürüp 3-17 FPS'te kalmıştı;
+v3'te yaklaşık 30 sn.
+
+**Dikkat:** tek koşu ve iki rapor arasında oyuncunun ne yaptığı kontrol edilmedi; kontrollü bir A/B karşılaştırması değil. Yönü gösterir,
+büyüklüğü kesin değildir.
+
+**Açık sorular:**
+- 100. sn'den sonra FPS 90'dan 24'e iniyor, işlemci %40-47'de sabit, PSS 2,7'den 2,86 GB'a çıkıyor (native 1,5'ten 1,67 GB'a).
+  Nedeni bilinmiyor: adaylar telefonun ısınması (termal kısma), oyuncu ilerledikçe yeni yonga üretimi, çöp toplayıcı. Rapor çöp
+  toplayıcı kaydı içermiyor (cihazda kapalı), bu yüzden duraklamalar görülemedi. `native_mb` motorun kendi yığınını da içerir:
+  artış sızıntı mı yoksa dünya yüklenmesi mi, bu raporla ayırt edilemez.
+- Ekran görüntüleri yalnızca ilk 1 200 kareyi (dünya oluşturma menüsü) kapsıyor; oynanış karesi yok.
+- Çökme yok: `native_crash.txt` ve çökme raporu yok; süreç çıkışı kullanıcı kapatması.
+
+**Sonraki adım:** Android'de `MONO_GC_PHASES` varsayılan açık (az satır: toplama başına bir), böylece sonraki raporda duraklamalar ve
+canlı veri görülür; ardından uzun bir koşu (5 dk+) ile düşüşün zamanla sürüp sürmediği ölçülür.
