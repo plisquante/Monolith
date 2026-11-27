@@ -117,6 +117,40 @@
         "pal_value_for": "net/minecraft/world/level/chunk/Palette.valueFor(I)Ljava/lang/Object;",
         "pal_id_for": "net/minecraft/world/level/chunk/Palette.idFor(Ljava/lang/Object;Lnet/minecraft/world/level/chunk/PaletteResize;)I"
       }
+    },
+    "palette.rs": {
+      "fields": {
+        "pc_data": "net/minecraft/world/level/chunk/PalettedContainer.data",
+        "data_storage": "net/minecraft/world/level/chunk/PalettedContainer$Data.storage",
+        "data_palette": "net/minecraft/world/level/chunk/PalettedContainer$Data.palette",
+        "sbs_size": "net/minecraft/util/SimpleBitStorage.size",
+        "sbs_data": "net/minecraft/util/SimpleBitStorage.data",
+        "sbs_mask": "net/minecraft/util/SimpleBitStorage.mask",
+        "sbs_bits": "net/minecraft/util/SimpleBitStorage.bits",
+        "sbs_values_per_long": "net/minecraft/util/SimpleBitStorage.valuesPerLong",
+        "sbs_divide_mul": "net/minecraft/util/SimpleBitStorage.divideMul",
+        "sbs_divide_add": "net/minecraft/util/SimpleBitStorage.divideAdd",
+        "sbs_divide_shift": "net/minecraft/util/SimpleBitStorage.divideShift",
+        "zbs_size": "net/minecraft/util/ZeroBitStorage.size",
+        "lp_values": "net/minecraft/world/level/chunk/LinearPalette.values",
+        "lp_size": "net/minecraft/world/level/chunk/LinearPalette.size",
+        "hp_values": "net/minecraft/world/level/chunk/HashMapPalette.values",
+        "bimap_by_id": "net/minecraft/util/CrudeIncrementalIntIdentityHashBiMap.byId",
+        "sv_value": "net/minecraft/world/level/chunk/SingleValuePalette.value",
+        "pc_strategy": "net/minecraft/world/level/chunk/PalettedContainer.strategy",
+        "st_bits_per_axis": "net/minecraft/world/level/chunk/Strategy.bitsPerAxis"
+      },
+      "classes": {
+        "SimpleBitStorage": "net/minecraft/util/SimpleBitStorage",
+        "ZeroBitStorage": "net/minecraft/util/ZeroBitStorage",
+        "LinearPalette": "net/minecraft/world/level/chunk/LinearPalette",
+        "HashMapPalette": "net/minecraft/world/level/chunk/HashMapPalette",
+        "BiMap": "net/minecraft/util/CrudeIncrementalIntIdentityHashBiMap",
+        "SingleValuePalette": "net/minecraft/world/level/chunk/SingleValuePalette",
+        "PalettedContainer": "net/minecraft/world/level/chunk/PalettedContainer",
+        "Strategy1": "net/minecraft/world/level/chunk/Strategy$1",
+        "Strategy2": "net/minecraft/world/level/chunk/Strategy$2"
+      }
     }
   },
   "patches": [
@@ -339,6 +373,24 @@
       "fn": "reencode_contents",
       "orig": true,
       "fingerprint": "dd4aa5ed69027c94"
+    },
+    {
+      "class": "net/minecraft/world/level/chunk/PalettedContainer",
+      "method": "get",
+      "desc": "(I)Ljava/lang/Object;",
+      "file": "palette.rs",
+      "fn": "pc_get",
+      "orig": true,
+      "fingerprint": "6681cf3073ed0cd9"
+    },
+    {
+      "class": "net/minecraft/world/level/chunk/PalettedContainer",
+      "method": "get",
+      "desc": "(III)Ljava/lang/Object;",
+      "file": "palette.rs",
+      "fn": "pc_get3",
+      "orig": true,
+      "fingerprint": "7496e95a4d98df92"
     }
   ]
 }
