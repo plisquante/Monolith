@@ -54,15 +54,18 @@ pub fn init() {
         let mut prev_t = std::time::Instant::now();
         // takılma bekçisi: kareler 3 tur (6 sn) üst üste ilerlemezse bir kez tüm Java iş parçacıklarının yığın izini yazar
         let (mut last_frames, mut still, mut dumped) = (0u64, 0u32, false);
-        let (mut hot, mut hot_name, mut hot_dumped) = (0u32, String::new(), String::new());
+        let (mut hot, mut hot_name) = (0u32, String::new());
+        let mut hot_seen: Vec<String> = Vec::new();
         loop {
             std::thread::sleep(std::time::Duration::from_secs(2));
             mem_line();
             let (t, rows) = threads_line(&mut prev, prev_t);
             prev_t = t;
-            // sıcak işçi bekçisi: aynı "Worker" iş parçacığı 5 tur (10 sn) üst üste %90'ın üstündeyse bir kez yığınları yaz
+            // sıcak iş parçacığı bekçisi: aynı iş parçacığı 5 tur (10 sn) üst üste %90'ın üstündeyse yığınları yaz
             // (tek işçinin dolup diğerlerinin boşta kalması: bölüm yeniden oluşturma işleri onun kuyruğunda bekliyor olabilir)
-            match rows.iter().find(|r| r.1.starts_with("Worker") && r.0 >= 90.0) {
+            // her iş parçacığı adı için bir kez, oturumda en çok 5 döküm (ana iş parçacığı oyun sırasında da %90'ı geçebilir:
+            // döküm o zaman da yazılır, ama bir kez). Ad "#tid" ile ayrılır: aynı ad yeni bir iş parçacığında yeniden sayılır.
+            match rows.iter().find(|r| r.0 >= 90.0 && !r.1.starts_with("mono-sampler") && !hot_seen.contains(&r.1)) {
                 Some(r) if r.1 == hot_name => hot += 1,
                 Some(r) => {
                     hot_name = r.1.clone();
@@ -73,9 +76,9 @@ pub fn init() {
                     hot_name.clear();
                 }
             }
-            if hot >= 5 && hot_dumped != hot_name {
-                hot_dumped = hot_name.clone();
-                eprintln!("[mono:hotworker] t={} {} {} sn'dir %90 üstünde; iş parçacıklarının yığınları:\n{}", now_ms(), hot_name, hot * 2, crate::rt::dump_fast_stacks(40));
+            if hot >= 5 && hot_seen.len() < 5 && !hot_seen.contains(&hot_name) {
+                hot_seen.push(hot_name.clone());
+                eprintln!("[mono:hot] t={} {} {} sn'dir %90 üstünde; iş parçacıklarının yığınları:\n{}", now_ms(), hot_name, hot * 2, crate::rt::dump_fast_stacks(40));
             }
             let fr = crate::natives_rhi::GL_FRAMES_TOTAL.load(std::sync::atomic::Ordering::Relaxed);
             if fr > 100 && fr == last_frames {
