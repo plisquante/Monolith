@@ -184,6 +184,9 @@ final class EngineResources {
             // user-defined engine switches, applied last so they override the defaults above
             applyExtraEnv(ctx, cfg.extraEnv);
             Os.setenv("TMPDIR", tmp.getAbsolutePath(), true);
+            // Android'de dosya adı kodlaması her zaman UTF-8. Motor (Linux kuralı) LANG/LC_ALL'dan okur; tanımlı değilse
+            // ASCII seçer ve dosya adlarındaki Türkçe harfler "?" olur ("Yeni D?nya"). Kullanıcı kendisi verdiyse dokunma.
+            if (Os.getenv("LC_ALL") == null && Os.getenv("LANG") == null) Os.setenv("LANG", "C.UTF-8", true);
             File jar = new File(cfg.clientJarPath == null ? "" : cfg.clientJarPath);
             File verDir = jar.getParentFile();
             if (verDir == null || !jar.isFile()) return;
