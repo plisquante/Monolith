@@ -54,10 +54,29 @@ pub fn init() {
         let mut prev_t = std::time::Instant::now();
         // takılma bekçisi: kareler 3 tur (6 sn) üst üste ilerlemezse bir kez tüm Java iş parçacıklarının yığın izini yazar
         let (mut last_frames, mut still, mut dumped) = (0u64, 0u32, false);
+        let (mut hot, mut hot_name, mut hot_dumped) = (0u32, String::new(), String::new());
         loop {
             std::thread::sleep(std::time::Duration::from_secs(2));
             mem_line();
-            prev_t = threads_line(&mut prev, prev_t);
+            let (t, rows) = threads_line(&mut prev, prev_t);
+            prev_t = t;
+            // sıcak işçi bekçisi: aynı "Worker" iş parçacığı 5 tur (10 sn) üst üste %90'ın üstündeyse bir kez yığınları yaz
+            // (tek işçinin dolup diğerlerinin boşta kalması: bölüm yeniden oluşturma işleri onun kuyruğunda bekliyor olabilir)
+            match rows.iter().find(|r| r.1.starts_with("Worker") && r.0 >= 90.0) {
+                Some(r) if r.1 == hot_name => hot += 1,
+                Some(r) => {
+                    hot_name = r.1.clone();
+                    hot = 1;
+                }
+                None => {
+                    hot = 0;
+                    hot_name.clear();
+                }
+            }
+            if hot >= 5 && hot_dumped != hot_name {
+                hot_dumped = hot_name.clone();
+                eprintln!("[mono:hotworker] t={} {} {} sn'dir %90 üstünde; iş parçacıklarının yığınları:\n{}", now_ms(), hot_name, hot * 2, crate::rt::dump_fast_stacks(40));
+            }
             let fr = crate::natives_rhi::GL_FRAMES_TOTAL.load(std::sync::atomic::Ordering::Relaxed);
             if fr > 100 && fr == last_frames {
                 still += 1;
@@ -120,7 +139,7 @@ fn task_times() -> Vec<(u32, String, u64)> {
     out
 }
 
-fn threads_line(prev: &mut std::collections::HashMap<u32, (String, u64)>, prev_t: std::time::Instant) -> std::time::Instant {
+fn threads_line(prev: &mut std::collections::HashMap<u32, (String, u64)>, prev_t: std::time::Instant) -> (std::time::Instant, Vec<(f64, String)>) {
     let now = std::time::Instant::now();
     let dt = now.duration_since(prev_t).as_secs_f64().max(0.001);
     const HZ: f64 = 100.0; // Linux/Android USER_HZ (sysconf(_SC_CLK_TCK)) her iki platformda 100
@@ -141,5 +160,5 @@ fn threads_line(prev: &mut std::collections::HashMap<u32, (String, u64)>, prev_t
     let total: f64 = rows.iter().map(|r| r.0).sum::<f64>() + 0.0; // boş toplam -0.0 olmasın
     let top: Vec<String> = rows.iter().take(10).map(|(p, n)| format!("{n}={p:.0}%")).collect();
     eprintln!("[mono:threads] t={} total={:.0}% {}", now_ms(), total, top.join(" "));
-    now
+    (now, rows)
 }
