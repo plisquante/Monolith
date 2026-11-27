@@ -184,6 +184,11 @@
         "Rect": "net/minecraft/client/gui/navigation/ScreenRectangle",
         "Pos": "net/minecraft/client/gui/navigation/ScreenPosition"
       }
+    },
+    "density.rs": {
+      "fields": {
+        "values": "net/minecraft/world/level/levelgen/densityfunction/DensityBuffer.values"
+      }
     }
   },
   "patches": [
@@ -478,6 +483,25 @@
       "fn": "intersects",
       "orig": true,
       "fingerprint": "f3d41ad0e41b6e28"
+    },
+    {
+      "class": "net/minecraft/world/level/levelgen/densityfunction/DensityBuffer",
+      "method": "get",
+      "desc": "(I)F",
+      "file": "density.rs",
+      "fn": "get_value",
+      "orig": true,
+      "fingerprint": "444ae654fc20ad50"
+    },
+    {
+      "class": "net/minecraft/world/level/levelgen/densityfunction/DensityBuffer",
+      "method": "set",
+      "desc": "(IF)V",
+      "file": "density.rs",
+      "fn": "set_value",
+      "orig": true,
+      "verify": false,
+      "fingerprint": "022de69d28d1d407"
     }
   ]
 }
