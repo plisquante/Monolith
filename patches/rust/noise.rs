@@ -87,3 +87,32 @@ pub fn fiddled_distance(_orig: impl Fn(i64, i32, i32, i32, f64, f64, f64) -> rt:
     let c = dx + f1;
     Ok(a * a + b * b + c * c)
 }
+
+/// Climate$RTree$Node.distance(long[]): 7 boyutta Σ square(parameterSpace[i].distance(q[i])). Biyom ağacı aramasının iç
+/// döngüsü (Leaf ve SubTree bunu geçersiz kılmaz). Parameter final record: alanlar doğrudan okunur. long taşmaları wrapping.
+/// null / kısa dizi / null parametre orijinale gider (aynı istisna).
+pub fn node_distance(orig: impl Fn(rt::Ref, rt::Ref) -> rt::Res<i64>, this: rt::Ref, q: rt::Ref) -> rt::Res<i64> {
+    if this.is_null() || q.is_null() {
+        return orig(this, q);
+    }
+    unsafe {
+        let ps: rt::Ref = get(this, F_node_params);
+        if ps.is_null() || array_len(ps) < 7 || array_len(q) < 7 {
+            return orig(this, q);
+        }
+        let pa = array::<rt::Ref>(ps);
+        let qa = array::<i64>(q);
+        let mut sum = 0i64;
+        for i in 0..7 {
+            let p = pa[i];
+            if !is_Param(p) {
+                return orig(this, q);
+            }
+            let v = qa[i];
+            let above = v.wrapping_sub(get::<i64>(p, F_max));
+            let d = if above > 0 { above } else { get::<i64>(p, F_min).wrapping_sub(v).max(0) };
+            sum = sum.wrapping_add(d.wrapping_mul(d));
+        }
+        Ok(sum)
+    }
+}

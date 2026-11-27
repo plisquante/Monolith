@@ -197,7 +197,8 @@
         "g_y": "net/minecraft/world/level/levelgen/synth/GradientNoise$Gradient.y",
         "g_z": "net/minecraft/world/level/levelgen/synth/GradientNoise$Gradient.z",
         "min": "net/minecraft/world/level/biome/Climate$Parameter.min",
-        "max": "net/minecraft/world/level/biome/Climate$Parameter.max"
+        "max": "net/minecraft/world/level/biome/Climate$Parameter.max",
+        "node_params": "net/minecraft/world/level/biome/Climate$RTree$Node.parameterSpace"
       },
       "statics": {
         "gradient": "net/minecraft/world/level/levelgen/synth/GradientNoise.GRADIENT"
@@ -597,6 +598,15 @@
       "fn": "fiddled_distance",
       "orig": true,
       "fingerprint": "ff61c1d0f89505bc"
+    },
+    {
+      "class": "net/minecraft/world/level/biome/Climate$RTree$Node",
+      "method": "distance",
+      "desc": "([J)J",
+      "file": "noise.rs",
+      "fn": "node_distance",
+      "orig": true,
+      "fingerprint": "f8c0016b051827de"
     }
   ]
 }
