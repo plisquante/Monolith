@@ -116,3 +116,17 @@ pub fn node_distance(orig: impl Fn(rt::Ref, rt::Ref) -> rt::Res<i64>, this: rt::
         Ok(sum)
     }
 }
+
+/// GradientNoise.wrap(double) (statik): uzak koordinatları 2^25 periyotla sarar. HALF_ROUND_OFF = Math.nextDown(2^24)
+/// sabittir (sınıf başlatıcısında hesaplanır); burada aynı değer doğrudan kurulur, böylece sınıfın başlatılmış olması
+/// gerekmez. NaN Java'daki gibi hesaplama dalına düşer (karşılaştırmalar yanlış döner). Math.floor = f64::floor (IEEE).
+pub fn noise_wrap(orig: impl Fn(f64) -> rt::Res<f64>, d: f64) -> rt::Res<f64> {
+    if unsafe { *s_farlands() } != 0 {
+        return orig(d);
+    }
+    let h = f64::from_bits((16777216.0f64).to_bits() - 1);
+    if d >= -h && d < h {
+        return Ok(d);
+    }
+    Ok(d - (d / 33554432.0 + 0.5).floor() * 33554432.0)
+}

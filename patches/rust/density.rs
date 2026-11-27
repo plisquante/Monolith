@@ -29,3 +29,19 @@ pub fn set_value(orig: impl Fn(rt::Ref, i32, f32) -> rt::Res<()>, this: rt::Ref,
         Ok(())
     }
 }
+
+/// DensityBuffer.addTo(int, float): values[i] += v (float toplama, Java ile aynı).
+pub fn add_to(orig: impl Fn(rt::Ref, i32, f32) -> rt::Res<()>, this: rt::Ref, i: i32, v: f32) -> rt::Res<()> {
+    if this.is_null() {
+        return orig(this, i, v);
+    }
+    unsafe {
+        let a: rt::Ref = get(this, F_values);
+        if a.is_null() || (i as u32) >= (array_len(a) as u32) {
+            return orig(this, i, v);
+        }
+        let p = &mut array::<f32>(a)[i as usize];
+        *p += v;
+        Ok(())
+    }
+}

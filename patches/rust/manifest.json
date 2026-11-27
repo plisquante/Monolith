@@ -201,7 +201,8 @@
         "node_params": "net/minecraft/world/level/biome/Climate$RTree$Node.parameterSpace"
       },
       "statics": {
-        "gradient": "net/minecraft/world/level/levelgen/synth/GradientNoise.GRADIENT"
+        "gradient": "net/minecraft/world/level/levelgen/synth/GradientNoise.GRADIENT",
+        "farlands": "net/minecraft/SharedConstants.DEBUG_ENABLE_FARLANDS"
       },
       "classes": {
         "Gradient": "net/minecraft/world/level/levelgen/synth/GradientNoise$Gradient",
@@ -607,6 +608,25 @@
       "fn": "node_distance",
       "orig": true,
       "fingerprint": "f8c0016b051827de"
+    },
+    {
+      "class": "net/minecraft/world/level/levelgen/synth/GradientNoise",
+      "method": "wrap",
+      "desc": "(D)D",
+      "file": "noise.rs",
+      "fn": "noise_wrap",
+      "orig": true,
+      "fingerprint": "17712df75332f1c2"
+    },
+    {
+      "class": "net/minecraft/world/level/levelgen/densityfunction/DensityBuffer",
+      "method": "addTo",
+      "desc": "(IF)V",
+      "file": "density.rs",
+      "fn": "add_to",
+      "orig": true,
+      "verify": false,
+      "fingerprint": "22b29cab64ac8963"
     }
   ]
 }
