@@ -171,6 +171,19 @@
       "calls": {
         "chunk_min_y": "net/minecraft/world/level/chunk/ChunkAccess.getMinY()I"
       }
+    },
+    "screen_rect.rs": {
+      "fields": {
+        "r_position": "net/minecraft/client/gui/navigation/ScreenRectangle.position",
+        "r_width": "net/minecraft/client/gui/navigation/ScreenRectangle.width",
+        "r_height": "net/minecraft/client/gui/navigation/ScreenRectangle.height",
+        "p_x": "net/minecraft/client/gui/navigation/ScreenPosition.x",
+        "p_y": "net/minecraft/client/gui/navigation/ScreenPosition.y"
+      },
+      "classes": {
+        "Rect": "net/minecraft/client/gui/navigation/ScreenRectangle",
+        "Pos": "net/minecraft/client/gui/navigation/ScreenPosition"
+      }
     }
   },
   "patches": [
@@ -420,6 +433,51 @@
       "fn": "lc_get_block_state",
       "orig": true,
       "fingerprint": "58d4f9a8cd33fd1d"
+    },
+    {
+      "class": "net/minecraft/client/gui/navigation/ScreenRectangle",
+      "method": "left",
+      "desc": "()I",
+      "file": "screen_rect.rs",
+      "fn": "left",
+      "orig": true,
+      "fingerprint": "d2a3d5a2bd3f63bd"
+    },
+    {
+      "class": "net/minecraft/client/gui/navigation/ScreenRectangle",
+      "method": "right",
+      "desc": "()I",
+      "file": "screen_rect.rs",
+      "fn": "right",
+      "orig": true,
+      "fingerprint": "38a4b27a2c711fd5"
+    },
+    {
+      "class": "net/minecraft/client/gui/navigation/ScreenRectangle",
+      "method": "top",
+      "desc": "()I",
+      "file": "screen_rect.rs",
+      "fn": "top",
+      "orig": true,
+      "fingerprint": "819c1efced4bd78c"
+    },
+    {
+      "class": "net/minecraft/client/gui/navigation/ScreenRectangle",
+      "method": "bottom",
+      "desc": "()I",
+      "file": "screen_rect.rs",
+      "fn": "bottom",
+      "orig": true,
+      "fingerprint": "b095fd2875a6d995"
+    },
+    {
+      "class": "net/minecraft/client/gui/navigation/ScreenRectangle",
+      "method": "intersects",
+      "desc": "(Lnet/minecraft/client/gui/navigation/ScreenRectangle;)Z",
+      "file": "screen_rect.rs",
+      "fn": "intersects",
+      "orig": true,
+      "fingerprint": "f3d41ad0e41b6e28"
     }
   ]
 }
