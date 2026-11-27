@@ -95,11 +95,19 @@ def main() -> int:
                "--main", mb.MAIN_CLASS, "--no-lwjgl", "--shards", str(a.shards), "-o", rust] + (
                    ["--android", "--api", str(a.api)] + (["--ndk", a.ndk] if a.ndk else []) if a.android else []) + (
                    (["--escape"] if a.escape else []) + (["--inline"] if a.inline else []))
+        t_gen_start = __import__("time").time()
         if subprocess.run(gen, cwd=ROOT).returncode:
             return 1
         if a.transpile_only:
             print(f"transpiled: {rust}")
             return 0
+        if a.android and os.path.isfile(os.path.join(rust, "libminecraft_mono.so")) and not a.reuse_objs:
+            # --android ile rustgen çeviriden sonra .so'yu zaten derler; aşağıdaki --resume adımı aynı parçaları ikinci
+            # kez derliyordu (tam derlemede ~30 dk boşa). .so'nun bu çalıştırmada yazıldığı denetlenir.
+            so = os.path.join(rust, "libminecraft_mono.so")
+            if os.path.getmtime(so) >= t_gen_start:
+                print(f"done: {so}")
+                return 0
     comp = common + ["--cp", "-", "--main", "-", "--resume"] + ([] if a.android else ["--compile"]) + (["--reuse-objs"] if a.reuse_objs else [])
     if subprocess.run(comp, cwd=ROOT).returncode:
         return 1
