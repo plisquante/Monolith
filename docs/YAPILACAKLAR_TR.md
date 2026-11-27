@@ -103,3 +103,14 @@ orijinale), bytecode parmak izi, `MONO_PATCH_VERIFY=1` ve fark testleri (`monoli
 | E6 | Dünya üretimi: `DensityBuffer`, `Aquifer`, `GradientNoise`, `BiomeManager.getBiome`, `Climate` | işçi | bekliyor |
 | E7 | GUI kesişim denetimleri (`GuiRenderState.hasIntersection`, `ScreenRectangle`) | çizim | bekliyor (F3 açıkken belirgin) |
 | E8 | Yamalar için çalışma zamanı kapatma anahtarı (yeniden derlemeden devre dışı bırakmak, A/B ölçümü) | - | bekliyor |
+
+## F. Fabric + shader yolu (27 Kasım 2026 kararı)
+
+Sıra: (1) E bölümündeki sıcak alan yamaları, (2) F, (3) yeniden sıcak alan yamaları, (4) final.
+
+| # | iş | durum |
+|---|---|---|
+| F1 | Fabric Loader + Mixin derleme anında uygulanır (çalışırken bytecode değişmez: AOT); dönüştürülmüş sınıflar Rust'a çevrilir. İlk hedef: Fabric API ile masaüstünde açılış | bekliyor |
+| F2 | wgpu çizim arka ucu (Minecraft arka uç arayüzü Rust'ta); GL arka ucu yerinde kalır, anahtarla seçilir. Önce masaüstü Vulkan, sonra Android | bekliyor |
+| F3 | Gölgelendirici çevirisi (GLSL -> naga -> wgpu) | bekliyor |
+| F4 | Sodium/Iris benzeri mod ve bir shader paketi | bekliyor |
