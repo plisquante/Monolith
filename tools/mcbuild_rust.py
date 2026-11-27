@@ -25,7 +25,10 @@ if "%MC_GAME_DIR%"=="" set "MC_GAME_DIR=%HERE%game"
 if not exist "%MC_GAME_DIR%" mkdir "%MC_GAME_DIR%"
 if "%MC_GRAPHICS%"=="" set "MC_GRAPHICS=opengl"
 if "%MC_USERNAME%"=="" set "MC_USERNAME=Player"
-"%HERE%rust\\prog.exe" -Djavax.net.ssl.trustStore="%HERE%resources\\cacerts" -Djavax.net.ssl.trustStoreType=JKS -Dmono.graphics.backend=%MC_GRAPHICS% --version {vid} --gameDir "%MC_GAME_DIR%" --assetsDir "%HERE%assets" --assetIndex {idx} --username %MC_USERNAME% --accessToken 0 --userType legacy %*
+rem Minecraft'in cevrimdisi kipi: Realms ve oturum agi denemeleri yok. MC_ONLINE=1 eski yol.
+set "OFFLINE=--offlineDeveloperMode"
+if "%MC_ONLINE%"=="1" set "OFFLINE="
+"%HERE%rust\\prog.exe" -Djavax.net.ssl.trustStore="%HERE%resources\\cacerts" -Djavax.net.ssl.trustStoreType=JKS -Dmono.graphics.backend=%MC_GRAPHICS% --version {vid} --gameDir "%MC_GAME_DIR%" --assetsDir "%HERE%assets" --assetIndex {idx} --username %MC_USERNAME% --accessToken 0 --userType legacy %OFFLINE% %*
 """
 
 RUN_SH = """#!/bin/sh
@@ -34,8 +37,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 export MONO_RESOURCES="$HERE/resources"
 GAME_DIR="${{MC_GAME_DIR:-$HERE/game}}"
 mkdir -p "$GAME_DIR"
+# Minecraft'ın çevrimdışı kipi: Realms ve oturum ağı denemeleri yok. MC_ONLINE=1 eski yol.
+OFFLINE=--offlineDeveloperMode; [ "${{MC_ONLINE:-0}}" = 1 ] && OFFLINE=
 exec "$HERE/rust/prog" -Djavax.net.ssl.trustStore="$HERE/resources/cacerts" -Djavax.net.ssl.trustStoreType=JKS -Dmono.graphics.backend="${{MC_GRAPHICS:-opengl}}" --version {vid} --gameDir "$GAME_DIR" \\
-  --assetsDir "$HERE/assets" --assetIndex {idx} --username "${{MC_USERNAME:-Player}}" --accessToken 0 --userType legacy "$@"
+  --assetsDir "$HERE/assets" --assetIndex {idx} --username "${{MC_USERNAME:-Player}}" --accessToken 0 --userType legacy $OFFLINE "$@"
 """
 
 

@@ -2714,6 +2714,9 @@ pub extern "C" fn mono_android_entry(user: *const c_char, gdir: *const c_char, a
         if let Ok(idx) = std::env::var("MC_ASSET_INDEX") {
             if !idx.is_empty() { args.push("--assetIndex".to_string()); args.push(idx); }
         }
+        // Minecraft'ın kendi çevrimdışı kipi: Realms denetimi, kullanıcı özelliklerini çekme ve sohbet imza anahtarı
+        // isteği yapılmaz (ağ denemesi ve "Couldn't connect to realms" hataları kalkar; oynanışa etkisi yok). MC_ONLINE=1 eski yol.
+        if std::env::var("MC_ONLINE").map_or(true, |v| v != "1") { args.push("--offlineDeveloperMode".to_string()); }
     }
     if let Ok(b) = std::env::var("MONO_RHI_BACKEND") {
         if !b.is_empty() { args.push(format!("-Dmono.graphics.backend={}", b)); }
