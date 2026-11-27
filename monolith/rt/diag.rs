@@ -52,10 +52,24 @@ pub fn init() {
     let _ = std::thread::Builder::new().name("mono-diag".into()).spawn(|| {
         let mut prev: std::collections::HashMap<u32, (String, u64)> = std::collections::HashMap::new();
         let mut prev_t = std::time::Instant::now();
+        // takılma bekçisi: kareler 3 tur (6 sn) üst üste ilerlemezse bir kez tüm Java iş parçacıklarının yığın izini yazar
+        let (mut last_frames, mut still, mut dumped) = (0u64, 0u32, false);
         loop {
             std::thread::sleep(std::time::Duration::from_secs(2));
             mem_line();
             prev_t = threads_line(&mut prev, prev_t);
+            let fr = crate::natives_rhi::GL_FRAMES_TOTAL.load(std::sync::atomic::Ordering::Relaxed);
+            if fr > 100 && fr == last_frames {
+                still += 1;
+                if still >= 3 && !dumped {
+                    dumped = true;
+                    eprintln!("[mono:stall] t={} kareler {} sn'dir durmuş; iş parçacıklarının yığınları:\n{}", now_ms(), still * 2, crate::rt::dump_fast_stacks(40));
+                }
+            } else {
+                still = 0;
+                dumped = false;
+            }
+            last_frames = fr;
         }
     });
 }

@@ -1669,6 +1669,7 @@ impl Drop for FastFree {
     fn drop(&mut self) {
         // FAST'in Drop'u olmadığı için bu noktada hâlâ erişilebilir.
         with_fast(|f| unsafe {
+            fast_unregister(f);
             if f.cap > 0 {
                 drop(Vec::from_raw_parts(f.p, 0, f.cap));
                 f.p = std::ptr::null_mut();
@@ -1677,6 +1678,62 @@ impl Drop for FastFree {
             }
         });
     }
+}
+
+// ---- MONO_DIAG takılma dökümü: iş parçacıklarının çerçeve yığınlarının adresleri. Yalnızca MONO_DIAG açıkken doldurulur
+// (ilk çerçeve tamponu ayrılırken kaydolur, iş parçacığı biterken silinir). diag.rs, kareler durduğunda (çizim iş parçacığı bir
+// yerde bekliyorsa) bunlardan her Java iş parçacığının o anki yığın izini yazar. Okuma kilitsizdir ve çalışan iş parçacıklarının
+// yığını o an değişiyor olabilir: döküm yalnızca tanı içindir (en çok MAX_DUMP_FRAMES çerçeve, işaretçiler denetlenir).
+static FAST_REG: std::sync::Mutex<Vec<(usize, i32)>> = std::sync::Mutex::new(Vec::new());
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn os_tid() -> i32 {
+    extern "C" {
+        fn gettid() -> i32;
+    }
+    unsafe { gettid() }
+}
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn os_tid() -> i32 {
+    0
+}
+fn fast_register(f: &mut FastStack) {
+    if crate::diag::on() {
+        if let Ok(mut r) = FAST_REG.lock() {
+            r.push((f as *mut FastStack as usize, os_tid()));
+        }
+    }
+}
+fn fast_unregister(f: &mut FastStack) {
+    if crate::diag::on() {
+        if let Ok(mut r) = FAST_REG.lock() {
+            let a = f as *mut FastStack as usize;
+            r.retain(|e| e.0 != a);
+        }
+    }
+}
+/// Kayıtlı her iş parçacığının yığın izi (en içten başlayarak, en çok `max` çerçeve).
+pub fn dump_fast_stacks(max: usize) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    let Ok(r) = FAST_REG.lock() else { return out };
+    for &(addr, tid) in r.iter() {
+        let name = std::fs::read_to_string(format!("/proc/self/task/{tid}/comm")).unwrap_or_default();
+        let f = unsafe { &*(addr as *const FastStack) };
+        let (p, len, cap) = (f.p, f.len, f.cap);
+        let _ = writeln!(out, "-- {} #{} ({} çerçeve)", name.trim(), tid, len);
+        if p.is_null() || len > cap {
+            continue;
+        }
+        for i in (0..len).rev().take(max) {
+            let s = unsafe { *p.add(i) };
+            if s.info.is_null() {
+                continue;
+            }
+            let fi = unsafe { &*s.info };
+            let _ = writeln!(out, "    at {}.{}({}:{})", fi.class.replace('/', "."), fi.method, fi.file, s.line);
+        }
+    }
+    out
 }
 
 #[cold]
@@ -1690,6 +1747,7 @@ fn fast_grow(f: &mut FastStack) {
             drop(Vec::from_raw_parts(f.p, 0, f.cap));
         } else {
             FAST_FREE.with(|_| ()); // ilk ayırma: iş parçacığı bitince tamponu geri verecek nesneyi kaydet
+            fast_register(f);
         }
     }
     f.p = v.as_mut_ptr();

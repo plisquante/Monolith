@@ -514,6 +514,8 @@ fn gl_diag() -> &'static GlDiag {
     })
 }
 static GS_FRAMES: AtomicU64 = AtomicU64::new(0);
+/// Toplam kare sayısı (sıfırlanmaz): diag.rs takılma bekçisi kareler durdu mu diye bakar.
+pub static GL_FRAMES_TOTAL: AtomicU64 = AtomicU64::new(0);
 static GS_DRAWS: AtomicU64 = AtomicU64::new(0);
 static GS_ELEMS: AtomicU64 = AtomicU64::new(0);
 static GS_UPLOAD: AtomicU64 = AtomicU64::new(0);
@@ -566,6 +568,7 @@ fn gs_frame() {
         return;
     }
     GS_FRAMES.fetch_add(1, Ordering::Relaxed);
+    GL_FRAMES_TOTAL.fetch_add(1, Ordering::Relaxed);
     let now = now_ms();
     let last = GS_LAST_MS.load(Ordering::Relaxed);
     if last == 0 {
