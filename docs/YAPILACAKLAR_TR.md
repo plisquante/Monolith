@@ -114,3 +114,27 @@ Sıra: (1) E bölümündeki sıcak alan yamaları, (2) F, (3) yeniden sıcak ala
 | F2 | wgpu çizim arka ucu (Minecraft arka uç arayüzü Rust'ta); GL arka ucu yerinde kalır, anahtarla seçilir. Önce masaüstü Vulkan, sonra Android | bekliyor |
 | F3 | Gölgelendirici çevirisi (GLSL -> naga -> wgpu) | bekliyor |
 | F4 | Sodium/Iris benzeri mod ve bir shader paketi | bekliyor |
+
+## G. Derleme anında seçilen kipler (27 Kasım 2026 kararı)
+
+Sıra: E (sıcak alan yamaları) -> F (Fabric; sonucu ne olursa olsun) -> G. Kip derleme betiğine parametre olarak verilir;
+kipe göre açılış bayrakları ve kısıtlama yamaları motora eklenir. Kullanıcı derlenmiş kipi değiştiremez.
+
+| kip | derleme anında belirlenen | kullanıcının yapamayacağı |
+|---|---|---|
+| **Tam** (varsayılan, bugünkü hal) | - | kısıtlama yok |
+| **Yalnızca çok oyunculu** | sunucu adresi; isteğe bağlı doku paketi ve yükleme ekranı | ana menüye dönmek, başka sunucuya ya da tek oyunculuya geçmek. Bağlantı koparsa ana menü yerine yeniden bağlanma ya da kapanma |
+| **Yalnızca tek oyunculu** | dünya (derlemeye gömülür, ilk açılışta oyun klasörüne kopyalanır), doku paketi, yükleme ekranı | dünyadan çıkmak, yeni dünya açmak, doku paketini değiştirmek. İlerleme kaydedilir (dünya her açılışta sıfırlanmaz) |
+| **Fabric olursa (her kipte)** | mod listesi ve shader paketi | mod ya da shader eklemek, çıkarmak, değiştirmek |
+
+Teknik yol: Minecraft'ın Quick Play açılış bayrakları (`--quickPlayMultiplayer <adres:port>`,
+`--quickPlaySingleplayer <dünya>`): bağlantı ve dünya yükleme açılış yükleme ekranının arkasında başlar. Kısıtlamalar Rust
+yamalarıyla (Bağlantıyı kes / Kaydet ve çık düğmeleri, ana menü, doku paketi ve dünya seçim ekranları).
+
+| # | iş | durum |
+|---|---|---|
+| G1 | Derleme parametresi: `--mode full|multiplayer|singleplayer` (+ sunucu adresi / dünya klasörü / doku paketi) | bekliyor |
+| G2 | Yalnızca çok oyunculu: Quick Play + menüden çıkış engeli + kopmada yeniden bağlanma | bekliyor |
+| G3 | Yalnızca tek oyunculu: dünyayı gömme, ilk açılışta kopyalama, Quick Play, çıkış ve dünya seçimi engeli | bekliyor |
+| G4 | Doku paketi ve yükleme ekranının derlemeye sabitlenmesi | bekliyor |
+| G5 | (F'ye bağlı) mod ve shader listesinin sabitlenmesi | bekliyor |
