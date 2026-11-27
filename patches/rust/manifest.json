@@ -189,6 +189,23 @@
       "fields": {
         "values": "net/minecraft/world/level/levelgen/densityfunction/DensityBuffer.values"
       }
+    },
+    "noise.rs": {
+      "fields": {
+        "perms": "net/minecraft/world/level/levelgen/synth/GradientNoise.perms",
+        "g_x": "net/minecraft/world/level/levelgen/synth/GradientNoise$Gradient.x",
+        "g_y": "net/minecraft/world/level/levelgen/synth/GradientNoise$Gradient.y",
+        "g_z": "net/minecraft/world/level/levelgen/synth/GradientNoise$Gradient.z",
+        "min": "net/minecraft/world/level/biome/Climate$Parameter.min",
+        "max": "net/minecraft/world/level/biome/Climate$Parameter.max"
+      },
+      "statics": {
+        "gradient": "net/minecraft/world/level/levelgen/synth/GradientNoise.GRADIENT"
+      },
+      "classes": {
+        "Gradient": "net/minecraft/world/level/levelgen/synth/GradientNoise$Gradient",
+        "Param": "net/minecraft/world/level/biome/Climate$Parameter"
+      }
     }
   },
   "patches": [
@@ -502,6 +519,42 @@
       "orig": true,
       "verify": false,
       "fingerprint": "022de69d28d1d407"
+    },
+    {
+      "class": "net/minecraft/util/LinearCongruentialGenerator",
+      "method": "next",
+      "desc": "(JJ)J",
+      "file": "noise.rs",
+      "fn": "lcg_next",
+      "orig": true,
+      "fingerprint": "06930b0c715b0191"
+    },
+    {
+      "class": "net/minecraft/world/level/levelgen/synth/GradientNoise",
+      "method": "permute",
+      "desc": "(I)I",
+      "file": "noise.rs",
+      "fn": "permute",
+      "orig": true,
+      "fingerprint": "2ac3cfc79ce65848"
+    },
+    {
+      "class": "net/minecraft/world/level/levelgen/synth/GradientNoise",
+      "method": "gradDot",
+      "desc": "(IFFF)F",
+      "file": "noise.rs",
+      "fn": "grad_dot",
+      "orig": true,
+      "fingerprint": "eee839c683942701"
+    },
+    {
+      "class": "net/minecraft/world/level/biome/Climate$Parameter",
+      "method": "distance",
+      "desc": "(J)J",
+      "file": "noise.rs",
+      "fn": "param_distance",
+      "orig": true,
+      "fingerprint": "cf56884bb9f46197"
     }
   ]
 }
