@@ -555,7 +555,7 @@ pub struct ICEntry {
     next: std::sync::atomic::AtomicPtr<ICEntry>,
 }
 
-/// MONO_IC_POLY=1 (çalışma zamanı, varsayılan KAPALI): çağrı yeri önbelleği çok girişli olur. Eski yol yalnızca İLK görülen
+/// MONO_IC_POLY (çalışma zamanı, varsayılan AÇIK; =0 kapatır): çağrı yeri önbelleği çok girişli olur. Eski yol yalnızca İLK görülen
 /// sınıfı saklar; başka sınıf gören çağrı yeri (çok biçimli: List'in birkaç uygulaması gibi) her seferinde yavaş yoldan gider
 /// (`itab_find` ikili arama, `instance_of` üst sınıf zinciri). S26 v14 profilinde `itab_find_ic_slow` + `is_subclass` CPU'nun
 /// %5-7'si. Açıkken yavaş yol önce zincirde arar, bulamazsa hesaplayıp zincirin sonuna ekler. Kayıtlar hiç değişmez ve
@@ -563,7 +563,8 @@ pub struct ICEntry {
 const IC_POLY_MAX: usize = 8;
 fn ic_poly() -> bool {
     static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *V.get_or_init(|| std::env::var("MONO_IC_POLY").is_ok_and(|v| !v.is_empty() && v != "0"))
+    // 27 Kasım 2026'dan beri varsayılan AÇIK (S26: itab_find_ic_slow + is_subclass + fill %6,2 -> %3,6); "0" eski yolu getirir
+    *V.get_or_init(|| std::env::var("MONO_IC_POLY").map_or(true, |v| v != "0"))
 }
 impl Default for ICache {
     fn default() -> Self {
