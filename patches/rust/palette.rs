@@ -8,6 +8,19 @@
 // aralık dışı indeks, paletinde olmayan kimlik: Java'nın istisna fırlattığı durumlar) çevrilmiş orijinale gider; orijinal
 // aynı sonucu ya da aynı istisnayı üretir. Yan etki yok (yalnızca okuma).
 
+/// MONO_PATCH_VERIFY=1: hızlı yolun sonucu orijinalle karşılaştırılır (bu yamalar yalnızca okur, orijinali ikinci kez
+/// çalıştırmanın yan etkisi yok). Farklı nesne dönerse ilk farkta durur (patch::mismatch).
+#[inline(always)]
+fn checked(fast: rt::Ref, what: &str, orig: impl FnOnce() -> rt::Res<rt::Ref>) -> rt::Res<rt::Ref> {
+    if verify() {
+        match orig() {
+            Ok(o) if o.0 == fast.0 => {}
+            _ => mismatch(what),
+        }
+    }
+    Ok(fast)
+}
+
 #[inline(always)]
 fn bits_get(st: rt::Ref, i: i32) -> Option<i32> {
     unsafe {
@@ -81,7 +94,7 @@ pub fn pc_get(orig: impl Fn(rt::Ref, i32) -> rt::Res<rt::Ref>, this: rt::Ref, i:
     let (st, pal): (rt::Ref, rt::Ref) = unsafe { (get(data, F_data_storage), get(data, F_data_palette)) };
     if let Some(id) = bits_get(st, i) {
         if let Some(v) = palette_value(pal, id) {
-            return Ok(v);
+            return checked(v, "PalettedContainer.get(I)", || orig(this, i));
         }
     }
     orig(this, i)
@@ -107,8 +120,73 @@ pub fn pc_get3(orig: impl Fn(rt::Ref, i32, i32, i32) -> rt::Res<rt::Ref>, this: 
     let (st, pal): (rt::Ref, rt::Ref) = unsafe { (get(data, F_data_storage), get(data, F_data_palette)) };
     if let Some(id) = bits_get(st, i) {
         if let Some(v) = palette_value(pal, id) {
-            return Ok(v);
+            return checked(v, "PalettedContainer.get(III)", || orig(this, x, y, z));
         }
     }
     orig(this, x, y, z)
+}
+
+/// E2: LevelChunk.getBlockState(BlockPos). Çevrilmiş yol: üç sanal getX/getY/getZ, Level.isDebug, varsayılan arayüz
+/// metotlarıyla bölüm indeksi, LevelChunkSection.getBlockState -> PalettedContainer.get(x,y,z) -> get(i) -> iki arayüz çağrısı
+/// ve checkcast. Hızlı yol yalnızca: nesne tam olarak LevelChunk (EmptyLevelChunk gibi alt sınıflar getBlockState'i geçersiz
+/// kılar), konum tam olarak BlockPos ya da MutableBlockPos (getX/Y/Z'yi geçersiz kılmazlar), seviye hata ayıklama dünyası
+/// değil, bölüm boş değil ve palet okuması yukarıdaki yaygın biçimlerden. Boş (yalnızca hava) bölümde Blocks.AIR'in
+/// varsayılan durumu döner (Java ile aynı). Diğer her şey (null, aralık dışı, hata ayıklama dünyası) orijinale gider.
+pub fn lc_get_block_state(orig: impl Fn(rt::Ref, rt::Ref) -> rt::Res<rt::Ref>, this: rt::Ref, pos: rt::Ref) -> rt::Res<rt::Ref> {
+    if !is_LevelChunk(this) || !(is_BlockPos(pos) || is_MutableBlockPos(pos)) {
+        return orig(this, pos);
+    }
+    unsafe {
+        let level: rt::Ref = get(this, F_lc_level);
+        if level.is_null() || get::<u8>(level, F_level_is_debug) != 0 {
+            return orig(this, pos);
+        }
+        let (x, y, z) = (get::<i32>(pos, F_v_x), get::<i32>(pos, F_v_y), get::<i32>(pos, F_v_z));
+        let min_y = match c_chunk_min_y(this) {
+            Ok(v) => v,
+            Err(_) => return orig(this, pos),
+        };
+        let si = (y >> 4).wrapping_sub(min_y >> 4);
+        let secs: rt::Ref = get(this, F_ca_sections);
+        if secs.is_null() || si < 0 || (si as u32) >= (array_len(secs) as u32) {
+            return orig(this, pos);
+        }
+        let s = array::<rt::Ref>(secs)[si as usize];
+        if !is_LevelChunkSection(s) {
+            return orig(this, pos);
+        }
+        if get::<i16>(s, F_lcs_non_empty) == 0 {
+            // hasOnlyAir: Blocks.AIR.defaultBlockState()
+            let air: rt::Ref = *s_blocks_air();
+            if air.is_null() {
+                return orig(this, pos);
+            }
+            let st: rt::Ref = get(air, F_block_default_state);
+            return if st.is_null() { orig(this, pos) } else { checked(st, "LevelChunk.getBlockState (hava)", || orig(this, pos)) };
+        }
+        let pc: rt::Ref = get(s, F_lcs_states);
+        if !is_PalettedContainer(pc) {
+            return orig(this, pos);
+        }
+        let strat: rt::Ref = get(pc, F_pc_strategy);
+        if !is_Strategy1(strat) && !is_Strategy2(strat) {
+            return orig(this, pos);
+        }
+        let b = get::<i32>(strat, F_st_bits_per_axis) & 31;
+        let i = (((y & 15) << b) | (z & 15)) << b | (x & 15);
+        let data: rt::Ref = get(pc, F_pc_data);
+        if data.is_null() {
+            return orig(this, pos);
+        }
+        let (st, pal): (rt::Ref, rt::Ref) = (get(data, F_data_storage), get(data, F_data_palette));
+        if let Some(id) = bits_get(st, i) {
+            if let Some(v) = palette_value(pal, id) {
+                // Java'daki checkcast BlockState: tam sınıf değilse orijinal (aynı istisnayı fırlatır)
+                if is_BlockState(v) {
+                    return checked(v, "LevelChunk.getBlockState", || orig(this, pos));
+                }
+            }
+        }
+        orig(this, pos)
+    }
 }

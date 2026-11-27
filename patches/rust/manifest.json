@@ -138,7 +138,16 @@
         "bimap_by_id": "net/minecraft/util/CrudeIncrementalIntIdentityHashBiMap.byId",
         "sv_value": "net/minecraft/world/level/chunk/SingleValuePalette.value",
         "pc_strategy": "net/minecraft/world/level/chunk/PalettedContainer.strategy",
-        "st_bits_per_axis": "net/minecraft/world/level/chunk/Strategy.bitsPerAxis"
+        "st_bits_per_axis": "net/minecraft/world/level/chunk/Strategy.bitsPerAxis",
+        "lc_level": "net/minecraft/world/level/chunk/LevelChunk.level",
+        "level_is_debug": "net/minecraft/world/level/Level.isDebug",
+        "v_x": "net/minecraft/core/Vec3i.x",
+        "v_y": "net/minecraft/core/Vec3i.y",
+        "v_z": "net/minecraft/core/Vec3i.z",
+        "ca_sections": "net/minecraft/world/level/chunk/ChunkAccess.sections",
+        "lcs_non_empty": "net/minecraft/world/level/chunk/LevelChunkSection.nonEmptyBlockCount",
+        "lcs_states": "net/minecraft/world/level/chunk/LevelChunkSection.states",
+        "block_default_state": "net/minecraft/world/level/block/Block.defaultBlockState"
       },
       "classes": {
         "SimpleBitStorage": "net/minecraft/util/SimpleBitStorage",
@@ -149,7 +158,18 @@
         "SingleValuePalette": "net/minecraft/world/level/chunk/SingleValuePalette",
         "PalettedContainer": "net/minecraft/world/level/chunk/PalettedContainer",
         "Strategy1": "net/minecraft/world/level/chunk/Strategy$1",
-        "Strategy2": "net/minecraft/world/level/chunk/Strategy$2"
+        "Strategy2": "net/minecraft/world/level/chunk/Strategy$2",
+        "LevelChunk": "net/minecraft/world/level/chunk/LevelChunk",
+        "BlockPos": "net/minecraft/core/BlockPos",
+        "MutableBlockPos": "net/minecraft/core/BlockPos$MutableBlockPos",
+        "LevelChunkSection": "net/minecraft/world/level/chunk/LevelChunkSection",
+        "BlockState": "net/minecraft/world/level/block/state/BlockState"
+      },
+      "statics": {
+        "blocks_air": "net/minecraft/world/level/block/Blocks.AIR"
+      },
+      "calls": {
+        "chunk_min_y": "net/minecraft/world/level/chunk/ChunkAccess.getMinY()I"
       }
     }
   },
@@ -391,6 +411,15 @@
       "fn": "pc_get3",
       "orig": true,
       "fingerprint": "7496e95a4d98df92"
+    },
+    {
+      "class": "net/minecraft/world/level/chunk/LevelChunk",
+      "method": "getBlockState",
+      "desc": "(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;",
+      "file": "palette.rs",
+      "fn": "lc_get_block_state",
+      "orig": true,
+      "fingerprint": "58d4f9a8cd33fd1d"
     }
   ]
 }
