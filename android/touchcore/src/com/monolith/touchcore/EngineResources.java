@@ -53,7 +53,8 @@ final class EngineResources {
     private static void applyExtraEnv(Context ctx, String spec) throws android.system.ErrnoException {
         java.util.Set<String> now = new java.util.HashSet<>();
         if (spec != null) {
-            for (String part : spec.split("[;\\n]")) {
+            // ayraç: ';', satır sonu ya da boşluk ("MONO_DIAG=1 MONO_CPU_PROFILE=1" de iki ayrı anahtar olur; değerlerde boşluk yok)
+            for (String part : spec.split("[;\\s]+")) {
                 int eq = part.indexOf('=');
                 if (eq <= 0) continue;
                 String key = part.substring(0, eq).trim();
