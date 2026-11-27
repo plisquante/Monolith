@@ -83,6 +83,7 @@ MONO_SHARD=pkg MONO_CONCAT=exact MONO_NULL_ELIDE=1 MONO_LINE_LAZY=1 MONO_REGION_
 
 | anahtar | değerler | varsayılan | ne yapar | kod |
 |---|---|---|---|---|
+| `MONO_IC_POLY` | `1` | kapalı | çağrı yeri önbelleği çok girişli (sınıf başına en çok 8 kayıt): çok biçimli arayüz çağrısı, `checkcast`, `instanceof` her seferinde yavaş yoldan gitmez (S26 v14: `itab_find_ic_slow` + `is_subclass` CPU'nun %5-7'si). Derlemede `MONO_ICACHE=1` gerekir | `rt.rs` |
 | `MONO_WORKER_NICE` | 1..19 | kapalı | (Android) "Worker-" iş parçacıklarının önceliğini düşürür; dünya üretimi çizimi boğmasın | `sync.rs` |
 | `MONO_DISPLAY_BACKEND` | `x11`, `wayland` | otomatik | Linux pencere sistemi seçimi | `desk/linux.rs` |
 | `MONO_WINDOW_SIZE` | `GxY` (ör. `1280x720`) | - | başlangıç pencere boyutu | `desk/*.rs` |

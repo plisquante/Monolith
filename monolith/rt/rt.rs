@@ -546,9 +546,24 @@ pub fn itab_find(c: &'static Class, sel: u32) -> *const () {
 
 /// Bir çağrı yerinin önbelleği. Üretilen kodda her çağrı yeri kendi `static`'ini taşır.
 pub struct ICache(std::sync::atomic::AtomicPtr<ICEntry>);
+#[repr(C)]
 pub struct ICEntry {
+    // `class` ve `val` ilk iki alan kalmalı: satır içine alınmış `hit` (üretilmiş parçalarda) bu yerleşimi okur
     class: *const Class,
     val: *const (),
+    /// MONO_IC_POLY=1: aynı çağrı yerinin gördüğü sonraki sınıflar (zincir, en çok IC_POLY_MAX kayıt; yalnızca eklenir)
+    next: std::sync::atomic::AtomicPtr<ICEntry>,
+}
+
+/// MONO_IC_POLY=1 (çalışma zamanı, varsayılan KAPALI): çağrı yeri önbelleği çok girişli olur. Eski yol yalnızca İLK görülen
+/// sınıfı saklar; başka sınıf gören çağrı yeri (çok biçimli: List'in birkaç uygulaması gibi) her seferinde yavaş yoldan gider
+/// (`itab_find` ikili arama, `instance_of` üst sınıf zinciri). S26 v14 profilinde `itab_find_ic_slow` + `is_subclass` CPU'nun
+/// %5-7'si. Açıkken yavaş yol önce zincirde arar, bulamazsa hesaplayıp zincirin sonuna ekler. Kayıtlar hiç değişmez ve
+/// silinmez (sınıf -> metot eşlemesi program boyunca sabit), okuyucu ya boş ya da tam yazılmış kayıt görür.
+const IC_POLY_MAX: usize = 8;
+fn ic_poly() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var("MONO_IC_POLY").is_ok_and(|v| !v.is_empty() && v != "0"))
 }
 impl Default for ICache {
     fn default() -> Self {
@@ -579,9 +594,52 @@ impl ICache {
         if !self.0.load(Ordering::Relaxed).is_null() {
             return;
         }
-        let b = Box::into_raw(Box::new(ICEntry { class: c, val }));
+        let b = Box::into_raw(Box::new(ICEntry { class: c, val, next: std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()) }));
         if self.0.compare_exchange(std::ptr::null_mut(), b, Ordering::AcqRel, Ordering::Acquire).is_err() {
             drop(unsafe { Box::from_raw(b) }); // başka iş parçacığı önce yazdı
+        }
+    }
+    /// MONO_IC_POLY: zincirin tamamında (ilk kayıt dahil) `c` için saklanan değer.
+    #[inline]
+    fn poly_find(&self, c: &'static Class) -> Option<*const ()> {
+        use std::sync::atomic::Ordering;
+        let mut p = self.0.load(Ordering::Acquire);
+        let mut n = 0;
+        while !p.is_null() && n <= IC_POLY_MAX {
+            let e = unsafe { &*p };
+            if std::ptr::eq(e.class, c) {
+                return Some(e.val);
+            }
+            p = e.next.load(Ordering::Acquire);
+            n += 1;
+        }
+        None
+    }
+    /// MONO_IC_POLY: (c, val) kaydını zincirin sonuna ekler (zincir doluysa ya da yarışta kaybedilirse eklemez).
+    #[cold]
+    #[inline(never)]
+    fn poly_add(&self, c: &'static Class, val: *const ()) {
+        use std::sync::atomic::Ordering;
+        let head = self.0.load(Ordering::Acquire);
+        if head.is_null() {
+            self.fill(c, val);
+            return;
+        }
+        let mut p = head;
+        for _ in 0..IC_POLY_MAX {
+            let e = unsafe { &*p };
+            if std::ptr::eq(e.class, c) {
+                return; // başka iş parçacığı ekledi
+            }
+            let nx = e.next.load(Ordering::Acquire);
+            if nx.is_null() {
+                let b = Box::into_raw(Box::new(ICEntry { class: c, val, next: std::sync::atomic::AtomicPtr::new(std::ptr::null_mut()) }));
+                if e.next.compare_exchange(std::ptr::null_mut(), b, Ordering::AcqRel, Ordering::Acquire).is_err() {
+                    drop(unsafe { Box::from_raw(b) });
+                }
+                return;
+            }
+            p = nx;
         }
     }
 }
@@ -597,6 +655,14 @@ pub fn itab_find_ic(ic: &'static ICache, c: &'static Class, sel: u32) -> *const 
 #[cold]
 #[inline(never)]
 fn itab_find_ic_slow(ic: &'static ICache, c: &'static Class, sel: u32) -> *const () {
+    if ic_poly() {
+        if let Some(f) = ic.poly_find(c) {
+            return f;
+        }
+        let f = itab_find(c, sel);
+        ic.poly_add(c, f);
+        return f;
+    }
     let f = itab_find(c, sel);
     ic.fill(c, f);
     f
@@ -617,6 +683,15 @@ pub fn checkcast_ic(r: Ref, target: &'static Class, ic: &'static ICache) -> Res<
 #[cold]
 #[inline(never)]
 fn checkcast_ic_slow(r: Ref, target: &'static Class, ic: &'static ICache) -> Res<Ref> {
+    if ic_poly() {
+        let c = unsafe { (*r.0).class };
+        if ic.poly_find(c).is_some() {
+            return Ok(r);
+        }
+        let r = checkcast(r, target)?;
+        ic.poly_add(c, std::ptr::null());
+        return Ok(r);
+    }
     let r = checkcast(r, target)?;
     ic.fill(unsafe { (*r.0).class }, std::ptr::null());
     Ok(r)
@@ -637,6 +712,17 @@ pub fn instance_of_ic(r: Ref, target: &'static Class, ic: &'static ICache) -> bo
 #[cold]
 #[inline(never)]
 fn instance_of_ic_slow(r: Ref, target: &'static Class, ic: &'static ICache) -> bool {
+    if ic_poly() {
+        let c = unsafe { (*r.0).class };
+        if ic.poly_find(c).is_some() {
+            return true;
+        }
+        let yes = instance_of(r, target);
+        if yes {
+            ic.poly_add(c, std::ptr::null());
+        }
+        return yes;
+    }
     let yes = instance_of(r, target);
     if yes {
         ic.fill(unsafe { (*r.0).class }, std::ptr::null());

@@ -124,7 +124,7 @@ fn threads_line(prev: &mut std::collections::HashMap<u32, (String, u64)>, prev_t
     }
     *prev = next;
     rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-    let total: f64 = rows.iter().map(|r| r.0).sum();
+    let total: f64 = rows.iter().map(|r| r.0).sum::<f64>() + 0.0; // boş toplam -0.0 olmasın
     let top: Vec<String> = rows.iter().take(10).map(|(p, n)| format!("{n}={p:.0}%")).collect();
     eprintln!("[mono:threads] t={} total={:.0}% {}", now_ms(), total, top.join(" "));
     now
