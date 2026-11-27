@@ -76,3 +76,30 @@ Durum: `bitti` / `sürüyor` / `bekliyor` / `ertelendi` / `yapılmayacak`.
 | D14 | Android'de çerçeve yığını için yerel TLS (`MONO_NATIVE_TLS=1`): CPU'nun yaklaşık %60'ı çerçeve kaydında (pthread_getspecific). PIPELINE §32 | S26'da ölçüldü (27 Kasım 2026, v8, global-dynamic): ortalama FPS 29,8 -> 60,8; 60. sn sonrası >100 ms kare gören pencere 22/76 -> 0/40; CPU'da Java kodu payı %25 -> %66. Kalan TLS maliyeti `[linker64]` %10,6 (TLSDESC çözücüsü). **varsayılan** (Android derlemesi; `MONO_NATIVE_TLS=0` eski yol, Android 9 ve öncesi için şart) |
 | D15 | CPU profilinden sıradaki hedefler: `itab_find_ic_slow`, `init_enter`, `is_subclass`; dünya üretimi (DensityBuffer, OreFeature, Beardifier, PalettedContainer) | bekliyor: v8 profili sonrası |
 | D16 | Dünya yükleme yavaşlığı (ilk ~55 sn: 1,7 sn donmalar, 6-8 FPS): CPU profili yalnızca yükleme penceresi için alınmalı | bekliyor |
+
+## E. Sıcak alt sistemleri Rust'a taşımak (27 Kasım 2026 kararı)
+
+Projenin amacı: Rust'ta daha hızlı çalışan Minecraft Java Edition. Oyunun tamamını başka bir motora taşımak yok (yeni bir
+oyun olur, lisans ve uyumluluk sorunu). Yol: profilde en çok CPU yiyen alt sistemler tek tek elle yazılmış Rust yamasına
+(`patches/rust/`) taşınır; hedef seviyeye gelince durulur.
+
+Hedef seviye (Galaxy S26, Android, görüş mesafesi 12, simülasyon 8; kullanıcıyla kesinleşecek):
+- yürürken ortalama 90 FPS ve 60. saniyeden sonra 100 ms'yi aşan kare olmaması,
+- blok kırma/koymada FPS 60'ın altına düşmemesi,
+- entegre sunucuda tick süresi (MSPT) 50 ms'nin altında (20 TPS),
+- dünya yüklemede 1 sn'yi aşan donma olmaması.
+
+Her yama için kural: Java ile aynı gözlemlenebilir davranış (istisnalar dahil; yalnızca yaygın durum, gerisi çevrilmiş
+orijinale), bytecode parmak izi, `MONO_PATCH_VERIFY=1` ve fark testleri (`monolith/patch_tests.py`), telefonda önce/sonra
+ölçümü (`MONO_DIAG=1 MONO_CPU_PROFILE=1`, `tools/cpu_report.py --slow`).
+
+| # | alt sistem | iş parçacığı | durum |
+|---|---|---|---|
+| E1 | Blok durumu okuma: `PalettedContainer.get(I)`, `get(III)` | sunucu, işçi | yazıldı (a31bee5), sınanacak |
+| E2 | `LevelChunk.getBlockState`, `LevelChunkSection.getBlockState` | sunucu | bekliyor |
+| E3 | Çarpışma sorguları (`BlockCollisions.computeNext`) | sunucu | bekliyor |
+| E4 | Işık motoru (blok ve gökyüzü ışığı yayılımı) | sunucu, çizim | bekliyor |
+| E5 | Chunk bölüm örgüsü oluşturma (section compile) | işçi | bekliyor |
+| E6 | Dünya üretimi: `DensityBuffer`, `Aquifer`, `GradientNoise`, `BiomeManager.getBiome`, `Climate` | işçi | bekliyor |
+| E7 | GUI kesişim denetimleri (`GuiRenderState.hasIntersection`, `ScreenRectangle`) | çizim | bekliyor (F3 açıkken belirgin) |
+| E8 | Yamalar için çalışma zamanı kapatma anahtarı (yeniden derlemeden devre dışı bırakmak, A/B ölçümü) | - | bekliyor |
