@@ -458,6 +458,37 @@ pub fn c_str_arg(s: Ref) -> Res<std::ffi::CString> {
 pub use crate::heap::{recycle as recycle_scope, safepoint as gc_safepoint, ArenaGuard, ThreadGuard};
 pub use crate::heap::weak_read;
 
+/// Java `volatile` alan okuması (çevrilmiş getfield/getstatic). JSR-133'ün ARM eşlemesi: yükleme, ardından edinme çiti.
+/// Eskiden düz okumaydı: x86'da (TSO) sorun çıkmaz ama arm64'te sonraki okumalar öne geçer, kilitsiz yapılar (ForkJoinPool,
+/// CompletableFuture, AbstractConsecutiveExecutor) yayımlanan görevi eksik görür ve görev kaybolur (S26: chunk üretimi ve
+/// kaynak yükleme kilitlenmeleri). `read_volatile` derleyicinin okumayı döngü dışına almasını da engeller.
+/// # Safety
+/// `p` hizalı ve geçerli bir alan adresi olmalı.
+#[inline(always)]
+pub unsafe fn vol_load<T: Copy>(p: *const T) -> T {
+    let v = std::ptr::read_volatile(p);
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Acquire);
+    v
+}
+/// Java `volatile` alan yazımı: serbest bırakma çiti, yazma, ardından tam çit (sonraki volatile okumayla sıralı tutarlılık).
+/// # Safety
+/// `p` hizalı ve geçerli bir alan adresi olmalı.
+#[inline(always)]
+pub unsafe fn vol_store<T: Copy>(p: *mut T, v: T) {
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Release);
+    std::ptr::write_volatile(p, v);
+    std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
+}
+/// Volatile referans yazımında SATB bariyerinin etrafındaki çitler (yazma satb_store içinde yapılır).
+#[inline(always)]
+pub fn vol_fence_before() {
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Release);
+}
+#[inline(always)]
+pub fn vol_fence_after() {
+    std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
+}
+
 #[inline(always)]
 pub fn gc_thread_guard() -> ThreadGuard {
     ThreadGuard::enter()

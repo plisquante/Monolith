@@ -194,6 +194,8 @@ def find_iterator_scopes(insns) -> dict:
 #   * double sqrt: ikisi de IEEE 754'e göre doğru yuvarlanmış karekök.
 #   * double floor/ceil: ikisi de IEEE tanımı (NaN, sonsuz ve -0.0 korunur; ceil(-0.5) == -0.0).
 # float/double max/min BURADA YOK: Java'da NaN'ı yayar ve -0.0 < 0.0 sayar, Rust'ın max/min'i farklı davranır.
+ACC_VOLATILE_F = 0x0040  # alan erişim bayrağı (metotlarda aynı bit ACC_BRIDGE'dir; burada yalnızca alanlarda kullanılır)
+
 MATH_INTRINSICS = {
     ("max", "(II)I"): "{0}.max({1})",
     ("min", "(II)I"): "{0}.min({1})",
@@ -643,7 +645,11 @@ class MethodGen:
                 self.emit_link_err(e, "java/lang/NoSuchFieldError", str(le), stk, 0, a.desc)
                 return None
             self.init_class(dc, e)
-            push(self.kind_of_field(f.desc), self.from_field(f.desc, f"unsafe {{ {self.g.static_name(dc, f)} }}"))
+            if f.access & ACC_VOLATILE_F:
+                # Java volatile: edinme çitli okuma (rt::vol_load); arm64'te düz okuma kilitsiz yapılarda görev kaybettirir
+                push(self.kind_of_field(f.desc), self.from_field(f.desc, f"unsafe {{ rt::vol_load(&raw const {self.g.static_name(dc, f)}) }}"))
+            else:
+                push(self.kind_of_field(f.desc), self.from_field(f.desc, f"unsafe {{ {self.g.static_name(dc, f)} }}"))
         elif op == "putstatic":
             try:
                 dc, f = self.field(a, static=True)
@@ -652,9 +658,13 @@ class MethodGen:
                 return None
             self.init_class(dc, e)
             v = pop()
+            vol = bool(f.access & ACC_VOLATILE_F)
             if f.desc[0] in "L[":
                 # referans yazımı: SATB yazma bariyeri (rt::satb_store); işaretleme etkin değilken işlem yapmaz
-                e(f"unsafe {{ rt::{'satb_store_r' if self.g.region_classes else 'satb_store'}(&raw mut {self.g.static_name(dc, f)}, {v}); }}")
+                st = f"rt::{'satb_store_r' if self.g.region_classes else 'satb_store'}(&raw mut {self.g.static_name(dc, f)}, {v});"
+                e(f"unsafe {{ rt::vol_fence_before(); {st} rt::vol_fence_after(); }}" if vol else f"unsafe {{ {st} }}")
+            elif vol:
+                e(f"unsafe {{ rt::vol_store(&raw mut {self.g.static_name(dc, f)}, {self.to_field(f.desc, v)}); }}")
             else:
                 e(f"unsafe {{ {self.g.static_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
         elif op == "getfield":
@@ -665,7 +675,11 @@ class MethodGen:
                 self.emit_link_err(e, "java/lang/NoSuchFieldError", str(le), stk, 1, a.desc)
                 return None
             o = pop()
-            rd = f"unsafe {{ (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)} }}"
+            if f.access & ACC_VOLATILE_F:
+                # Java volatile: edinme çitli okuma (rt::vol_load)
+                rd = f"unsafe {{ rt::vol_load(&raw const (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)}) }}"
+            else:
+                rd = f"unsafe {{ (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)} }}"
             if dc.name == "java/lang/ref/Reference" and f.name == "referent":
                 # zayıf referans okuma bariyeri: eşzamanlı işaretleme sürerken okunan hedef canlı tutulur (gc.rs weak_read)
                 rd = f"rt::weak_read({rd})"
@@ -679,11 +693,17 @@ class MethodGen:
                 return None
             v = pop()
             o = pop()
+            vol = bool(f.access & ACC_VOLATILE_F)
+            place = f"(*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)}"
             if f.desc[0] in "L[":
                 # referans yazımı: SATB yazma bariyeri (rt::satb_store); işaretleme etkin değilken işlem yapmaz
-                e(f"unsafe {{ rt::{'satb_store_r' if self.g.region_classes else 'satb_store'}(&raw mut (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)}, {v}); }}")
+                st = f"rt::{'satb_store_r' if self.g.region_classes else 'satb_store'}(&raw mut {place}, {v});"
+                e(f"unsafe {{ rt::vol_fence_before(); {st} rt::vol_fence_after(); }}" if vol else f"unsafe {{ {st} }}")
+            elif vol:
+                # Java volatile: çitli yazma (rt::vol_store)
+                e(f"unsafe {{ rt::vol_store(&raw mut {place}, {self.to_field(f.desc, v)}); }}")
             else:
-                e(f"unsafe {{ (*({self.nn_ptr(o, out)} as *mut {st_name})).{self.g.field_name(dc, f)} = {self.to_field(f.desc, v)}; }}")
+                e(f"unsafe {{ {place} = {self.to_field(f.desc, v)}; }}")
         elif op == "new":
             try:
                 ci2 = self.app_class(a.name)

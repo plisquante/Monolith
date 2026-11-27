@@ -272,7 +272,9 @@ pub fn n_jdk_internal_misc_Unsafe__getLong(this: Ref, o: Ref, off: i64) -> Res<i
     Ok(unsafe { (addr(o, off) as *const i64).read_unaligned() })
 }
 pub fn n_jdk_internal_misc_Unsafe__getReferenceVolatile(this: Ref, o: Ref, off: i64) -> Res<Ref> {
-    Ok(unsafe { (addr(o, off) as *const Ref).read() })
+    // Java volatile okuma: SeqCst atomik yükleme. Eskiden düz okumaydı; arm64'te bu okumadan sonraki okumalar öne geçebilir
+    // ve başka iş parçacığının yayımladığı nesnenin alanları eski görülür (ConcurrentHashMap, ForkJoinPool, CompletableFuture).
+    Ok(Ref(unsafe { std::sync::atomic::AtomicPtr::from_ptr(addr(o, off) as *mut *mut Obj).load(std::sync::atomic::Ordering::SeqCst) }))
 }
 
 // ------------------------------------------------------------------ çeşitli
@@ -312,7 +314,9 @@ unsafe_put!(n_jdk_internal_misc_Unsafe__putInt, i32, i32);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putLong, i64, i64);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putFloat, f32, f32);
 unsafe_put!(n_jdk_internal_misc_Unsafe__putDouble, f64, f64);
-unsafe_put!(n_jdk_internal_misc_Unsafe__putIntVolatile, i32, i32);
+// putIntVolatile burada TANIMLANMAZ: yerel tanım natives_io.rs'teki atomik (SeqCst) sürümü gölgeliyordu (yerel öğe `pub use *`
+// ile gelenin önüne geçer) ve düz yazma yapıyordu. arm64'te bu, kilitsiz kuyruklarda (ForkJoinPool, CompletableFuture)
+// görev kaybına yol açar (S26: IOWorker / chunk üretimi kilitlenmesi).
 pub fn n_jdk_internal_misc_Unsafe__putReference(this: Ref, o: Ref, off: i64, v: Ref) -> Res<()> {
     unsafe { crate::heap::satb_store(addr(o, off) as *mut Ref, crate::region::guard_into(addr(o, off) as usize, v)) };
     Ok(())
