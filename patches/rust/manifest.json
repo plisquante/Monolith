@@ -206,6 +206,21 @@
         "Gradient": "net/minecraft/world/level/levelgen/synth/GradientNoise$Gradient",
         "Param": "net/minecraft/world/level/biome/Climate$Parameter"
       }
+    },
+    "fastutil.rs": {
+      "fields": {
+        "def_ret": "it/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap.defRetValue",
+        "h_key": "it/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap.key",
+        "h_value": "it/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap.value",
+        "h_mask": "it/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap.mask",
+        "h_null": "it/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap.containsNullKey",
+        "h_n": "it/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap.n",
+        "l_key": "it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap.key",
+        "l_value": "it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap.value",
+        "l_mask": "it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap.mask",
+        "l_null": "it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap.containsNullKey",
+        "l_n": "it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap.n"
+      }
     }
   },
   "patches": [
@@ -555,6 +570,24 @@
       "fn": "param_distance",
       "orig": true,
       "fingerprint": "cf56884bb9f46197"
+    },
+    {
+      "class": "it/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap",
+      "method": "get",
+      "desc": "(J)Ljava/lang/Object;",
+      "file": "fastutil.rs",
+      "fn": "l2o_get",
+      "orig": true,
+      "fingerprint": "2f4a45c238f9d6f5"
+    },
+    {
+      "class": "it/unimi/dsi/fastutil/longs/Long2ObjectLinkedOpenHashMap",
+      "method": "get",
+      "desc": "(J)Ljava/lang/Object;",
+      "file": "fastutil.rs",
+      "fn": "l2o_linked_get",
+      "orig": true,
+      "fingerprint": "7edb3882711c6dc0"
     }
   ]
 }
