@@ -588,6 +588,15 @@
       "fn": "l2o_linked_get",
       "orig": true,
       "fingerprint": "7edb3882711c6dc0"
+    },
+    {
+      "class": "net/minecraft/world/level/biome/BiomeManager",
+      "method": "getFiddledDistance",
+      "desc": "(JIIIDDD)D",
+      "file": "noise.rs",
+      "fn": "fiddled_distance",
+      "orig": true,
+      "fingerprint": "ff61c1d0f89505bc"
     }
   ]
 }

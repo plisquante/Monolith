@@ -54,3 +54,36 @@ pub fn param_distance(orig: impl Fn(rt::Ref, i64) -> rt::Res<i64>, this: rt::Ref
         Ok(get::<i64>(this, F_min).wrapping_sub(v).max(0))
     }
 }
+
+#[inline(always)]
+fn lcg(a: i64, b: i64) -> i64 {
+    a.wrapping_mul(a.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407)).wrapping_add(b)
+}
+
+#[inline(always)]
+fn fiddle(s: i64) -> f64 {
+    // Math.floorMod((s >> 24), 1024) / 1024.0, sonra (d - 0.5) * 0.9
+    let d = ((s >> 24).rem_euclid(1024)) as f64 / 1024.0;
+    (d - 0.5) * 0.9
+}
+
+/// BiomeManager.getFiddledDistance(long, int, int, int, double, double, double) (statik). getBiome(int,int,int) her çağrıda
+/// sekiz kez çağırır; çevrilmiş halde her biri dokuz LCG.next, üç getFiddle ve üç Mth.square çağrısı. Bit düzeyinde aynı:
+/// long taşmaları wrapping, double işlemleri Java'daki sırayla (toplama sırası korunur).
+pub fn fiddled_distance(_orig: impl Fn(i64, i32, i32, i32, f64, f64, f64) -> rt::Res<f64>, seed: i64, x: i32, y: i32, z: i32, dx: f64, dy: f64, dz: f64) -> rt::Res<f64> {
+    let mut s = lcg(seed, x as i64);
+    s = lcg(s, y as i64);
+    s = lcg(s, z as i64);
+    s = lcg(s, x as i64);
+    s = lcg(s, y as i64);
+    s = lcg(s, z as i64);
+    let f1 = fiddle(s);
+    s = lcg(s, seed);
+    let f2 = fiddle(s);
+    s = lcg(s, seed);
+    let f3 = fiddle(s);
+    let a = dz + f3;
+    let b = dy + f2;
+    let c = dx + f1;
+    Ok(a * a + b * b + c * c)
+}
